@@ -67,68 +67,158 @@ We dont need any permissions from any admistrative organisation from IITGN as we
 
 Three possible extensions, proposed by the team rather than requested by either respondent:
 
-1. Visual image search from appearance, such as “the blue poster,” beyond OCR text clues.
-2. Local audio/video transcription with results opened at matching timestamps.
-3. User-controlled encrypted library export/restore for moving between devices.
+1. Handwriting recognition beyond the printed English OCR baseline.
+2. Search for environmental sounds or music beyond speech transcripts.
+3. User-controlled encrypted library export/restore.
+
+Visual image search, bounded audio/video search, and unencrypted manual transfer are now part of the planned v1 scope. These are team decisions, not additional requests attributed to either interviewee.
 
 Based on the interviews and our team discussion, we define the problem as follows:
 
 **Problem statement:** IITGN students can remember what saved academic or campus information was about but struggle to locate its original among chats and files. Searching and scrolling take time when the information is needed quickly. A useful personal retrieval tool must let them search from remembered meaning, return the original source, and make successful saving visible.
 
+## Product scope and implementation status
+
+Campus Recall will be a free, installable PWA for iPhone, Android, and laptops. A student saves supported originals, searches remembered meaning or visual appearance, and opens the corresponding original image, PDF page, note, snapshot, or media interval. Every device has a separate local library with manual transfer.
+
+**Status:** Specification and implementation handoffs only. No application features, executable acceptance tests, model benchmarks, or physical-device passes are claimed yet. The [implementation plan](IMPLEMENTATION_PLAN.md) must merge before application implementation starts.
+
+Supported inputs: JPEG/PNG/WebP up to 20 MB; unencrypted PDFs up to 20 MB and 50 pages; notes up to 20,000 characters; public webpage text snapshots up to 20,000 characters; MP3/WAV/M4A audio up to five minutes and 50 MB; H.264 MP4 video with optional AAC up to two minutes and 100 MB. MB means 1,000,000 bytes; character limits count Unicode code points. HEIC/HEVC/MOV are outside v1. Unsupported/deep-validation failures have a reason and conversion guidance; already saved originals remain available.
+
+Web capture uses a direct public fetch where browser rules permit; otherwise it offers pasted text or an imported inert HTML/PDF snapshot. There is no proxy or account integration. English is the acceptance baseline. There are no generated answers, reminders, tasks, accounts, or automatic sync.
+
+Browser retention is best-effort. The app requests persistence where available and provides manual backups; it cannot guarantee at-rest encryption or control browser/OS backup policies. Core operations work offline after explicit asset setup. Foreground processing resumes safely after reopening.
+
 ## Local AI retrieval and what our code controls
 
-Campus Recall will use a local embedding model for semantic search. **No external AI API calls, hosted embedding service, or cloud inference are involved.** The model creates numerical vectors for extracted content and the student's query on the phone. Our code compares those vectors using cosine similarity, ranks matching passages, groups them by original item, and displays relevant excerpts with source references. Embedding creation uses a trained model; similarity comparison is the mathematical matching step. This is a retrieval workflow, with no generated answers in the MVP. 
+A local embedding model creates vectors for extracted text, images, sampled video frames, and queries. OCR and a local speech model supply text and timestamps. Code compares normalized vectors using cosine similarity, filters weak candidates, groups results by original, and displays excerpts/previews with source references. **No external AI API, hosted embeddings, or cloud inference are used.** This is retrieval, without generated answers.
 
-We mainly test :
-- Which original item and PDF page a result references.
-- Whether displayed excerpts come from that item's extracted content.
-- Whether the app returns no relevant result when all similarity scores fall below a configured threshold.
-- Whether extraction, embedding creation, and search remain on the phone.
+AI-related tests check source IDs, pages/timestamps, excerpt provenance, filtering, actual retrieval outcomes, and local execution. They do not require exact generated wording. Visual matches need no invented text caption. OCR and transcripts are labelled automated extraction.
 
-A similarity score is not a probability that a result is correct. We will select the threshold using calibration examples and freeze it before acceptance testing. A rejected match means there is no sufficiently relevant result, not proof that the student never saved the item. The exact wording of the empty-state message is not an acceptance requirement.
+Similarity is not a probability of correctness. Calibrate separate text/visual thresholds on separate data, then freeze model revisions, processing, thresholds, and acceptance fixtures. A rejected match means no sufficiently relevant result; it does not prove the user never saved the item.
 
-Models may be bundled or downloaded during explicit setup. After setup, importing local files, indexing, searching, and opening saved originals must work offline. Saving a new public webpage requires an explicit network fetch; opening its saved snapshot does not. These web requests are separate from AI processing.
+Model/runtime setup is explicit and may require internet. Afterwards, local-file import, processing, search, restart, and original viewing make no outgoing network requests. User-selected webpage fetch/open and setup are separate actions and never attach unrelated library content or queries.
 
-## Five independently testable specification statements
+## Fifteen independently testable specification statements
 
-Each statement has its own fixtures and fresh library. Tests verify observable results and source IDs rather than exact generated wording. These are acceptance requirements; implementation and executable tests are still pending.
+Each statement needs its own automated test using a fresh library/fixtures. The [acceptance design](docs/implementation/acceptance.md) defines the planned corpus, negatives, calibration, device evidence, and test boundaries. Tests and fixture assets are to be implemented; none are reported as passing here.
 
-### S1 — Save supported information locally
+### S1 — Durable local save
 
-**Statement:** A student can save a JPEG/PNG photo or screenshot, PDF, text note, or public static webpage without adding a title or tag. The app shows “Saved locally” only after the original file or snapshot and its item record are stored successfully, and the item remains visible in recent saves after restarting.
+**Statement:** Saving a supported file, note, or webpage snapshot without a mandatory title/tag stores its original and metadata before showing “Saved locally”. It remains in recent saves after restart, including when models are not installed.
 
-**Test:** Independently import each supported type, using a controlled HTTP page for the webpage case. Check that confirmation follows successful storage. Restart and verify the saved entries, original image/PDF byte hashes, note/snapshot text, and source URL. Force a storage failure and verify an error with no success confirmation. If extraction fails after storage, the original must remain visible with Failed status instead of disappearing or appearing Ready.
+**Test:** Independently save each supported kind, restart the database/browser profile, and compare original bytes/hashes, note/snapshot text, IDs, and URLs. Force a transaction/storage failure and assert no successful item or confirmation. A saved original with later processing failure remains browsable.
 
-**Trace:** From Suhani's interview about saving a banner photo and Bhavya's interview about knowing whether information was successfully saved.
+**Trace:** From Suhani's interview about saving a banner photo and Bhavya's interview about knowing whether information was saved.
 
-### S2 — Extract text and create embeddings on the phone
+### S2 — Browse, filter, and rename
 
-**Statement:** After model setup, readable supported items are processed locally into extracted text and embeddings. Photos/screenshots use OCR, PDFs retain page references, and an item becomes Ready only after successful indexing. Processing failures produce Failed status with a reason.
+**Statement:** The library lists items newest first, filters by kind/status, and permits display-title changes while preserving item identity, capture time, and original bytes.
 
-**Test:** With networking disabled, import a legible JPEG, PNG, text PDF, scanned PDF, note, and pre-saved webpage snapshot, each with a known phrase. Check extracted phrases, local embeddings, index entries, and the correct PDF page references. Each small fixture must become Ready within 120 seconds on the documented reference phone; this is a target to test. A corrupt image must fail explicitly rather than become Ready.
+**Test:** Seed a fresh mixed-status/type library with duplicate titles and known timestamps. Check stable recent ordering, filter combinations, and rename without changed IDs/hashes. Renaming must not cause one item's viewer to open another original.
 
-**Trace:** From Suhani's interview about information inside a photographed banner, with local processing informed by our market research and team decisions.
+**Trace:** From Bhavya's interview about scrolling and uncertainty about maintaining the library.
 
-### S3 — Match remembered meaning and reject weak matches
+### S3 — Delete without resurrection
 
-**Statement:** Using locally created query embeddings and cosine similarity, each query in the fixed six-case, 30-item acceptance corpus returns its expected original among the top three distinct results. Candidates below the configured relevance threshold are excluded; if none qualify, the app returns an empty result list with a no-relevant-result state.
+**Statement:** Deleting an item removes its original, derived content, previews, and jobs. An interrupted or late processing response must never recreate that item or its index.
 
-**Test:** Build a fresh library using actual extraction and embeddings. Freeze the model/version, threshold, queries, and expected IDs before testing. Check the expected original in the top three for all six queries, including the paraphrase with no meaningful shared words. Multiple chunks from one PDF must not occupy multiple item slots. Test the threshold decision separately with controlled scores below, at, and above the threshold, and verify the fixed unrelated queries return no results. Check the empty-result state, not its exact wording.
+**Test:** Independently delete queued, Ready, and Processing fixtures. Release a delayed processing publication after deletion and assert it is rejected. Repeat deletion and inspect all related stores; no original/result may reappear after restart.
 
-**Trace:** From Suhani's and Bhavya's interviews about struggling to find saved information; rejecting weak matches is our team's reliability requirement.
+**Trace:** From our team's privacy and reliable local-storage requirements, informed by market research.
 
-### S4 — Show excerpts with the exact saved source
+### S4 — Safe webpage capture and fallback
 
-**Statement:** Every search result includes an excerpt from its item's extracted text and a reference to that saved original. Selecting the reference opens the corresponding original; PDF results open the page associated with the excerpt. The app must never fabricate a source reference or substitute a different item when a source is unavailable.
+**Statement:** A student can capture a permitted public webpage or save its URL with manually supplied text/inert HTML/PDF content when direct extraction fails. Captured HTML must never execute, and a URL-only entry must not pretend to contain extracted page contents.
 
-**Test:** Seed a fresh library with an image, three-page PDF, note, and webpage snapshot, including two items with identical display titles. Verify each result's item ID, excerpt membership in its extracted text, PDF page mapping, and opened original bytes/text. Remove one original while keeping its index entry and verify an unavailable-source state with no substituted file. No test depends on a generated answer's wording.
+**Test:** Use controlled allowed/blocked-fetch fixtures, manual text, and an HTML fixture containing scripts/event handlers. Verify stored URL/text and no script execution; failures expose the fallback. Check text limits and visible truncation rather than an unannounced full-page claim.
 
-**Trace:** From Suhani's interview about finding the original saved photo, with source verification added by our team.
+**Trace:** From our market research and team decision to support saved links without a server or account integrations.
 
-### S5 — Never send private content for remote processing
+### S5 — Exact original and source location
 
-**Statement:** Campus Recall must never send imported originals, extracted text, embeddings, source metadata, or search queries to a remote service for storage, analytics, or AI processing. After model setup, local-file import, extraction, embedding creation, search, and original viewing must work offline without an external AI API key or account.
+**Statement:** Selecting a result opens its saved original by item ID, at the mapped PDF page or media interval when applicable. Text excerpts come from that source's extracted segment. The app must never fabricate a reference or substitute another original when the source is unavailable.
 
-**Test:** With models present and networking blocked, import private test files, index them, search, restart, and open originals. Repeat with network monitoring and verify zero app-initiated requests on these core paths. Verify managed originals and indexes are excluded from automatic cloud backup. Test explicit model download and webpage save/open separately: those requests must never attach unrelated library content or search queries. Sharing/exporting an original requires an explicit user action.
+**Test:** Seed independently mapped image/PDF/note/snapshot/audio/video sources with duplicate titles. Check IDs, original bytes/text, excerpt membership, PDF page, and annotated media interval with two-second edge tolerance. Remove one original and assert an unavailable state without substitution.
 
-**Trace:** From our market research on cloud-processing limitations and our team's decision to keep retrieval private and local to the phone.
+**Trace:** From Suhani's interview about recovering the original saved photo, with source verification added by our team.
+
+### S6 — Manual library transfer
+
+**Statement:** A selected-item export and valid restore preserve original bytes, titles, capture times, and source URLs. New restored items are queued for local indexing; content duplicates are reported without overwriting existing originals.
+
+**Test:** Export a fresh mixed library and restore into a second browser profile. Compare hashes/metadata and queued status. Test identical titles with different content, a true hashed duplicate, invalid version/path/hash, missing files, and a forced import failure. Invalid import must leave the previous library unchanged. No embeddings or model weights belong in the archive.
+
+**Trace:** From our team's decision to support separate private device libraries with manual transfer.
+
+### S7 — Honest model setup and offline readiness
+
+**Statement:** Explicit setup reports real asset progress and declares Offline ready only after every required model, tokenizer, OCR, PDF, media, and WASM asset is cached and verified. Incomplete assets require repair rather than a remote inference fallback.
+
+**Test:** Interrupt setup, remove/corrupt a required runtime asset, resume, and inspect readiness. With complete verified assets, restart offline and run actual small-file processing/search. Missing assets must not produce a false readiness or silent remote call.
+
+**Trace:** From our market research and team requirement for free local inference without API keys.
+
+### S8 — Local OCR and PDF extraction
+
+**Statement:** Supported readable images and PDFs produce locally extracted text and embeddings with correct PDF page provenance. Failed/corrupt/unsupported processing preserves the saved original with Failed status and a reason rather than Ready.
+
+**Test:** With networking disabled after setup, process known-phrase JPEG/PNG/WebP, text PDF page 2, and scanned PDF fixtures using actual OCR and embeddings. Each agreed small fixture must become Ready within the 120-second reference-phone target. Check page mapping plus corrupt/encrypted/over-limit failures. This is a target, not measured speed.
+
+**Trace:** From Suhani's interview about information inside a photographed banner; PDF and offline limits are team scope decisions.
+
+### S9 — Semantic retrieval and weak-match rejection
+
+**Statement:** In the frozen 30-item corpus, every text query R1–R6 returns its expected original among the top three distinct items, including the paraphrase without meaningful shared words. The fixed unrelated queries return no relevant result; duplicate chunks cannot occupy separate item-result slots.
+
+**Test:** Independently build the corpus through actual extraction/embedding and search offline with frozen thresholds/configuration. Assert expected IDs and empty negative results. Separately use controlled scores to check below/at/above-threshold filtering, deterministic grouping, and tie-breaking. Do not assert exact empty-state wording or use mocked ranking as retrieval evidence.
+
+**Trace:** From Suhani's and Bhavya's interviews about difficulty finding saved information, with weak-match rejection added by our team.
+
+### S10 — Visual image and video-scene search
+
+**Statement:** The fixed visual queries R7/R8/R12 retrieve their expected original image or sampled video scene among the top three, without depending on answer words in filenames, OCR, or metadata.
+
+**Test:** Build a fresh visual fixture library with actual image embeddings, no descriptive answer metadata, and the frozen queries. Check original IDs and video sample locations. Show previews/locations rather than a generated caption. Only scenes visible at the agreed sample times are guaranteed by these cases.
+
+**Trace:** From our market research and team decision to extend retrieval beyond OCR text.
+
+### S11 — Speech and timestamp retrieval
+
+**Statement:** English speech in supported audio/video becomes searchable, and R9/R10/R11 retrieve their original media among the top three with a location covering the relevant spoken interval. Silent video remains eligible for visual indexing.
+
+**Test:** Independently process actual short audio/video fixtures and run speech queries without answer-bearing filenames/metadata. Check source IDs, required speech content, and independently annotated intervals with two-second edge tolerance. Check near-silence, silent video, duration/codec limits, and explicit failures. Do not compare the complete transcript to exact generated wording.
+
+**Trace:** From our team's selected multimodal scope, informed by market research; this was not requested by either interviewee.
+
+### S12 — Recoverable processing and retry
+
+**Statement:** Interrupted or failed processing preserves the original and exposes its state. Reopening/retrying completes a valid current generation without duplicate published segments or stale-claim writes.
+
+**Test:** In a fresh library, interrupt actual processing before publication, reopen, and retry. Inject a recoverable extraction failure, observe Failed, retry, and check one complete Ready generation. Attempt stale-generation publication and verify it does not alter the item.
+
+**Trace:** From Bhavya's interview about knowing what was saved, with processing recovery added by our team.
+
+### S13 — Responsive installable offline PWA
+
+**Statement:** The app supports the agreed phone/laptop layouts and installation paths. After its assets are cached, its interface, policy pages, and saved originals can reopen offline without hiding files behind model setup.
+
+**Test:** Use a production build at 390/768/1440 px; verify navigation, long filenames, empty/errors, focus, keyboard, and reduced motion. Reload the cached shell and originals offline in the same profile. Record physical-phone installation, keyboard-open, safe-area, zoom, and playback checks separately from emulation.
+
+**Trace:** From our team's decision to make the local product usable on iPhone, Android, and laptops.
+
+### S14 — Never upload private content for processing
+
+**Statement:** Core import, extraction, embedding creation, search, restart, and saved-source viewing must never send originals, extracted content, embeddings, source metadata, or queries to remote storage, analytics, or AI services. These paths work offline after setup.
+
+**Test:** With assets ready, exercise all supported modalities using fresh sentinel-bearing private fixtures and monitor actual outgoing requests. Assert no core-path egress or remote sentinel leakage. Test setup and explicit webpage requests separately; they must not attach unrelated content/queries. Missing assets cause repair rather than remote inference. Do not claim control over OS/browser backups.
+
+**Trace:** From our market research on cloud-processing limitations and our team's private local-retrieval decision.
+
+### S15 — Accessible and truthful policy pages
+
+**Statement:** Privacy Policy and Terms and Conditions are linked from Settings and first-use information, work before models are installed, reload directly, and remain accessible offline after app caching. Their descriptions match actual implemented storage/network behavior and do not invent institutional endorsement or security guarantees.
+
+**Test:** In a fresh browser profile, navigate to both hash routes before setup, then cache/reload offline from a production build. Check links and readable headings. Review text against actual destinations, storage, export/delete behavior, and project contact information. Apply the UI copy/style checklist, with physical-device review recorded separately. Policy text alone never proves privacy behavior.
+
+**Trace:** From our team's product-transparency requirements and the agreed UI instructions.
