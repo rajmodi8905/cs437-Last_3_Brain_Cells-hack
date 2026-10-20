@@ -63,10 +63,55 @@ function titleFor(input: SaveInput, kind: ItemKind): string {
   return input.kind === 'note' ? input.text.split(/\r?\n/, 1)[0]?.trim() || kind : kind;
 }
 
+function normalizeTitle(value: string, explicit: boolean): string {
+  const trimmed = value.trim();
+  if (!trimmed) throw error('INVALID_INPUT', 'Title must be between one and 120 Unicode code points.');
+  if (explicit) {
+    if (codePoints(trimmed) > LIMITS.maxTitleCodePoints) throw error('INVALID_INPUT', 'Title must be between one and 120 Unicode code points.');
+    return trimmed;
+  }
+  return Array.from(trimmed).slice(0, LIMITS.maxTitleCodePoints).join('');
+}
+
 function validateUrl(url: string): void {
   let parsed: URL;
   try { parsed = new URL(url); } catch { throw error('INVALID_INPUT', 'Webpage URL is invalid.'); }
   if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') throw error('INVALID_INPUT', 'Webpage URL must use HTTP or HTTPS.');
+}
+
+function isValidHttpUrl(url: string): boolean {
+  try {
+    const parsed = new URL(url);
+    return parsed.protocol === 'http:' || parsed.protocol === 'https:';
+  } catch {
+    return false;
+  }
+}
+
+function validateArchiveEntry(entry: unknown, files: Record<string, Uint8Array>): ArchiveManifest['items'][number] {
+  if (!entry || typeof entry !== 'object') throw error('INVALID_ARCHIVE', 'Archive item metadata is invalid.');
+  const candidate = entry as Partial<ArchiveManifest['items'][number]>;
+  if (typeof candidate.id !== 'string' || !candidate.id.trim()) throw error('INVALID_ARCHIVE', 'Archive item ID is invalid.');
+  if (typeof candidate.kind !== 'string' || !['image', 'pdf', 'note', 'webpage', 'audio', 'video'].includes(candidate.kind)) throw error('INVALID_ARCHIVE', 'Archive item kind is invalid.');
+  if (typeof candidate.title !== 'string' || !candidate.title.trim() || codePoints(candidate.title.trim()) > LIMITS.maxTitleCodePoints) throw error('INVALID_ARCHIVE', 'Archive title is invalid.');
+  if (typeof candidate.mimeType !== 'string' || !candidate.mimeType.trim()) throw error('INVALID_ARCHIVE', 'Archive MIME type is invalid.');
+  if (candidate.kind === 'note' || candidate.kind === 'webpage') {
+    if (!candidate.mimeType.startsWith('text/plain')) throw error('INVALID_ARCHIVE', 'Archive text item MIME type is invalid.');
+  } else if (SUPPORTED_MIME_TYPES[candidate.mimeType] !== candidate.kind) {
+    throw error('INVALID_ARCHIVE', 'Archive item MIME type does not match its kind.');
+  }
+  if (typeof candidate.originalPath !== 'string' || !/^originals\/[0-9a-f-]+$/.test(candidate.originalPath) || candidate.originalPath !== `originals/${candidate.id}` || !files[candidate.originalPath]) {
+    throw error('INVALID_ARCHIVE', 'Archive original path is invalid.');
+  }
+  if (!Number.isInteger(candidate.byteLength) || candidate.byteLength < 0) throw error('INVALID_ARCHIVE', 'Archive item byte length is invalid.');
+  const bytes = files[candidate.originalPath];
+  if (candidate.byteLength !== bytes.length) throw error('INVALID_ARCHIVE', 'Archive byte length does not match its manifest.');
+  if (typeof candidate.contentSha256 !== 'string' || !/^[a-f0-9]{64}$/i.test(candidate.contentSha256)) throw error('INVALID_ARCHIVE', 'Archive item hash is invalid.');
+  if (typeof candidate.createdAt !== 'number' || !Number.isFinite(candidate.createdAt) || candidate.createdAt <= 0) throw error('INVALID_ARCHIVE', 'Archive item timestamp is invalid.');
+  if (candidate.kind === 'webpage') {
+    if (typeof candidate.sourceUrl !== 'string' || !candidate.sourceUrl.trim() || !isValidHttpUrl(candidate.sourceUrl)) throw error('INVALID_ARCHIVE', 'Archive webpage URL is invalid.');
+  }
+  return candidate as ArchiveManifest['items'][number];
 }
 
 export class DexieLibraryRepository implements ProcessingRepository {
@@ -90,8 +135,8 @@ export class DexieLibraryRepository implements ProcessingRepository {
     const contentSha256 = await sha256(blob);
     const originalBytes = await bytesFor(blob);
     const title = titleFor(input, kind!);
-    if (!codePoints(title) || codePoints(title) > LIMITS.maxTitleCodePoints) throw error('INVALID_INPUT', 'Title must be between one and 120 Unicode code points.');
-    const item: LibraryItem = { id, kind: kind!, title: Array.from(title).slice(0, LIMITS.maxTitleCodePoints).join(''), originalName, mimeType, byteLength: blob.size, contentSha256, originalBlobId, createdAt, sourceUrl, status: 'queued', processingGeneration: 0 };
+    const itemTitle = input.title?.trim() ? normalizeTitle(title, true) : normalizeTitle(title, false);
+    const item: LibraryItem = { id, kind: kind!, title: itemTitle, originalName, mimeType, byteLength: blob.size, contentSha256, originalBlobId, createdAt, sourceUrl, status: 'queued', processingGeneration: 0 };
     try {
       await this.database.transaction('rw', this.database.items, this.database.originals, this.database.jobs, async () => {
         await this.database.items.add(item);
@@ -114,7 +159,7 @@ export class DexieLibraryRepository implements ProcessingRepository {
       .sort((left, right) => right.createdAt - left.createdAt || left.id.localeCompare(right.id));
   }
   async renameItem(id: string, title: string): Promise<LibraryItem> {
-    const normalized = title.trim(); if (!codePoints(normalized) || codePoints(normalized) > LIMITS.maxTitleCodePoints) throw error('INVALID_INPUT', 'Title must be between one and 120 Unicode code points.');
+    const normalized = normalizeTitle(title, true);
     return this.database.transaction('rw', this.database.items, this.database.jobs, async () => {
       const item = await this.database.items.get(id); if (!item) throw error('SOURCE_UNAVAILABLE', 'Item was not found.');
       const updated = { ...item, title: normalized, processingGeneration: item.processingGeneration + 1, status: 'queued' as const, error: undefined };
@@ -174,7 +219,21 @@ export class DexieLibraryRepository implements ProcessingRepository {
     try { files = unzipSync(new Uint8Array(await bytesFor(archive))); manifest = JSON.parse(strFromU8(files['manifest.json']!)) as ArchiveManifest; } catch { throw error('INVALID_ARCHIVE', 'Archive is not a valid Campus Recall export.'); }
     if (manifest.format !== 'campus-recall' || manifest.version !== 1 || !Array.isArray(manifest.items) || new Set(manifest.items.map((item) => item.id)).size !== manifest.items.length) throw error('INVALID_ARCHIVE', 'Archive manifest is invalid.');
     const prepared: Array<{ item: LibraryItem; original: OriginalRecord; job: JobRecord }> = []; const skippedDuplicateIds: string[] = [];
-    for (const entry of manifest.items) { if (!/^originals\/[0-9a-f-]+$/.test(entry.originalPath) || entry.originalPath !== `originals/${entry.id}` || !files[entry.originalPath]) throw error('INVALID_ARCHIVE', 'Archive original path is invalid.'); const bytes = files[entry.originalPath]!; if (bytes.length !== entry.byteLength) throw error('INVALID_ARCHIVE', 'Archive byte length does not match its manifest.'); const blobBytes = new ArrayBuffer(bytes.byteLength); new Uint8Array(blobBytes).set(bytes); const blob = new Blob([blobBytes], { type: entry.mimeType }); if (await sha256(blob) !== entry.contentSha256) throw error('INVALID_ARCHIVE', 'Archive hash does not match its original.'); const duplicate = await this.database.items.where('contentSha256').equals(entry.contentSha256).filter((item) => item.kind === entry.kind && item.sourceUrl === entry.sourceUrl).first(); if (duplicate) { skippedDuplicateIds.push(duplicate.id); continue; } const id = crypto.randomUUID(); const originalBlobId = crypto.randomUUID(); const item: LibraryItem = { id, kind: entry.kind, title: entry.title, originalName: entry.originalName, mimeType: entry.mimeType, byteLength: entry.byteLength, contentSha256: entry.contentSha256, originalBlobId, createdAt: entry.createdAt, sourceUrl: entry.sourceUrl, status: 'queued', processingGeneration: 0 }; prepared.push({ item, original: { id: originalBlobId, itemId: id, data: blobBytes, mimeType: entry.mimeType }, job: { itemId: id, generation: 0, queuedAt: Date.now() } }); }
+    const duplicateByKey = new Map<string, string>();
+    for (const rawEntry of manifest.items) {
+      const entry = validateArchiveEntry(rawEntry, files);
+      const bytes = files[entry.originalPath]!;
+      const blobBytes = new ArrayBuffer(bytes.byteLength); new Uint8Array(blobBytes).set(bytes); const blob = new Blob([blobBytes], { type: entry.mimeType });
+      if (await sha256(blob) !== entry.contentSha256) throw error('INVALID_ARCHIVE', 'Archive hash does not match its original.');
+      const duplicateKey = `${entry.kind}|${entry.contentSha256}|${entry.sourceUrl ?? ''}`;
+      const existingDuplicate = await this.database.items.where('contentSha256').equals(entry.contentSha256).filter((item) => item.kind === entry.kind && item.sourceUrl === entry.sourceUrl).first();
+      const pendingDuplicateId = duplicateByKey.get(duplicateKey);
+      if (existingDuplicate) { skippedDuplicateIds.push(existingDuplicate.id); continue; }
+      if (pendingDuplicateId) { skippedDuplicateIds.push(pendingDuplicateId); continue; }
+      const id = crypto.randomUUID(); const originalBlobId = crypto.randomUUID(); const item: LibraryItem = { id, kind: entry.kind, title: entry.title, originalName: entry.originalName, mimeType: entry.mimeType, byteLength: entry.byteLength, contentSha256: entry.contentSha256, originalBlobId, createdAt: entry.createdAt, sourceUrl: entry.sourceUrl, status: 'queued', processingGeneration: 0 };
+      prepared.push({ item, original: { id: originalBlobId, itemId: id, data: blobBytes, mimeType: entry.mimeType }, job: { itemId: id, generation: 0, queuedAt: Date.now() } });
+      duplicateByKey.set(duplicateKey, id);
+    }
     await this.database.transaction('rw', this.database.items, this.database.originals, this.database.jobs, async () => { await this.database.items.bulkAdd(prepared.map((entry) => entry.item)); await this.database.originals.bulkAdd(prepared.map((entry) => entry.original)); await this.database.jobs.bulkAdd(prepared.map((entry) => entry.job)); });
     return { importedIds: prepared.map((entry) => entry.item.id), skippedDuplicateIds };
   }
