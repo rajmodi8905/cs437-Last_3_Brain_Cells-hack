@@ -103,9 +103,16 @@ function validateArchiveEntry(entry: unknown, files: Record<string, Uint8Array>)
   if (typeof candidate.originalPath !== 'string' || !/^originals\/[0-9a-f-]+$/.test(candidate.originalPath) || candidate.originalPath !== `originals/${candidate.id}` || !files[candidate.originalPath]) {
     throw error('INVALID_ARCHIVE', 'Archive original path is invalid.');
   }
-  if (!Number.isInteger(candidate.byteLength) || candidate.byteLength < 0) throw error('INVALID_ARCHIVE', 'Archive item byte length is invalid.');
+  if (typeof candidate.byteLength !== 'number' || !Number.isInteger(candidate.byteLength) || candidate.byteLength < 0) throw error('INVALID_ARCHIVE', 'Archive item byte length is invalid.');
   const bytes = files[candidate.originalPath];
   if (candidate.byteLength !== bytes.length) throw error('INVALID_ARCHIVE', 'Archive byte length does not match its manifest.');
+  if (candidate.kind === 'note' || candidate.kind === 'webpage') {
+    const text = strFromU8(bytes);
+    if (codePoints(text) > LIMITS.maxTextCodePoints) throw error('INVALID_ARCHIVE', 'Archive text exceeds the supported limit.');
+  } else {
+    const max = candidate.kind === 'image' || candidate.kind === 'pdf' ? LIMITS.maxPdfBytes : candidate.kind === 'audio' ? LIMITS.maxAudioBytes : LIMITS.maxVideoBytes;
+    if (bytes.length > max) throw error('INVALID_ARCHIVE', 'Archive item exceeds its supported size limit.');
+  }
   if (typeof candidate.contentSha256 !== 'string' || !/^[a-f0-9]{64}$/i.test(candidate.contentSha256)) throw error('INVALID_ARCHIVE', 'Archive item hash is invalid.');
   if (typeof candidate.createdAt !== 'number' || !Number.isFinite(candidate.createdAt) || candidate.createdAt <= 0) throw error('INVALID_ARCHIVE', 'Archive item timestamp is invalid.');
   if (candidate.kind === 'webpage') {
@@ -195,7 +202,11 @@ export class DexieLibraryRepository implements ProcessingRepository {
   }
   async recoverInterruptedJobs(): Promise<void> { await this.database.transaction('rw', this.database.items, this.database.jobs, async () => { const jobs = await this.database.jobs.toArray(); for (const job of jobs) if (job.claimId) { const item = await this.database.items.get(job.itemId); if (item?.status === 'processing') await this.database.items.put({ ...item, status: 'queued' }); await this.database.jobs.put({ ...job, claimId: undefined, claimedAt: undefined }); } }); }
   async publishSegments(claim: ProcessingClaim, segments: IndexedSegment[], metadata: { durationMs?: number; pageCount?: number } = {}): Promise<boolean> {
-    if (!segments.every((segment) => segment.itemId === claim.item.id && segment.vector.length === 768 && Array.from(segment.vector).every(Number.isFinite))) return false;
+    if (!segments.every((segment) => {
+      if (segment.itemId !== claim.item.id || segment.vector.length !== 768 || !Array.from(segment.vector).every(Number.isFinite)) return false;
+      const normSquared = Array.from(segment.vector).reduce((sum, value) => sum + value * value, 0);
+      return Number.isFinite(normSquared) && normSquared > 0;
+    })) return false;
     return this.database.transaction('rw', this.database.items, this.database.jobs, this.database.segments, async () => {
       const item = await this.database.items.get(claim.item.id); const job = await this.database.jobs.get(claim.item.id);
       if (!item || !job || job.claimId !== claim.claimId || item.processingGeneration !== claim.generation) return false;
@@ -219,22 +230,28 @@ export class DexieLibraryRepository implements ProcessingRepository {
     try { files = unzipSync(new Uint8Array(await bytesFor(archive))); manifest = JSON.parse(strFromU8(files['manifest.json']!)) as ArchiveManifest; } catch { throw error('INVALID_ARCHIVE', 'Archive is not a valid Campus Recall export.'); }
     if (manifest.format !== 'campus-recall' || manifest.version !== 1 || !Array.isArray(manifest.items) || new Set(manifest.items.map((item) => item.id)).size !== manifest.items.length) throw error('INVALID_ARCHIVE', 'Archive manifest is invalid.');
     const prepared: Array<{ item: LibraryItem; original: OriginalRecord; job: JobRecord }> = []; const skippedDuplicateIds: string[] = [];
-    const duplicateByKey = new Map<string, string>();
     for (const rawEntry of manifest.items) {
       const entry = validateArchiveEntry(rawEntry, files);
       const bytes = files[entry.originalPath]!;
       const blobBytes = new ArrayBuffer(bytes.byteLength); new Uint8Array(blobBytes).set(bytes); const blob = new Blob([blobBytes], { type: entry.mimeType });
       if (await sha256(blob) !== entry.contentSha256) throw error('INVALID_ARCHIVE', 'Archive hash does not match its original.');
-      const duplicateKey = `${entry.kind}|${entry.contentSha256}|${entry.sourceUrl ?? ''}`;
-      const existingDuplicate = await this.database.items.where('contentSha256').equals(entry.contentSha256).filter((item) => item.kind === entry.kind && item.sourceUrl === entry.sourceUrl).first();
-      const pendingDuplicateId = duplicateByKey.get(duplicateKey);
-      if (existingDuplicate) { skippedDuplicateIds.push(existingDuplicate.id); continue; }
-      if (pendingDuplicateId) { skippedDuplicateIds.push(pendingDuplicateId); continue; }
       const id = crypto.randomUUID(); const originalBlobId = crypto.randomUUID(); const item: LibraryItem = { id, kind: entry.kind, title: entry.title, originalName: entry.originalName, mimeType: entry.mimeType, byteLength: entry.byteLength, contentSha256: entry.contentSha256, originalBlobId, createdAt: entry.createdAt, sourceUrl: entry.sourceUrl, status: 'queued', processingGeneration: 0 };
       prepared.push({ item, original: { id: originalBlobId, itemId: id, data: blobBytes, mimeType: entry.mimeType }, job: { itemId: id, generation: 0, queuedAt: Date.now() } });
-      duplicateByKey.set(duplicateKey, id);
     }
-    await this.database.transaction('rw', this.database.items, this.database.originals, this.database.jobs, async () => { await this.database.items.bulkAdd(prepared.map((entry) => entry.item)); await this.database.originals.bulkAdd(prepared.map((entry) => entry.original)); await this.database.jobs.bulkAdd(prepared.map((entry) => entry.job)); });
-    return { importedIds: prepared.map((entry) => entry.item.id), skippedDuplicateIds };
+    const importedIds: string[] = [];
+    await this.database.transaction('rw', this.database.items, this.database.originals, this.database.jobs, async () => {
+      for (const entry of prepared) {
+        const existingDuplicate = await this.database.items.where('contentSha256').equals(entry.item.contentSha256).filter((item) => item.kind === entry.item.kind && item.sourceUrl === entry.item.sourceUrl).first();
+        if (existingDuplicate) {
+          skippedDuplicateIds.push(existingDuplicate.id);
+          continue;
+        }
+        await this.database.items.add(entry.item);
+        await this.database.originals.add(entry.original);
+        await this.database.jobs.add(entry.job);
+        importedIds.push(entry.item.id);
+      }
+    });
+    return { importedIds, skippedDuplicateIds };
   }
 }

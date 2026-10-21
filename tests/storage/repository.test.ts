@@ -78,10 +78,41 @@ describe('DexieLibraryRepository', () => {
         originalPath: `originals/${entryId}`
       }]
     };
-    const archive = new Blob([zipSync({ [`originals/${entryId}`]: bytes, 'manifest.json': strToU8(JSON.stringify(manifest)) })], { type: 'application/zip' });
+    const archiveBytes = zipSync({ [`originals/${entryId}`]: bytes, 'manifest.json': strToU8(JSON.stringify(manifest)) });
+    const archiveBuffer = new ArrayBuffer(archiveBytes.byteLength);
+    new Uint8Array(archiveBuffer).set(archiveBytes);
+    const archive = new Blob([archiveBuffer], { type: 'application/zip' });
 
     await expect(repository.importArchive(archive)).rejects.toMatchObject({ detail: { code: 'INVALID_ARCHIVE' } });
     expect((await repository.listItems())).toHaveLength(0);
+  });
+
+  it('rejects an oversized archive note before committing any writes', async () => {
+    const entryId = crypto.randomUUID();
+    const bytes = new TextEncoder().encode('x'.repeat(20_001));
+    const digest = Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', bytes)), (byte) => byte.toString(16).padStart(2, '0')).join('');
+    const manifest = {
+      format: 'campus-recall',
+      version: 1,
+      exportedAt: Date.now(),
+      items: [{
+        id: entryId,
+        kind: 'note',
+        title: 'Oversized note',
+        mimeType: 'text/plain;charset=utf-8',
+        byteLength: bytes.length,
+        contentSha256: digest,
+        createdAt: Date.now(),
+        originalPath: `originals/${entryId}`
+      }]
+    };
+    const archiveBytes = zipSync({ [`originals/${entryId}`]: bytes, 'manifest.json': strToU8(JSON.stringify(manifest)) });
+    const archiveBuffer = new ArrayBuffer(archiveBytes.byteLength);
+    new Uint8Array(archiveBuffer).set(archiveBytes);
+    const archive = new Blob([archiveBuffer], { type: 'application/zip' });
+
+    await expect(repository.importArchive(archive)).rejects.toMatchObject({ detail: { code: 'INVALID_ARCHIVE' } });
+    expect(await repository.listItems()).toHaveLength(0);
   });
 
   it('allows only one concurrent claim for a queued job', async () => {
@@ -110,5 +141,33 @@ describe('DexieLibraryRepository', () => {
     const duplicateReport = await restored.importArchive(archive);
     expect(duplicateReport.importedIds).toHaveLength(0);
     expect(duplicateReport.skippedDuplicateIds).toEqual([imported!.id]);
+  });
+
+  it('serializes concurrent imports so only one creates the item', async () => {
+    const item = await repository.save({ kind: 'webpage', url: 'https://example.test/concurrent', text: 'snapshot', title: 'Page' });
+    const archive = await repository.exportItems([item.id]);
+    const targetDatabase = new CampusRecallDatabase(`test-${crypto.randomUUID()}`);
+    const targetRepository = new DexieLibraryRepository(targetDatabase);
+    await targetRepository.open();
+
+    const [first, second] = await Promise.all([targetRepository.importArchive(archive), targetRepository.importArchive(archive)]);
+
+    expect([first.importedIds.length, second.importedIds.length].sort()).toEqual([0, 1]);
+    expect([first.skippedDuplicateIds.length, second.skippedDuplicateIds.length].sort()).toEqual([0, 1]);
+    expect(await targetRepository.listItems()).toHaveLength(1);
+  });
+
+  it('rejects zero vectors before publishing ready state', async () => {
+    const item = await repository.save(makeNote('zero vector'));
+    const claim = await repository.claimNextJob();
+    expect(claim).toBeDefined();
+
+    const segment: IndexedSegment = {
+      id: crypto.randomUUID(), itemId: item.id, modality: 'text', location: { kind: 'whole' },
+      text: 'zero', vector: new Float32Array(768), indexVersion: 'test'
+    };
+    expect(await repository.publishSegments(claim!, [segment])).toBe(false);
+    expect((await repository.getItem(item.id))?.status).toBe('processing');
+    expect(await repository.listSearchableSegments('test')).toHaveLength(0);
   });
 });
