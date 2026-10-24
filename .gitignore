@@ -3,3 +3,7 @@ dist/
 coverage/
 .models/
 .cache/
+public/runtime/
+public/asset-manifest.json
+playwright-report/
+test-results/

@@ -1,5 +1,7 @@
 # Campus Recall verification checklist
 
+**23 October integration note:** The foundation-only findings and command evidence below are historical evidence from Chaitanya’s content handoff, not the current application status. Raj has implemented the product and added real-model, browser and accessibility tests. Read [current verification evidence](../verification/README.md) for actual results. Physical-device manual scenarios remain untested until the team records them. Policy changes in this integration still need team review before a deployment.
+
 **Draft content handoff.** Documentation review and foundation checks are distinct from unfinished application acceptance. All manual scenarios below are **Untested**. Raj owns UI/engine/PWA implementation and automated application acceptance; Chaitanya supplies content and review instructions only.
 
 ## Documentation validation contract

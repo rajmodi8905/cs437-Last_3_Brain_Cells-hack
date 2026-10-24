@@ -1,0 +1,189 @@
+{
+  "kind": "Public setup endpoints only; no private content or queries sent",
+  "results": [
+    {
+      "name": "embeddinggemma-2-ONNX/config.json",
+      "url": "https://huggingface.co/onnx-community/embeddinggemma-2-ONNX/resolve/daa72c51243991dfcaf9f9137d2c573d8f7790c0/config.json",
+      "status": 200,
+      "ok": true,
+      "redirected": true,
+      "finalHost": "huggingface.co"
+    },
+    {
+      "name": "embeddinggemma-2-ONNX/config_sentence_transformers.json",
+      "url": "https://huggingface.co/onnx-community/embeddinggemma-2-ONNX/resolve/daa72c51243991dfcaf9f9137d2c573d8f7790c0/config_sentence_transformers.json",
+      "status": 200,
+      "ok": true,
+      "redirected": true,
+      "finalHost": "huggingface.co"
+    },
+    {
+      "name": "embeddinggemma-2-ONNX/onnx/model_q4.onnx",
+      "url": "https://huggingface.co/onnx-community/embeddinggemma-2-ONNX/resolve/daa72c51243991dfcaf9f9137d2c573d8f7790c0/onnx/model_q4.onnx",
+      "status": 200,
+      "ok": true,
+      "redirected": true,
+      "finalHost": "us.aws.cdn.hf.co"
+    },
+    {
+      "name": "embeddinggemma-2-ONNX/onnx/model_q4.onnx_data",
+      "url": "https://huggingface.co/onnx-community/embeddinggemma-2-ONNX/resolve/daa72c51243991dfcaf9f9137d2c573d8f7790c0/onnx/model_q4.onnx_data",
+      "status": 200,
+      "ok": true,
+      "redirected": true,
+      "finalHost": "us.aws.cdn.hf.co"
+    },
+    {
+      "name": "embeddinggemma-2-ONNX/onnx/vision_encoder_q4.onnx",
+      "url": "https://huggingface.co/onnx-community/embeddinggemma-2-ONNX/resolve/daa72c51243991dfcaf9f9137d2c573d8f7790c0/onnx/vision_encoder_q4.onnx",
+      "status": 200,
+      "ok": true,
+      "redirected": true,
+      "finalHost": "us.aws.cdn.hf.co"
+    },
+    {
+      "name": "embeddinggemma-2-ONNX/onnx/vision_encoder_q4.onnx_data",
+      "url": "https://huggingface.co/onnx-community/embeddinggemma-2-ONNX/resolve/daa72c51243991dfcaf9f9137d2c573d8f7790c0/onnx/vision_encoder_q4.onnx_data",
+      "status": 200,
+      "ok": true,
+      "redirected": true,
+      "finalHost": "us.aws.cdn.hf.co"
+    },
+    {
+      "name": "embeddinggemma-2-ONNX/preprocessor_config.json",
+      "url": "https://huggingface.co/onnx-community/embeddinggemma-2-ONNX/resolve/daa72c51243991dfcaf9f9137d2c573d8f7790c0/preprocessor_config.json",
+      "status": 200,
+      "ok": true,
+      "redirected": true,
+      "finalHost": "huggingface.co"
+    },
+    {
+      "name": "embeddinggemma-2-ONNX/processor_config.json",
+      "url": "https://huggingface.co/onnx-community/embeddinggemma-2-ONNX/resolve/daa72c51243991dfcaf9f9137d2c573d8f7790c0/processor_config.json",
+      "status": 200,
+      "ok": true,
+      "redirected": true,
+      "finalHost": "huggingface.co"
+    },
+    {
+      "name": "embeddinggemma-2-ONNX/tokenizer.json",
+      "url": "https://huggingface.co/onnx-community/embeddinggemma-2-ONNX/resolve/daa72c51243991dfcaf9f9137d2c573d8f7790c0/tokenizer.json",
+      "status": 200,
+      "ok": true,
+      "redirected": true,
+      "finalHost": "us.aws.cdn.hf.co"
+    },
+    {
+      "name": "embeddinggemma-2-ONNX/tokenizer_config.json",
+      "url": "https://huggingface.co/onnx-community/embeddinggemma-2-ONNX/resolve/daa72c51243991dfcaf9f9137d2c573d8f7790c0/tokenizer_config.json",
+      "status": 200,
+      "ok": true,
+      "redirected": true,
+      "finalHost": "huggingface.co"
+    },
+    {
+      "name": "whisper-tiny.en/added_tokens.json",
+      "url": "https://huggingface.co/onnx-community/whisper-tiny.en/resolve/2575352d61be1bf7225cf8f8b268a4678025fc58/added_tokens.json",
+      "status": 200,
+      "ok": true,
+      "redirected": true,
+      "finalHost": "huggingface.co"
+    },
+    {
+      "name": "whisper-tiny.en/config.json",
+      "url": "https://huggingface.co/onnx-community/whisper-tiny.en/resolve/2575352d61be1bf7225cf8f8b268a4678025fc58/config.json",
+      "status": 200,
+      "ok": true,
+      "redirected": true,
+      "finalHost": "huggingface.co"
+    },
+    {
+      "name": "whisper-tiny.en/generation_config.json",
+      "url": "https://huggingface.co/onnx-community/whisper-tiny.en/resolve/2575352d61be1bf7225cf8f8b268a4678025fc58/generation_config.json",
+      "status": 200,
+      "ok": true,
+      "redirected": true,
+      "finalHost": "huggingface.co"
+    },
+    {
+      "name": "whisper-tiny.en/normalizer.json",
+      "url": "https://huggingface.co/onnx-community/whisper-tiny.en/resolve/2575352d61be1bf7225cf8f8b268a4678025fc58/normalizer.json",
+      "status": 200,
+      "ok": true,
+      "redirected": true,
+      "finalHost": "huggingface.co"
+    },
+    {
+      "name": "whisper-tiny.en/onnx/decoder_model_merged_quantized.onnx",
+      "url": "https://huggingface.co/onnx-community/whisper-tiny.en/resolve/2575352d61be1bf7225cf8f8b268a4678025fc58/onnx/decoder_model_merged_quantized.onnx",
+      "status": 200,
+      "ok": true,
+      "redirected": true,
+      "finalHost": "us.aws.cdn.hf.co"
+    },
+    {
+      "name": "whisper-tiny.en/onnx/encoder_model_quantized.onnx",
+      "url": "https://huggingface.co/onnx-community/whisper-tiny.en/resolve/2575352d61be1bf7225cf8f8b268a4678025fc58/onnx/encoder_model_quantized.onnx",
+      "status": 200,
+      "ok": true,
+      "redirected": true,
+      "finalHost": "us.aws.cdn.hf.co"
+    },
+    {
+      "name": "whisper-tiny.en/preprocessor_config.json",
+      "url": "https://huggingface.co/onnx-community/whisper-tiny.en/resolve/2575352d61be1bf7225cf8f8b268a4678025fc58/preprocessor_config.json",
+      "status": 200,
+      "ok": true,
+      "redirected": true,
+      "finalHost": "huggingface.co"
+    },
+    {
+      "name": "whisper-tiny.en/quantize_config.json",
+      "url": "https://huggingface.co/onnx-community/whisper-tiny.en/resolve/2575352d61be1bf7225cf8f8b268a4678025fc58/quantize_config.json",
+      "status": 200,
+      "ok": true,
+      "redirected": true,
+      "finalHost": "huggingface.co"
+    },
+    {
+      "name": "whisper-tiny.en/special_tokens_map.json",
+      "url": "https://huggingface.co/onnx-community/whisper-tiny.en/resolve/2575352d61be1bf7225cf8f8b268a4678025fc58/special_tokens_map.json",
+      "status": 200,
+      "ok": true,
+      "redirected": true,
+      "finalHost": "huggingface.co"
+    },
+    {
+      "name": "whisper-tiny.en/tokenizer.json",
+      "url": "https://huggingface.co/onnx-community/whisper-tiny.en/resolve/2575352d61be1bf7225cf8f8b268a4678025fc58/tokenizer.json",
+      "status": 200,
+      "ok": true,
+      "redirected": true,
+      "finalHost": "huggingface.co"
+    },
+    {
+      "name": "whisper-tiny.en/tokenizer_config.json",
+      "url": "https://huggingface.co/onnx-community/whisper-tiny.en/resolve/2575352d61be1bf7225cf8f8b268a4678025fc58/tokenizer_config.json",
+      "status": 200,
+      "ok": true,
+      "redirected": true,
+      "finalHost": "huggingface.co"
+    },
+    {
+      "name": "whisper-tiny.en/vocab.json",
+      "url": "https://huggingface.co/onnx-community/whisper-tiny.en/resolve/2575352d61be1bf7225cf8f8b268a4678025fc58/vocab.json",
+      "status": 200,
+      "ok": true,
+      "redirected": true,
+      "finalHost": "huggingface.co"
+    },
+    {
+      "name": "English OCR data",
+      "url": "https://cdn.jsdelivr.net/npm/@tesseract.js-data/eng@1.0.0/4.0.0_best_int/eng.traineddata.gz",
+      "status": 200,
+      "ok": true,
+      "redirected": false,
+      "finalHost": "cdn.jsdelivr.net"
+    }
+  ]
+}

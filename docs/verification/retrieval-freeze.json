@@ -1,0 +1,20 @@
+{
+  "frozenAt": "2026-10-23T12:45:40.680Z",
+  "indexVersion": "gemma2-daa72c5-q4-768-ch256o48-img70-lowered1-notitledup1-asr2-v7",
+  "thresholds": {
+    "text": 0.7,
+    "visual": 0.69
+  },
+  "evaluationStatus": "Consumed original corpus. Current runs are regression tests, not independent held-out evidence. Original queries, targets and negatives remain unchanged. Single query prefix retained; redundant note titles removed; ASR edge-silence offset preserved. Calibration determines thresholds separately.",
+  "hashes": {
+    "tests/fixtures/corpus.json": "534c379cc2dd336fded0b36d57957a17a249c16a39a36f380088581e82f6c1b3",
+    "tests/fixtures/calibration.json": "e7acc8adaa5d61a1f8bff9c798ac52f724c60c42229de796935c2dbc71f658c4",
+    "src/engine/model.worker.ts": "b40863a8703f7b3a201444fefeba0f7f45378a0bcaf4f84a2a4e81630ff7ab31",
+    "src/engine/query.ts": "aad0826db4b158c0fdcd926678836a0bf6dd60afb66adf431aad8f83d6bf5159",
+    "src/engine/documents.ts": "0e903f1e7a1921ac21b3daf2e193721834679f746abe9bfd0495369a090b6592",
+    "src/engine/audio.ts": "9bdc3d9d4ce07d0cf73c45637e7faf875e3647e12231cd66a8a5269ccd6fb6f5",
+    "src/engine/ranking.ts": "bf48e244356a381673b9a005c95ef7ce565f25d0d7d6b2aed70412db90ea3dc6",
+    "src/engine/onnx-q4.ts": "95966f958a33c14959837ed607b59ab93232afb72ba3fc95629167700574c84a",
+    "scripts/model-assets.json": "b6a6d5069ae2a955f5e557c91092e504c26d41d3be9fe2b6c887fd0c111b7d93"
+  }
+}

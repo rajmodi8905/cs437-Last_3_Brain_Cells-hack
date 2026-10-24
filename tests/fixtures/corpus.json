@@ -1,0 +1,196 @@
+{
+  "provenance": "Team-created synthetic fixtures. Drawings rendered from SVG; speech synthesized using macOS Samantha. No actual announcements or interview artifacts.",
+  "targets": [
+    {
+      "id": "R1",
+      "file": "sample-01.jpg",
+      "query": "Find the badminton team registration announcement",
+      "sha256": "3c9f34dc6a34ec3bade0063d335d7c327c349d19ff1d00c807a4e8d60bb38899"
+    },
+    {
+      "id": "R2",
+      "file": "sample-02.png",
+      "query": "When do we hand in the CS437 project?",
+      "sha256": "0b7d9ee7b494975c25de4c65f89f3ed697fbfa18150b83e9adb0e9197dd49c92"
+    },
+    {
+      "id": "R3",
+      "file": "sample-03.pdf",
+      "query": "How many classmates can work together for CS437?",
+      "page": 2,
+      "sha256": "5b124fb2928e9db137ff87b77d6351100f828b9853059733f39e61bab3480374"
+    },
+    {
+      "id": "R4",
+      "kind": "note",
+      "text": "Meet the mentor at the north library entrance on Tuesday afternoon.",
+      "query": "Where is our adviser appointment?"
+    },
+    {
+      "id": "R5",
+      "kind": "webpage",
+      "url": "https://example.test/fixture/05",
+      "text": "Build a robot at the student workshop. Registration opens on Thursday. Fill in the application to reserve your place.",
+      "query": "Find the sign-up page for the robot-building session"
+    },
+    {
+      "id": "R6",
+      "file": "sample-06.pdf",
+      "query": "How long is the appeal window?",
+      "page": 2,
+      "sha256": "6e87b85ac10703175d1dea8f2f80ea609a231b350bc6753ef3fff6792d7e5b12"
+    },
+    {
+      "id": "R7",
+      "file": "sample-07.png",
+      "query": "Find the red backpack on the table",
+      "visual": true,
+      "sha256": "616a5c9cd7ebbf94b3c54d0b15487bb68b3db2be19692b83d099d13dbf7c8a33"
+    },
+    {
+      "id": "R8",
+      "file": "sample-08.png",
+      "query": "Find the bicycle beside the basketball court",
+      "visual": true,
+      "sha256": "5d3f58be4c1f3ef27a4cb3ee639f48361b63cf6ed7ae0bf7c8a7871abc25f487"
+    },
+    {
+      "id": "R9",
+      "file": "sample-09.mp3",
+      "query": "Find the voice announcement about the chess orientation",
+      "interval": [
+        0,
+        18
+      ],
+      "sha256": "f269ba303500dc3264062d25cd3566fcb711f29818889464de8d6443f3f73bc7"
+    },
+    {
+      "id": "R10",
+      "file": "sample-10.m4a",
+      "query": "Where was the recording about collecting the lab access card?",
+      "interval": [
+        0,
+        18
+      ],
+      "sha256": "a004a0f2f9269ad96ce967a30d710ddd63a15d04223d75ec2379883164658f36"
+    },
+    {
+      "id": "R11",
+      "file": "sample-11.mp4",
+      "query": "Find the video explaining where theatre rehearsal is",
+      "interval": [
+        3,
+        21
+      ],
+      "sha256": "12c6bb982bd2572483e805bbaaaadae2e3ee6d63473671faf50a8c3e43ca8c5e"
+    },
+    {
+      "id": "R12",
+      "file": "sample-12.mp4",
+      "query": "Find the video with a yellow umbrella next to a bicycle",
+      "visual": true,
+      "interval": [
+        0,
+        7
+      ],
+      "sha256": "36e3e632a02b3341478918008269d0e63d728607b60e9c361fb40a7e7a5514ae"
+    }
+  ],
+  "distractors": [
+    {
+      "id": "D1",
+      "kind": "note",
+      "text": "Football trials registration closes next Tuesday. Bring boots."
+    },
+    {
+      "id": "D2",
+      "kind": "note",
+      "text": "CS201 homework submission is due next Monday at noon."
+    },
+    {
+      "id": "D3",
+      "kind": "note",
+      "text": "The chemistry group assignment allows five students per team."
+    },
+    {
+      "id": "D4",
+      "kind": "note",
+      "text": "Meet the finance tutor at the south cafeteria on Friday."
+    },
+    {
+      "id": "D5",
+      "kind": "note",
+      "text": "Painting workshop materials are available in the studio."
+    },
+    {
+      "id": "D6",
+      "kind": "note",
+      "text": "A committee review meeting will happen this Wednesday."
+    },
+    {
+      "id": "D7",
+      "kind": "note",
+      "text": "The library opens at eight on weekdays and nine on weekends."
+    },
+    {
+      "id": "D8",
+      "kind": "note",
+      "text": "Music practice rooms can be booked through the activity office."
+    },
+    {
+      "id": "D9",
+      "kind": "note",
+      "text": "The cafeteria serves lunch between twelve and two."
+    },
+    {
+      "id": "D10",
+      "kind": "note",
+      "text": "Return borrowed sports equipment to the front desk."
+    },
+    {
+      "id": "D11",
+      "file": "sample-23.png",
+      "sha256": "c6ee45eea5de20e870b61b510d2357b14c6267a382f13c43343da70a580cc396"
+    },
+    {
+      "id": "D12",
+      "file": "sample-24.png",
+      "sha256": "ed0dd4d98b12663ea1818e137bc58670398c8386981b2e0b8f651995f4f6d72a"
+    },
+    {
+      "id": "D13",
+      "file": "sample-25.png",
+      "sha256": "2846e1e04c604e931e2273c8c526429da8e1a3dadf835eb6dddd4350a1bafd2a"
+    },
+    {
+      "id": "D14",
+      "file": "sample-26.pdf",
+      "sha256": "04e72f23c5d19a911b3e236e59fab24cc43503952a017986aed80f3759299c12"
+    },
+    {
+      "id": "D15",
+      "file": "sample-27.pdf",
+      "sha256": "4d0d4ec79e35bc149b4d3bda9c38b6692d2f371e8ece67046fa402b76d351ad8"
+    },
+    {
+      "id": "D16",
+      "file": "sample-28.mp3",
+      "sha256": "dcdb990bce0b22f9c203768896e3e965f5934d3bbc627a59c7661c7d631b249f"
+    },
+    {
+      "id": "D17",
+      "file": "sample-29.mp3",
+      "sha256": "5f484d7e0e46ab8c6f95ac61ef3cf95c7ef891d7fd1129444e1da19ab95c7d95"
+    },
+    {
+      "id": "D18",
+      "file": "sample-30.mp4",
+      "sha256": "aa83204c7346d846562e149f5c397d0780c03d16d15be9b29207fdf7d90c0d3f"
+    }
+  ],
+  "negatives": [
+    "Find the instructions for replacing a car's alternator.",
+    "Find the sourdough bread recipe I saved.",
+    "Show the hotel reservation for my Paris holiday."
+  ]
+}

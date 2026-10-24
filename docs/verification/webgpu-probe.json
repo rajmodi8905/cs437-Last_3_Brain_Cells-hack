@@ -1,0 +1,14 @@
+{
+  "adapter": true,
+  "gpu": {
+    "vendor": "apple",
+    "architecture": "metal-3",
+    "device": "",
+    "description": ""
+  },
+  "device": "webgpu",
+  "dimensions": 768,
+  "imageDimensions": 768,
+  "elapsedMs": 10521.399999976158,
+  "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/156.0.0.0 Safari/537.36"
+}

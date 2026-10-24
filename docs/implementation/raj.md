@@ -1,5 +1,7 @@
 # Raj: core UI, local intelligence, integration, and verification
 
+23 October integration override: Raj requested `raj_final` from merged `main`. Preserve `Raj_setup`. The implementation and checks now exist; see [verification](../verification/README.md). The requirements below remain the handoff baseline.
+
 Branch: existing `Raj_setup`; preserve its history and incorporate latest merged `main` normally. Read [team instructions](README.md), [plan](../../IMPLEMENTATION_PLAN.md), [SPEC](../../SPEC.md), [contracts](contracts.md), and [acceptance design](acceptance.md). Ask before staging/committing and publishing unapproved changes.
 
 This chat implements Raj's package: all core UI/UX, viewers, routing, rendered policy pages, PWA behavior, and all AI/embeddings. Own `src/ui/`, `src/engine/`, `src/app/`, and the PWA assets/configuration. Nakshatra supplies storage/contracts; Chaitanya supplies content documents. Do not build substitute storage or their documentation package. Independent UI/engine work can start after the planning PR merges; production integration uses Nakshatra's merged foundation and reviewed Chaitanya content, following the agreed PR order.

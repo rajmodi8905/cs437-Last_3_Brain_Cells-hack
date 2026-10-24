@@ -1,0 +1,145 @@
+{
+  "environment": "Playwright Chromium; production app origin http://127.0.0.1:4174",
+  "method": "HEAD",
+  "mode": "Browser CORS; omitted credentials/referrer; no private content or queries",
+  "results": [
+    {
+      "name": "embeddinggemma-2-ONNX/config.json",
+      "status": 200,
+      "ok": true,
+      "finalHost": "huggingface.co"
+    },
+    {
+      "name": "embeddinggemma-2-ONNX/config_sentence_transformers.json",
+      "status": 200,
+      "ok": true,
+      "finalHost": "huggingface.co"
+    },
+    {
+      "name": "embeddinggemma-2-ONNX/onnx/model_q4.onnx",
+      "status": 200,
+      "ok": true,
+      "finalHost": "us.aws.cdn.hf.co"
+    },
+    {
+      "name": "embeddinggemma-2-ONNX/onnx/model_q4.onnx_data",
+      "status": 200,
+      "ok": true,
+      "finalHost": "us.aws.cdn.hf.co"
+    },
+    {
+      "name": "embeddinggemma-2-ONNX/onnx/vision_encoder_q4.onnx",
+      "status": 200,
+      "ok": true,
+      "finalHost": "us.aws.cdn.hf.co"
+    },
+    {
+      "name": "embeddinggemma-2-ONNX/onnx/vision_encoder_q4.onnx_data",
+      "status": 200,
+      "ok": true,
+      "finalHost": "us.aws.cdn.hf.co"
+    },
+    {
+      "name": "embeddinggemma-2-ONNX/preprocessor_config.json",
+      "status": 200,
+      "ok": true,
+      "finalHost": "huggingface.co"
+    },
+    {
+      "name": "embeddinggemma-2-ONNX/processor_config.json",
+      "status": 200,
+      "ok": true,
+      "finalHost": "huggingface.co"
+    },
+    {
+      "name": "embeddinggemma-2-ONNX/tokenizer.json",
+      "status": 200,
+      "ok": true,
+      "finalHost": "us.aws.cdn.hf.co"
+    },
+    {
+      "name": "embeddinggemma-2-ONNX/tokenizer_config.json",
+      "status": 200,
+      "ok": true,
+      "finalHost": "huggingface.co"
+    },
+    {
+      "name": "whisper-tiny.en/added_tokens.json",
+      "status": 200,
+      "ok": true,
+      "finalHost": "huggingface.co"
+    },
+    {
+      "name": "whisper-tiny.en/config.json",
+      "status": 200,
+      "ok": true,
+      "finalHost": "huggingface.co"
+    },
+    {
+      "name": "whisper-tiny.en/generation_config.json",
+      "status": 200,
+      "ok": true,
+      "finalHost": "huggingface.co"
+    },
+    {
+      "name": "whisper-tiny.en/normalizer.json",
+      "status": 200,
+      "ok": true,
+      "finalHost": "huggingface.co"
+    },
+    {
+      "name": "whisper-tiny.en/onnx/decoder_model_merged_quantized.onnx",
+      "status": 200,
+      "ok": true,
+      "finalHost": "us.aws.cdn.hf.co"
+    },
+    {
+      "name": "whisper-tiny.en/onnx/encoder_model_quantized.onnx",
+      "status": 200,
+      "ok": true,
+      "finalHost": "us.aws.cdn.hf.co"
+    },
+    {
+      "name": "whisper-tiny.en/preprocessor_config.json",
+      "status": 200,
+      "ok": true,
+      "finalHost": "huggingface.co"
+    },
+    {
+      "name": "whisper-tiny.en/quantize_config.json",
+      "status": 200,
+      "ok": true,
+      "finalHost": "huggingface.co"
+    },
+    {
+      "name": "whisper-tiny.en/special_tokens_map.json",
+      "status": 200,
+      "ok": true,
+      "finalHost": "huggingface.co"
+    },
+    {
+      "name": "whisper-tiny.en/tokenizer.json",
+      "status": 200,
+      "ok": true,
+      "finalHost": "huggingface.co"
+    },
+    {
+      "name": "whisper-tiny.en/tokenizer_config.json",
+      "status": 200,
+      "ok": true,
+      "finalHost": "huggingface.co"
+    },
+    {
+      "name": "whisper-tiny.en/vocab.json",
+      "status": 200,
+      "ok": true,
+      "finalHost": "huggingface.co"
+    },
+    {
+      "name": "English OCR data",
+      "status": 200,
+      "ok": true,
+      "finalHost": "cdn.jsdelivr.net"
+    }
+  ]
+}

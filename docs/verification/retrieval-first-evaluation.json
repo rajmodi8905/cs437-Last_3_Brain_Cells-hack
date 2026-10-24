@@ -1,0 +1,341 @@
+{
+  "count": 30,
+  "ids": {
+    "R1": "3ef90873-28b6-4185-883f-fd2e9eb03547",
+    "R2": "92201115-576d-4de4-b245-45d54c16c19b",
+    "R3": "fa51dd37-ab91-438c-80e9-44bdd172e2b7",
+    "R4": "9d7aca9a-31d0-40b1-9b61-450c053a0ed8",
+    "R5": "fcfc7991-285d-494f-a6df-603154ddecb8",
+    "R6": "4bc4e1d2-8ee9-45b0-b753-22fcb3efad01",
+    "R7": "c8c2682f-9181-4759-b471-972586cef92a",
+    "R8": "38c1a64b-2931-4e34-bc4a-6e7ed80f1a5f",
+    "R9": "0853aeda-d2cb-43f8-b48b-24c2daee7a7a",
+    "R10": "06c9cb7e-9383-4eca-ba45-3cb9b54ad5c7",
+    "R11": "c5eaea25-a365-4885-8223-2c2de15d551f",
+    "R12": "fbc9b18e-a71b-4485-8074-ffed262fc3ae",
+    "D1": "db1004af-7fda-4ffe-8173-9153392af771",
+    "D2": "ceef33dd-93ff-4a61-b777-c9c3d8a76020",
+    "D3": "cd3c84c1-8b15-4e74-8af5-c12c7f144c87",
+    "D4": "72b25fc8-a539-489d-a01d-e1e665d1d81e",
+    "D5": "97c9740f-b4f8-4480-9f52-c61c9eedf84e",
+    "D6": "8413df18-c38c-43d2-a91b-c9aa8cbebc31",
+    "D7": "4cd6d93d-a7d7-4acd-866e-769d83e5d37e",
+    "D8": "22560bfd-3179-460d-8455-db65a717a380",
+    "D9": "2d7c4217-2d1f-42a8-8ef4-1a2a175de0b9",
+    "D10": "9dc19b23-e075-4f5e-80cb-a108cb4e285a",
+    "D11": "89fe54d6-912d-4c3d-9cca-08bfa904c442",
+    "D12": "073b5bab-700e-43fc-8f6b-4e03950c31f2",
+    "D13": "c677c1da-137b-4c78-bb2d-b5479d89cad1",
+    "D14": "7f4bea2c-0978-4ba5-88c2-d4a2975ddb4e",
+    "D15": "8496d5ec-d7f7-416b-aa61-baedf40de54b",
+    "D16": "1dcf83db-7652-48c7-9d49-b863127a5a78",
+    "D17": "4efce21a-d729-46ae-a70b-a6c1436442c2",
+    "D18": "74e02f76-dcd5-4a93-979b-b89cb6f98d6f"
+  },
+  "timings": {
+    "R1": 13448,
+    "R2": 11471,
+    "R3": 1880,
+    "R4": 672,
+    "R5": 680,
+    "R6": 1200,
+    "R7": 10628,
+    "R8": 10676,
+    "R9": 4991,
+    "R10": 4827,
+    "R11": 32245,
+    "R12": 19713,
+    "D1": 857,
+    "D2": 866,
+    "D3": 642,
+    "D4": 650,
+    "D5": 618,
+    "D6": 626,
+    "D7": 745,
+    "D8": 679,
+    "D9": 621,
+    "D10": 629,
+    "D11": 10213,
+    "D12": 9683,
+    "D13": 10095,
+    "D14": 665,
+    "D15": 660,
+    "D16": 4361,
+    "D17": 4172,
+    "D18": 18924
+  },
+  "failures": [],
+  "positives": [
+    {
+      "id": "R1",
+      "query": "Find the badminton team registration announcement",
+      "expectedItemId": "3ef90873-28b6-4185-883f-fd2e9eb03547",
+      "results": [
+        {
+          "itemId": "3ef90873-28b6-4185-883f-fd2e9eb03547",
+          "segmentId": "a0354be4-f028-40c0-a07a-af22f5844605",
+          "location": {
+            "kind": "whole"
+          },
+          "matchKind": "text",
+          "excerpt": "BADMINTON TEAM TRYOUTS\nSynthetic campus announcement\n\nRegister by Friday, 5 PM\n\nBring your racket to the sports hall.",
+          "score": 0.7982473144435572
+        }
+      ],
+      "elapsedMs": 525
+    },
+    {
+      "id": "R2",
+      "query": "When do we hand in the CS437 project?",
+      "expectedItemId": "92201115-576d-4de4-b245-45d54c16c19b",
+      "results": [
+        {
+          "itemId": "92201115-576d-4de4-b245-45d54c16c19b",
+          "segmentId": "0292afe2-50a6-4bf2-8244-78a8b7ccf3be",
+          "location": {
+            "kind": "whole"
+          },
+          "matchKind": "text",
+          "excerpt": "CS437 PROJECT SUBMISSION\nSynthetic course notice\n\nHand in the report on 5 November\n\nSubmit before 6 PM.",
+          "score": 0.8214049895105314
+        },
+        {
+          "itemId": "fa51dd37-ab91-438c-80e9-44bdd172e2b7",
+          "segmentId": "138ce36b-b215-4d0c-bea5-81c80fda7951",
+          "location": {
+            "kind": "page",
+            "page": 1
+          },
+          "matchKind": "text",
+          "excerpt": "Synthetic CS437 project guidelines\nRead the rules on the next page.",
+          "score": 0.7569901048117567
+        },
+        {
+          "itemId": "ceef33dd-93ff-4a61-b777-c9c3d8a76020",
+          "segmentId": "b91c3dd1-94c0-4973-a013-039e8f6a1e92",
+          "location": {
+            "kind": "whole"
+          },
+          "matchKind": "text",
+          "excerpt": "CS201 homework submission is due next Monday at noon.",
+          "score": 0.7101002708144766
+        }
+      ],
+      "elapsedMs": 762
+    },
+    {
+      "id": "R3",
+      "query": "How many classmates can work together for CS437?",
+      "expectedItemId": "fa51dd37-ab91-438c-80e9-44bdd172e2b7",
+      "results": [
+        {
+          "itemId": "fa51dd37-ab91-438c-80e9-44bdd172e2b7",
+          "segmentId": "be226a43-f826-4fa4-af1b-4a58ae0b25dc",
+          "location": {
+            "kind": "page",
+            "page": 2
+          },
+          "matchKind": "text",
+          "excerpt": "CS437 project rules\nA project group may contain at most three students.",
+          "score": 0.8267506210592925
+        },
+        {
+          "itemId": "cd3c84c1-8b15-4e74-8af5-c12c7f144c87",
+          "segmentId": "34067308-42b2-42ae-8db1-91fbe4d43df2",
+          "location": {
+            "kind": "whole"
+          },
+          "matchKind": "text",
+          "excerpt": "The chemistry group assignment allows five students per team.",
+          "score": 0.7326568188699679
+        },
+        {
+          "itemId": "92201115-576d-4de4-b245-45d54c16c19b",
+          "segmentId": "fc48264d-b7fe-4aec-b4a9-4267e016b73b",
+          "location": {
+            "kind": "whole"
+          },
+          "matchKind": "visual",
+          "score": 0.7030252901822693
+        }
+      ],
+      "elapsedMs": 590
+    },
+    {
+      "id": "R4",
+      "query": "Where is our adviser appointment?",
+      "expectedItemId": "9d7aca9a-31d0-40b1-9b61-450c053a0ed8",
+      "results": [],
+      "elapsedMs": 507
+    },
+    {
+      "id": "R5",
+      "query": "Find the sign-up page for the robot-building session",
+      "expectedItemId": "fcfc7991-285d-494f-a6df-603154ddecb8",
+      "results": [
+        {
+          "itemId": "fcfc7991-285d-494f-a6df-603154ddecb8",
+          "segmentId": "97a3acdc-3956-4738-a176-9f3ccbca9365",
+          "location": {
+            "kind": "whole"
+          },
+          "matchKind": "text",
+          "excerpt": "Build a robot at the student workshop. Registration opens on Thursday. Fill in the application to reserve your place.",
+          "score": 0.8071082504145214
+        }
+      ],
+      "elapsedMs": 567
+    },
+    {
+      "id": "R6",
+      "query": "How long is the appeal window?",
+      "expectedItemId": "4bc4e1d2-8ee9-45b0-b753-22fcb3efad01",
+      "results": [
+        {
+          "itemId": "4bc4e1d2-8ee9-45b0-b753-22fcb3efad01",
+          "segmentId": "2d32691b-691b-400f-ad18-915ce384ef51",
+          "location": {
+            "kind": "page",
+            "page": 2
+          },
+          "matchKind": "text",
+          "excerpt": "Written objections must arrive within seven calendar days.",
+          "score": 0.754311827844737
+        }
+      ],
+      "elapsedMs": 520
+    },
+    {
+      "id": "R7",
+      "query": "Find the red backpack on the table",
+      "expectedItemId": "c8c2682f-9181-4759-b471-972586cef92a",
+      "results": [
+        {
+          "itemId": "c8c2682f-9181-4759-b471-972586cef92a",
+          "segmentId": "257cd709-18d2-4292-a03d-3b65be0b6113",
+          "location": {
+            "kind": "whole"
+          },
+          "matchKind": "visual",
+          "score": 0.8173256918650493
+        }
+      ],
+      "elapsedMs": 517
+    },
+    {
+      "id": "R8",
+      "query": "Find the bicycle beside the basketball court",
+      "expectedItemId": "38c1a64b-2931-4e34-bc4a-6e7ed80f1a5f",
+      "results": [
+        {
+          "itemId": "38c1a64b-2931-4e34-bc4a-6e7ed80f1a5f",
+          "segmentId": "fc91e00f-0b24-4f25-95d1-5ce8dcfdd5e5",
+          "location": {
+            "kind": "whole"
+          },
+          "matchKind": "visual",
+          "score": 0.7815524892330159
+        }
+      ],
+      "elapsedMs": 562
+    },
+    {
+      "id": "R9",
+      "query": "Find the voice announcement about the chess orientation",
+      "expectedItemId": "0853aeda-d2cb-43f8-b48b-24c2daee7a7a",
+      "results": [
+        {
+          "itemId": "0853aeda-d2cb-43f8-b48b-24c2daee7a7a",
+          "segmentId": "1baf6950-e7a2-41fa-b684-1ed618e27b2b",
+          "location": {
+            "kind": "time",
+            "startMs": 2380,
+            "endMs": 8119.999999999999
+          },
+          "matchKind": "text",
+          "excerpt": "Chess Club orientation will be held on Saturday afternoon in the Student Activity Center.",
+          "score": 0.7787939433040381
+        }
+      ],
+      "elapsedMs": 765
+    },
+    {
+      "id": "R10",
+      "query": "Where was the recording about collecting the lab access card?",
+      "expectedItemId": "06c9cb7e-9383-4eca-ba45-3cb9b54ad5c7",
+      "results": [
+        {
+          "itemId": "06c9cb7e-9383-4eca-ba45-3cb9b54ad5c7",
+          "segmentId": "aa99de25-27f2-453b-b4bf-575c0671538b",
+          "location": {
+            "kind": "time",
+            "startMs": 3000,
+            "endMs": 8039.999999999999
+          },
+          "matchKind": "text",
+          "excerpt": "Collect your laboratory access card from the Electronics Office on Monday morning.",
+          "score": 0.8167381496127988
+        }
+      ],
+      "elapsedMs": 929
+    },
+    {
+      "id": "R11",
+      "query": "Find the video explaining where theatre rehearsal is",
+      "expectedItemId": "c5eaea25-a365-4885-8223-2c2de15d551f",
+      "results": [
+        {
+          "itemId": "c5eaea25-a365-4885-8223-2c2de15d551f",
+          "segmentId": "ece0e932-350e-4841-a20c-ed673dc28a00",
+          "location": {
+            "kind": "time",
+            "startMs": 0,
+            "endMs": 12799
+          },
+          "matchKind": "text",
+          "excerpt": "This is a synthetic rehearsal notice. The theater rehearsal will take place in the Black Box Studio near the auditorium. Please arrive before 6 in the evening.",
+          "score": 0.8067502709954842
+        }
+      ],
+      "elapsedMs": 689
+    },
+    {
+      "id": "R12",
+      "query": "Find the video with a yellow umbrella next to a bicycle",
+      "expectedItemId": "fbc9b18e-a71b-4485-8074-ffed262fc3ae",
+      "results": [
+        {
+          "itemId": "fbc9b18e-a71b-4485-8074-ffed262fc3ae",
+          "segmentId": "14ae5ff5-a9eb-44e9-86a7-85a2a0ca8163",
+          "location": {
+            "kind": "time",
+            "startMs": 5000,
+            "endMs": 7000
+          },
+          "matchKind": "visual",
+          "score": 0.7711754824146307
+        }
+      ],
+      "elapsedMs": 762
+    }
+  ],
+  "negatives": [
+    {
+      "query": "Find the instructions for replacing a car's alternator.",
+      "results": []
+    },
+    {
+      "query": "Find the sourdough bread recipe I saved.",
+      "results": []
+    },
+    {
+      "query": "Show the hotel reservation for my Paris holiday.",
+      "results": []
+    }
+  ],
+  "device": "wasm",
+  "indexVersion": "gemma2-daa72c5-q4-768-ch256o48-img70-lowered1-v2",
+  "dimensions": [
+    768
+  ]
+}

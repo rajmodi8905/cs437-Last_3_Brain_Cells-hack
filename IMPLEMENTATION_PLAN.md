@@ -1,6 +1,6 @@
 # Campus Recall: implementation and collaboration plan
 
-Approved direction: 19 October 2026. This document describes requirements, not implemented features. The planning PR must merge before application implementation begins. No application code or executable acceptance tests exist at this checkpoint.
+Approved direction: 19 October 2026. This is the historical planning baseline. The planning PR and both teammate packages are now merged. Raj’s final integration is on `raj_final`, as requested on 23 October; `Raj_setup` is preserved. Actual implementation evidence and remaining release checks are in [docs/verification](docs/verification/README.md). Requirements below remain binding except for the explicitly documented private inference-worker implementation detail.
 
 ## 1. Publish the plan, then work separately
 

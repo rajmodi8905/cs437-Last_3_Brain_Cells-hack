@@ -1,0 +1,129 @@
+.settings-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 22px;
+}
+.settings-section {
+  padding: 25px;
+  min-width: 0;
+}
+.section-title {
+  display: flex;
+  gap: 11px;
+  align-items: flex-start;
+  margin-bottom: 23px;
+  color: #7388a4;
+}
+.section-title div {
+  flex: 1;
+}
+.section-title h2 {
+  font-size: 14px;
+  color: #344457;
+  margin: 1px 0 6px;
+}
+.section-title p {
+  font-size: 10px;
+  margin: 0;
+  color: #8b97a5;
+}
+.section-title .status {
+  font-size: 9px;
+  margin-top: 4px;
+}
+.settings-section > p {
+  font-size: 11px;
+  color: #7c899a;
+  line-height: 1.8;
+  margin-bottom: 20px;
+}
+.settings-section .button {
+  font-size: 11px;
+}
+.settings-section > .field-help {
+  font-size: 10px;
+  margin: 17px 0 0;
+}
+.setup-progress {
+  margin: 18px 0;
+}
+.setup-progress > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 15px;
+  color: #6d7f97;
+  font-size: 10px;
+  margin-bottom: 9px;
+  overflow-wrap: anywhere;
+}
+.setup-progress progress {
+  width: 100%;
+  height: 6px;
+  accent-color: var(--blue);
+}
+.storage-summary {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+}
+.storage-summary strong {
+  font-size: 27px;
+  font-weight: 500;
+  letter-spacing: -1px;
+  color: #3d4d61;
+}
+.storage-summary span {
+  color: #93a0af;
+  font-size: 10px;
+}
+.button-row {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.end {
+  justify-content: flex-end;
+}
+.settings-policy {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 11px;
+  border-top: 1px solid #e9edf2;
+  padding: 13px 0;
+  color: #577399;
+}
+.policy {
+  max-width: 720px;
+  padding: 0 10px 40px;
+}
+.policy > .text-link {
+  margin-bottom: 36px;
+}
+.policy h1 {
+  margin-bottom: 25px;
+}
+.policy h2 {
+  margin: 30px 0 13px;
+}
+.policy h3 {
+  font-size: 15px;
+  margin-top: 25px;
+}
+.policy p {
+  font-size: 13px;
+  line-height: 1.85;
+  color: #667384;
+  overflow-wrap: anywhere;
+}
+.policy-bullet {
+  padding-left: 20px;
+  position: relative;
+}
+.policy-bullet:before {
+  content: '•';
+  position: absolute;
+  left: 4px;
+}

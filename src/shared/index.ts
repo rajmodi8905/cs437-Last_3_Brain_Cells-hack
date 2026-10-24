@@ -12,11 +12,21 @@ export interface AppError {
 }
 
 export type ErrorCode =
-  | 'INVALID_INPUT' | 'UNSUPPORTED_FORMAT' | 'LIMIT_EXCEEDED'
-  | 'STORAGE_FAILED' | 'SOURCE_UNAVAILABLE' | 'INVALID_ARCHIVE'
-  | 'FETCH_BLOCKED' | 'MODEL_NOT_READY' | 'SETUP_FAILED'
-  | 'EXTRACTION_FAILED' | 'INFERENCE_FAILED' | 'CANCELLED'
-  | 'INDEX_INCOMPATIBLE' | 'ENGINE_UNAVAILABLE' | 'INTERNAL_ERROR';
+  | 'INVALID_INPUT'
+  | 'UNSUPPORTED_FORMAT'
+  | 'LIMIT_EXCEEDED'
+  | 'STORAGE_FAILED'
+  | 'SOURCE_UNAVAILABLE'
+  | 'INVALID_ARCHIVE'
+  | 'FETCH_BLOCKED'
+  | 'MODEL_NOT_READY'
+  | 'SETUP_FAILED'
+  | 'EXTRACTION_FAILED'
+  | 'INFERENCE_FAILED'
+  | 'CANCELLED'
+  | 'INDEX_INCOMPATIBLE'
+  | 'ENGINE_UNAVAILABLE'
+  | 'INTERNAL_ERROR';
 
 export class AppOperationError extends Error {
   constructor(public readonly detail: AppError) {
@@ -67,8 +77,14 @@ export type SaveInput =
   | { kind: 'note'; text: string; title?: string }
   | { kind: 'webpage'; url: string; text: string; title?: string };
 
-export interface ItemFilters { kind?: ItemKind; status?: ItemStatus }
-export interface ImportReport { importedIds: string[]; skippedDuplicateIds: string[] }
+export interface ItemFilters {
+  kind?: ItemKind;
+  status?: ItemStatus;
+}
+export interface ImportReport {
+  importedIds: string[];
+  skippedDuplicateIds: string[];
+}
 
 export interface LibraryRepository {
   save(input: SaveInput): Promise<LibraryItem>;
@@ -81,20 +97,47 @@ export interface LibraryRepository {
   importArchive(archive: Blob): Promise<ImportReport>;
 }
 
-export interface ProcessingClaim { item: LibraryItem; generation: number; claimId: string }
-export interface SearchableSegment extends IndexedSegment { itemKind: ItemKind }
+export interface ProcessingClaim {
+  item: LibraryItem;
+  generation: number;
+  claimId: string;
+}
+export interface SearchableSegment extends IndexedSegment {
+  itemKind: ItemKind;
+}
 export interface ProcessingRepository {
   enqueueItem(itemId: string): Promise<void>;
   claimNextJob(): Promise<ProcessingClaim | undefined>;
   recoverInterruptedJobs(): Promise<void>;
-  publishSegments(claim: ProcessingClaim, segments: IndexedSegment[], metadata?: { durationMs?: number; pageCount?: number }): Promise<boolean>;
+  publishSegments(
+    claim: ProcessingClaim,
+    segments: IndexedSegment[],
+    metadata?: { durationMs?: number; pageCount?: number },
+  ): Promise<boolean>;
   failJob(claim: ProcessingClaim, error: AppError): Promise<boolean>;
   cancelItem(itemId: string): Promise<void>;
   listSearchableSegments(indexVersion: string, kind?: ItemKind): Promise<SearchableSegment[]>;
 }
 
-export type ProcessingStage = 'setup' | 'queued' | 'extracting' | 'transcribing' | 'embedding' | 'publishing' | 'ready' | 'failed' | 'cancelled';
-export interface EngineProgress { stage: ProcessingStage; itemId?: string; loadedBytes?: number; totalBytes?: number; completedUnits?: number; totalUnits?: number; message?: string }
+export type ProcessingStage =
+  | 'setup'
+  | 'queued'
+  | 'extracting'
+  | 'transcribing'
+  | 'embedding'
+  | 'publishing'
+  | 'ready'
+  | 'failed'
+  | 'cancelled';
+export interface EngineProgress {
+  stage: ProcessingStage;
+  itemId?: string;
+  loadedBytes?: number;
+  totalBytes?: number;
+  completedUnits?: number;
+  totalUnits?: number;
+  message?: string;
+}
 export type ProgressListener = (event: EngineProgress) => void;
 export interface EngineClient {
   setupModels(onProgress?: ProgressListener): Promise<void>;
@@ -114,11 +157,18 @@ export const LIMITS = {
   maxVideoBytes: 100_000_000,
   maxPdfPages: 50,
   maxAudioDurationMs: 5 * 60 * 1000,
-  maxVideoDurationMs: 2 * 60 * 1000
+  maxVideoDurationMs: 2 * 60 * 1000,
 } as const;
 
 export const SUPPORTED_MIME_TYPES: Record<string, ItemKind> = {
-  'image/jpeg': 'image', 'image/png': 'image', 'image/webp': 'image',
-  'application/pdf': 'pdf', 'audio/mpeg': 'audio', 'audio/wav': 'audio',
-  'audio/x-wav': 'audio', 'audio/mp4': 'audio', 'video/mp4': 'video'
+  'image/jpeg': 'image',
+  'image/png': 'image',
+  'image/webp': 'image',
+  'application/pdf': 'pdf',
+  'audio/mpeg': 'audio',
+  'audio/wav': 'audio',
+  'audio/x-wav': 'audio',
+  'audio/x-m4a': 'audio',
+  'audio/mp4': 'audio',
+  'video/mp4': 'video',
 };

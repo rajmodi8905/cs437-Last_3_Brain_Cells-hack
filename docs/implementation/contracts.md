@@ -1,6 +1,6 @@
 # Shared contracts, version 1
 
-Status: implementation specification, not executable application code. Nakshatra creates the corresponding TypeScript exports in `src/shared/`. All packages implement these names and semantics. Agree on changes before dependent code diverges.
+Status: shared implementation contract. Nakshatra supplied `src/shared/` and `src/storage/`. The public repository and EngineClient interfaces are retained. Raj’s private inference-worker protocol is typed in `src/app/model-protocol.ts`; public engine orchestration stays in the main-thread adapter for DOM/PDF operations, while inference and media/OCR runtimes use workers. The draft whole-engine worker envelope below is retained as planning history and is not the production wire format. No other teammate consumes that private envelope.
 
 ## 1. Constants and records
 

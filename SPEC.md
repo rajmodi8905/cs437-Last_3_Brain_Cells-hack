@@ -81,7 +81,7 @@ Based on the interviews and our team discussion, we define the problem as follow
 
 Campus Recall will be a free, installable PWA for iPhone, Android, and laptops. A student saves supported originals, searches remembered meaning or visual appearance, and opens the corresponding original image, PDF page, note, snapshot, or media interval. Every device has a separate local library with manual transfer.
 
-**Status:** Specification and implementation handoffs only. No application features, executable acceptance tests, model benchmarks, or physical-device passes are claimed yet. The [implementation plan](IMPLEMENTATION_PLAN.md) must merge before application implementation starts.
+**Status:** The planning PR and both teammate packages are merged. Raj’s implementation on `raj_final` adds the local processing engine, retrieval, interface and PWA. Automated checks and actual-model regression tests pass in the documented Chromium environment. Physical-phone, Safari, installed-PWA and team policy reviews remain outstanding. See [verification evidence](docs/verification/README.md) for results and limits; this specification defines the required behavior, not a blanket completion claim.
 
 Supported inputs: JPEG/PNG/WebP up to 20 MB; unencrypted PDFs up to 20 MB and 50 pages; notes up to 20,000 characters; public webpage text snapshots up to 20,000 characters; MP3/WAV/M4A audio up to five minutes and 50 MB; H.264 MP4 video with optional AAC up to two minutes and 100 MB. MB means 1,000,000 bytes; character limits count Unicode code points. HEIC/HEVC/MOV are outside v1. Unsupported/deep-validation failures have a reason and conversion guidance; already saved originals remain available.
 
@@ -101,7 +101,7 @@ Model/runtime setup is explicit and may require internet. Afterwards, local-file
 
 ## Fifteen independently testable specification statements
 
-Each statement needs its own automated test using a fresh library/fixtures. The [acceptance design](docs/implementation/acceptance.md) defines the planned corpus, negatives, calibration, device evidence, and test boundaries. Tests and fixture assets are to be implemented; none are reported as passing here.
+Each statement needs its own automated test using a fresh library/fixtures. The [acceptance design](docs/implementation/acceptance.md) defines the planned corpus, negatives, calibration, device evidence, and test boundaries. Executable tests and fixtures are now implemented. Read [verification evidence](docs/verification/README.md) for current results and unperformed physical-device checks; this specification defines required behavior rather than asserting completion.
 
 ### S1 — Durable local save
 

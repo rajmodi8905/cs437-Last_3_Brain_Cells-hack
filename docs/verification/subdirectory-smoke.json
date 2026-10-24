@@ -1,0 +1,9 @@
+{
+  "runtime": "Node 24.22.1 build; Playwright Chromium",
+  "base": "/campus-recall/",
+  "save": true,
+  "offlineReload": true,
+  "exactOriginal": true,
+  "directOfflinePolicy": true,
+  "pageErrors": []
+}
