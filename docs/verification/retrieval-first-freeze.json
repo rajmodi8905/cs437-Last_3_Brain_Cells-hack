@@ -1,0 +1,16 @@
+{
+  "frozenAt": "2026-10-23T17:18:00+05:30",
+  "indexVersion": "gemma2-daa72c5-q4-768-ch256o48-img70-lowered1-v2",
+  "thresholds": {
+    "text": 0.7,
+    "visual": 0.69
+  },
+  "hashes": {
+    "tests/fixtures/corpus.json": "534c379cc2dd336fded0b36d57957a17a249c16a39a36f380088581e82f6c1b3",
+    "tests/fixtures/calibration.json": "e7acc8adaa5d61a1f8bff9c798ac52f724c60c42229de796935c2dbc71f658c4",
+    "src/engine/model.worker.ts": "a6e98fb394d02cba252eac5ee872fee2fe47150cb55e4ad049023f5b48abf79c",
+    "src/engine/ranking.ts": "b5191fc977984c9038bdf2796dcc6fdad6add47d1ffb2278e60cd7060a6fd2e7",
+    "src/engine/onnx-q4.ts": "daefc2932b10c8de58c38bd28de47962b2efcbc5c01d95bac9e47b05922b54f0",
+    "scripts/model-assets.json": "b6a6d5069ae2a955f5e557c91092e504c26d41d3be9fe2b6c887fd0c111b7d93"
+  }
+}

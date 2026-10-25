@@ -1,0 +1,46 @@
+.button {
+  min-height: 42px;
+  padding: 10px 16px;
+  border: 1px solid transparent;
+  border-radius: 5px;
+  display: inline-flex;
+  gap: 8px;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: 550;
+  line-height: 1.5;
+  white-space: nowrap;
+}
+.primary {
+  background: var(--blue);
+  color: #fff;
+  box-shadow: 0 2px 3px #16397212;
+}
+.secondary {
+  background: #fff;
+  color: #485564;
+  border-color: #d8dfe8;
+  box-shadow: 0 1px 2px #19273805;
+}
+.danger {
+  background: #b33030;
+  color: #fff;
+}
+.full {
+  width: 100%;
+}
+.text-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px;
+  font-weight: 550;
+}
+.text-button {
+  border: 0;
+  background: none;
+  color: var(--blue);
+  font-size: 12px;
+  padding: 8px;
+}

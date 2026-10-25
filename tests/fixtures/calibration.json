@@ -1,0 +1,55 @@
+{
+  "visuals": [
+    {
+      "file": "cal-ball.png",
+      "query": "Find the thing used for a game of football"
+    },
+    {
+      "file": "cal-flower.png",
+      "query": "Something growing with yellow petals"
+    },
+    {
+      "file": "cal-chair.png",
+      "query": "What I sit on while I study"
+    }
+  ],
+  "texts": [
+    {
+      "text": "Collect the field trip permission slip from the geography department office.",
+      "query": "Where do I pick up the excursion authorization form?"
+    },
+    {
+      "text": "The swimming pool closes at eight in the evening.",
+      "query": "When does the pool shut?"
+    },
+    {
+      "text": "Dormitory residents must return room keys to the housing counter.",
+      "query": "Where should residents hand back their keys?"
+    },
+    {
+      "text": "Safety spectacles must be worn before entering rooms with active lasers.",
+      "query": "What is the rule for protecting our eyes?"
+    },
+    {
+      "text": "A receipt is required when asking for repayment of travel expenses.",
+      "query": "What do I need for a reimbursement?"
+    },
+    {
+      "text": "The chair suggested moving the meeting to the early part of next week.",
+      "query": "When is the rescheduled discussion?"
+    },
+    {
+      "text": "All written requests to change module registration need signatures from the instructor and programme office.",
+      "query": "Who must approve the switch?"
+    },
+    {
+      "text": "Participants may be absent from two lectures during the term.",
+      "query": "How many sessions can I skip?"
+    }
+  ],
+  "negatives": [
+    "How do I repair a diesel tractor?",
+    "Show the ski lift ticket for the Swiss Alps.",
+    "Find my recipe for chocolate souffle."
+  ]
+}

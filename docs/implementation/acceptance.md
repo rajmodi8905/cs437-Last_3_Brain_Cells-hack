@@ -1,6 +1,6 @@
 # Acceptance design and evidence
 
-Status: planned tests and fixture descriptions only. No application, assets, executable test files, model downloads, benchmark measurements, or passing feature tests are supplied by this document. Nakshatra supplies test tooling and storage/repository cases; Raj authors all UI/engine acceptance scenarios before their feature implementations. Chaitanya supplies content-review checklists. Raj owns the actual-model corpus and final evidence.
+Status: acceptance design, with executable tests now in `tests/`. See [verification evidence](../verification/README.md) for current measured outcomes and remaining checks. The first held-out evaluation missed R4; it is preserved in the report. Subsequent runs of that corpus are regression evidence, not independent held-out evidence. Nakshatra supplies test tooling and storage/repository cases; Raj authors all UI/engine acceptance scenarios before their feature implementations. Chaitanya supplies content-review checklists. Raj owns the actual-model corpus and final evidence.
 
 Read [SPEC](../../SPEC.md), [the plan](../../IMPLEMENTATION_PLAN.md), and [shared contracts](contracts.md). Every S1–S15 statement needs an automated test. Tests are independent: fresh library/profile/fixtures, no dependency on another test's execution order. Shared setup may preload verified public models; never share a previous test's private library as a shortcut.
 

@@ -1,0 +1,159 @@
+{
+  "count": 30,
+  "ids": {
+    "R1": "396b802b-5fde-48a2-a235-94c2b65c7b41",
+    "R2": "32a029df-0845-49a1-a53d-58592c261317",
+    "R3": "f9a58d72-9df1-4542-b8b5-ba1f892f9b19",
+    "R4": "070d5b8e-5ea1-4a15-8eca-76e74d468e95",
+    "R5": "b4938818-9f66-4e08-bb35-2ac7c0f58888",
+    "R6": "5b97c557-0c42-4573-871c-3e26ced58eee",
+    "R7": "128ebfd7-c009-4636-89de-6c7baec8c7f9",
+    "R8": "3a66794a-c83c-4e16-bc21-58be82e0a821",
+    "R9": "b5a9784c-35c3-481a-a34d-df5ed489e721",
+    "R10": "c9ddc29c-8590-4357-8fd9-af65643798aa",
+    "R11": "5a299209-8975-49fb-8d46-6ef26aba0ed2",
+    "R12": "4145c7d2-d7fc-44fa-8196-efb301d838c0",
+    "D1": "a050fea2-53a1-44b9-bf9a-02de74b53b39",
+    "D2": "c77cf884-22c7-4831-8cbb-0577e9207c5f",
+    "D3": "e4d24a8c-0b6e-42d3-abb9-d647d8df1c0f",
+    "D4": "fff4a16b-4cfb-4967-836c-96001c2bef82",
+    "D5": "9ca64aa1-3896-438e-bd18-705ecc730995",
+    "D6": "425865f7-cb33-42ba-842a-67620ad64013",
+    "D7": "18381c6b-9c43-4ad3-9b0c-a6ae27c7b8dd",
+    "D8": "f68bd53b-5d39-452e-9332-7d80a2506d99",
+    "D9": "c2b58ba9-7eb8-4f7b-879f-e602abc75543",
+    "D10": "afe62793-0a64-4a4b-b5a0-e30858aac694",
+    "D11": "7db96e0b-5aba-490e-967d-9a5aa186ac39",
+    "D12": "bb19b021-6b23-4c7e-b0a1-50523c17e0e1",
+    "D13": "667de2cd-8133-4685-8b0e-6807dd4b5422",
+    "D14": "5ce2a006-5670-4b4a-b233-5f8266df06bd",
+    "D15": "27c1155a-5dc0-4ad6-bc82-93d98921ded8",
+    "D16": "d12ae5bf-e81f-434a-a4a7-2be968bc6525",
+    "D17": "ac8455a4-5e56-4f67-b2e0-053539ddc4c2",
+    "D18": "270ad056-d403-47f3-a6c9-d21f8761fe30"
+  },
+  "timings": {
+    "R1": 12990,
+    "R2": 11372,
+    "R3": 4646,
+    "R4": 664,
+    "R5": 693,
+    "R6": 1287,
+    "R7": 10860,
+    "R8": 10493,
+    "R9": 5278,
+    "R10": 4894,
+    "R11": 34224,
+    "R12": 19437,
+    "D1": 569,
+    "D2": 793,
+    "D3": 569,
+    "D4": 601,
+    "D5": 566,
+    "D6": 567,
+    "D7": 597,
+    "D8": 568,
+    "D9": 534,
+    "D10": 534,
+    "D11": 9581,
+    "D12": 9708,
+    "D13": 10105,
+    "D14": 690,
+    "D15": 691,
+    "D16": 4358,
+    "D17": 5106,
+    "D18": 19398
+  },
+  "failures": [],
+  "positives": [
+    {
+      "id": "R9",
+      "query": "Find the voice announcement about the chess orientation",
+      "expectedItemId": "b5a9784c-35c3-481a-a34d-df5ed489e721",
+      "results": [
+        {
+          "itemId": "b5a9784c-35c3-481a-a34d-df5ed489e721",
+          "segmentId": "b783cdf2-f6d9-4b41-9c0d-ad64f5c09b6f",
+          "location": {
+            "kind": "time",
+            "startMs": 2620,
+            "endMs": 8320
+          },
+          "matchKind": "text",
+          "excerpt": "Chess Club orientation will be held on Saturday afternoon in the Student Activity Center.",
+          "score": 0.7980796575897523
+        }
+      ],
+      "elapsedMs": 542
+    },
+    {
+      "id": "R10",
+      "query": "Where was the recording about collecting the lab access card?",
+      "expectedItemId": "c9ddc29c-8590-4357-8fd9-af65643798aa",
+      "results": [
+        {
+          "itemId": "c9ddc29c-8590-4357-8fd9-af65643798aa",
+          "segmentId": "cd9248f5-e20c-4028-9040-ea1f14714857",
+          "location": {
+            "kind": "time",
+            "startMs": 3000,
+            "endMs": 8000
+          },
+          "matchKind": "text",
+          "excerpt": "Collect your laboratory access card from the Electronics Office on Monday morning.",
+          "score": 0.8278492607239099
+        }
+      ],
+      "elapsedMs": 550
+    },
+    {
+      "id": "R11",
+      "query": "Find the video explaining where theatre rehearsal is",
+      "expectedItemId": "5a299209-8975-49fb-8d46-6ef26aba0ed2",
+      "results": [
+        {
+          "itemId": "5a299209-8975-49fb-8d46-6ef26aba0ed2",
+          "segmentId": "69980328-c4c4-48a6-81b7-3dabbef5f3f4",
+          "location": {
+            "kind": "time",
+            "startMs": 2890,
+            "endMs": 10170
+          },
+          "matchKind": "text",
+          "excerpt": "This is a synthetic rehearsal notice. The theater rehearsal will take place in the Black Box studio near the auditorium.",
+          "score": 0.8325540380342751
+        },
+        {
+          "itemId": "f68bd53b-5d39-452e-9332-7d80a2506d99",
+          "segmentId": "35bf83b2-83b5-4f35-b69c-ac4ad92374f8",
+          "location": {
+            "kind": "whole"
+          },
+          "matchKind": "text",
+          "excerpt": "Music practice rooms can be booked through the activity office.",
+          "score": 0.7130612225687071
+        }
+      ],
+      "elapsedMs": 522
+    }
+  ],
+  "negatives": [
+    {
+      "query": "Find the instructions for replacing a car's alternator.",
+      "results": []
+    },
+    {
+      "query": "Find the sourdough bread recipe I saved.",
+      "results": []
+    },
+    {
+      "query": "Show the hotel reservation for my Paris holiday.",
+      "results": []
+    }
+  ],
+  "device": "wasm",
+  "indexVersion": "gemma2-daa72c5-q4-768-ch256o48-img70-lowered1-notitledup1-asr2-v7",
+  "dimensions": [
+    768
+  ]
+}

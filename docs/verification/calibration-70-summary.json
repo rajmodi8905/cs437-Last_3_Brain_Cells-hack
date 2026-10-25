@@ -1,0 +1,10 @@
+{
+  "status": "Measured intermediate calibration before held-out evaluation; descriptive visual queries are subsequently broadened in the final calibration set.",
+  "device": "Chromium WASM on Apple M4, macOS 27.0.1, 16 GB",
+  "imageMaxSoftTokens": 70,
+  "textPositiveCosines": [0.7968000489548922,0.8794645607623869,0.8242801530454512,0.7260881719830933,0.8112984646681778,0.7944169505730341,0.7138129120738015,0.7066426032251825],
+  "visualPositiveCosines": [0.7514380598992574,0.7656306619879157,0.7873333037573432],
+  "maxNegativeCosine": {"text":0.6841037235670429,"visual":0.5669803281224893},
+  "selectedAtThisCheckpoint": {"text":0.70,"visual":0.75},
+  "elapsedSeconds":46.0
+}

@@ -1,0 +1,46 @@
+<!doctype html>
+<html>
+  <head>
+    <title>Isolated acceptance harness</title>
+  </head>
+  <body>
+    <script type="module">
+      import { CampusRecallDatabase, DexieLibraryRepository } from '/src/storage/index.ts';
+      import { ModelClient } from '/src/app/model-client.ts';
+      import { cosine } from '/src/engine/ranking.ts';
+      import { LocalEngine, INDEX_VERSION } from '/src/engine/index.ts';
+      import { setupAssets, getManifest } from '/src/engine/assets.ts';
+      import { extractMedia, extractPdf, ocr } from '/src/engine/extract.ts';
+      import { lowerQuantizedGather } from '/src/engine/onnx-q4.ts';
+      import * as ort from 'onnxruntime-web/wasm';
+      async function waitForItem(repository, id) {
+        const deadline = performance.now() + 180000;
+        for (;;) {
+          const item = await repository.getItem(id);
+          if (!item || item.status === 'ready' || item.status === 'failed') return item;
+          if (performance.now() > deadline)
+            throw Error('Processing did not settle within three minutes.');
+          await new Promise((resolve) => setTimeout(resolve, 30));
+        }
+      }
+      window.harness = {
+        waitForItem,
+        ModelClient,
+        cosine,
+        INDEX_VERSION,
+        CampusRecallDatabase,
+        DexieLibraryRepository,
+        LocalEngine,
+        setupAssets,
+        getManifest,
+        extractMedia,
+        extractPdf,
+        ocr,
+        lowerQuantizedGather,
+        ort,
+      };
+      await navigator.serviceWorker.register('/sw.js', { type: 'module' });
+      await navigator.serviceWorker.ready;
+    </script>
+  </body>
+</html>

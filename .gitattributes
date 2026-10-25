@@ -1,0 +1,4 @@
+* text=auto eol=lf
+# Preserve fixture bytes, including PDF cross-reference offsets, on every OS.
+*.pdf binary
+*.onnx binary

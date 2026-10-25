@@ -1,6 +1,8 @@
 # Team implementation handoffs
 
-Status: planning documentation only. There is no application scaffold, package manifest, installed model, or executable application test yet. Do not report any feature as implemented from these documents.
+Current integration, 23 October 2026: Nakshatra’s and Chaitanya’s packages are merged. Raj explicitly requested completing integration on `raj_final` from current `main`, preserving `Raj_setup`. The original member-branch instructions below describe the earlier handoff. Current evidence and release checks are in [verification](../verification/README.md).
+
+Status: the original planning handoffs below are retained for ownership and contract history. The foundation, support documents and Raj’s integration now exist. Use the repository code, current README and verification report for implemented behavior and actual test results.
 
 ## Read order
 
@@ -49,4 +51,4 @@ Raj can work independently on UI/engine contracts after the plan merges. The run
 - Required other-member reviews are obtained before merge.
 - AI use is recorded in the course lab notes.
 
-App-wide commands in the plan are requirements for the future scaffold, not commands that work in this documentation-only checkout today.
+App-wide commands are implemented and documented in the root README. Full acceptance requires the explicit model/browser setup described there; a handoff document alone is not evidence of a passing test.
