@@ -81,7 +81,7 @@ Based on the interviews and our team discussion, we define the problem as follow
 
 Campus Recall will be a free, installable PWA for iPhone, Android, and laptops. A student saves supported originals, searches remembered meaning or visual appearance, and opens the corresponding original image, PDF page, note, snapshot, or media interval. Every device has a separate local library with manual transfer.
 
-**Status:** The planning PR and both teammate packages are merged. Raj’s implementation on `raj_final` adds the local processing engine, retrieval, interface and PWA. Automated checks and actual-model regression tests pass in the documented Chromium environment. Physical-phone, Safari, installed-PWA and team policy reviews remain outstanding. See [verification evidence](docs/verification/README.md) for results and limits; this specification defines the required behavior, not a blanket completion claim.
+**Status:** The planning PR and both teammate packages are merged. Raj’s implementation reached `main` through reviewed PR #6; follow-up verification work uses `raj_final`. It adds the local processing engine, retrieval, interface and PWA. Automated checks and actual-model regression tests pass in the documented Chromium environment. Physical-phone, Safari, installed-PWA and team policy reviews remain outstanding. See [verification evidence](docs/verification/README.md) for results and limits; this specification defines the required behavior, not a blanket completion claim.
 
 Supported inputs: JPEG/PNG/WebP up to 20 MB; unencrypted PDFs up to 20 MB and 50 pages; notes up to 20,000 characters; public webpage text snapshots up to 20,000 characters; MP3/WAV/M4A audio up to five minutes and 50 MB; H.264 MP4 video with optional AAC up to two minutes and 100 MB. MB means 1,000,000 bytes; character limits count Unicode code points. HEIC/HEVC/MOV are outside v1. Unsupported/deep-validation failures have a reason and conversion guidance; already saved originals remain available.
 
@@ -222,3 +222,9 @@ Each statement needs its own automated test using a fresh library/fixtures. The 
 **Test:** In a fresh browser profile, navigate to both hash routes before setup, then cache/reload offline from a production build. Check links and readable headings. Review text against actual destinations, storage, export/delete behavior, and project contact information. Apply the UI copy/style checklist, with physical-device review recorded separately. Policy text alone never proves privacy behavior.
 
 **Trace:** From our team's product-transparency requirements and the agreed UI instructions.
+
+## Executable test coverage and October checkpoints
+
+Every S1–S15 statement now maps to executable suites in [tests/spec/coverage.json](tests/spec/coverage.json). `npm run check` checks that mapping; `npm test` executes the actual behavior. Storage/vector fixtures test code-controlled invariants; semantic/visual/speech outcomes use the pinned real models.
+
+The [dated milestone audit](docs/verification/milestones-2026-10.md) records the earlier late milestones, reviewed/merged implementation and the conservative eight-statement 27 October minimum. Physical-phone performance/installation and final policy review are recorded separately and are not asserted as passed. Written Test paragraphs alone were not executable evidence for the earlier deadlines.

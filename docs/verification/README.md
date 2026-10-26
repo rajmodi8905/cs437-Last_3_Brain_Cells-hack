@@ -1,5 +1,7 @@
 # Verification evidence
 
+Update, 26 October: [PR #6](https://github.com/rajmodi8905/cs437-Last_3_Brain_Cells-hack/pull/6) is now reviewed and merged, and main CI passed. See the [October checkpoint audit](milestones-2026-10.md) for current per-statement coverage, fresh-checkout results and remaining gates. The pre-PR measurements below are retained as their original evidence.
+
 Implementation branch: `raj_final`, based on merged main `11cb2c4`. This report distinguishes implementation, automated evidence and manual release gates. This branch is a review candidate; no deployment is claimed.
 
 ## Environment and public assets
@@ -64,7 +66,7 @@ All 23 pinned external setup URLs also returned HTTP 200 in both the [HTTP healt
 
 Raw Playwright summaries: [acceptance](acceptance-run-summary.json), [browser](browser-run-summary.json). Additional reports: [accessibility](axe.json), [subdirectory smoke](subdirectory-smoke.json), [calibration](calibration.json), and separate fresh 30-item regressions for [S9](retrieval-S9.json), [S10](retrieval-S10.json) and [S11](retrieval-S11.json). Each corpus run processed all 30 originals, retrieved its expected targets at rank one and returned no matches for the three unrelated queries. These consumed-corpus reruns do not erase the initial failure described above.
 
-The UI is now split behind injected service contracts with a headless controller, separate screens/rows/dialogs and feature styles. Import-boundary tests and a contract-only view test cover that separation; they do not substitute for the real-model tests above. The compiled CSS is unchanged by this refactor. The interface detector previously returned no findings. Screenshots were inspected at desktop and phone viewport sizes; [UI review](ui-review.md) records the interaction and accessibility changes. CI is configured to repeat the checks on PRs, but no remote CI result is claimed before publication.
+The UI is now split behind injected service contracts with a headless controller, separate screens/rows/dialogs and feature styles. Import-boundary tests and a contract-only view test cover that separation; they do not substitute for the real-model tests above. The compiled CSS is unchanged by this refactor. The interface detector previously returned no findings. Screenshots were inspected at desktop and phone viewport sizes; [UI review](ui-review.md) records the interaction and accessibility changes. The pre-PR run made no remote CI claim. Main CI subsequently passed, as recorded in the dated checkpoint audit.
 
 ## Manual release gates
 
@@ -75,4 +77,4 @@ The UI is now split behind injected service contracts with a headless controller
 - Team review of the revised Privacy Policy and Terms before deployment; designate the actual host and its request logging policy.
 - Required PR reviews and authorized merge. This task does not authorize bypassing protection or publishing a deployment.
 
-No physical-phone test, deployment, merge or required course peer review is claimed by this report.
+No physical-phone test, deployment or later inter-group course peer review is claimed. PR #6’s two approvals and merge are separately verified in the dated checkpoint audit.

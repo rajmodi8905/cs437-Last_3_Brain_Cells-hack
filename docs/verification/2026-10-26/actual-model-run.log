@@ -1,0 +1,46 @@
+
+> campus-recall@0.1.0 test:acceptance
+> playwright test tests/acceptance
+
+[WebServer] (node:196) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+[WebServer] (node:200) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+[WebServer] (node:209) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+[WebServer] (node:238) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+[WebServer] (node:268) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+
+Running 10 tests using 1 worker
+
+(node:270) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+CALIBRATION {"text":[[0.7968000489548922,0.6317591453697767,0.6442243159434724,0.6147600868329208,0.7212130309187423,0.6277194982195899,0.6938677987464971,0.6672846993985395],[0.6486626896366467,0.8794645607623869,0.6631030050662183,0.6241348609476373,0.5915906484765128,0.65106083359188,0.5798995735442054,0.6407719698023734],[0.7037124586964862,0.6705309795026652,0.8242801530454512,0.6139071009253914,0.661113453776424,0.6263334555748417,0.6363460330336721,0.6090795767068817],[0.6202192738702581,0.6472122330736114,0.6417424349145879,0.7260881719830933,0.5995764249898742,0.5813205586055886,0.5760649332247967,0.6075739079564694],[0.6943935083427767,0.602179425723145,0.6423860701210021,0.6140675344675787,0.8112984646681778,0.5688741723135247,0.6524819005358233,0.599279587532063],[0.6087339230888307,0.6481472290826166,0.6196039136109004,0.5406279946271666,0.617128389022373,0.7944169505730341,0.6540215843571541,0.651716801271873],[0.6639035165319948,0.6347160285003872,0.7043137983744845,0.6347762383174427,0.6367369917342584,0.6390853478864839,0.7138129120738015,0.6410739356442611],[0.6369039000359763,0.6593701405449978,0.6634250882204903,0.637567397253214,0.6413307169624491,0.6484266724155726,0.6584977899973758,0.7066426032251825]],"visual":[[0.6960618974955025,0.5755650298498076,0.6249288653182595],[0.5568672347791562,0.6907091194611831,0.5591141696243999],[0.5796047842390303,0.5698751996775175,0.6995758615665967]],"negatives":[{"text":[0.5851027304996258,0.5612087177121232,0.576122687723827,0.5562588398937812,0.5971456034164969,0.5321654389724733,0.5728935692550854,0.5724935200758892],"visual":[0.556057841490553,0.5189671661132227,0.5238107630508004]},{"text":[0.6841037235670429,0.627220549257718,0.617216618621889,0.5987342192513876,0.6833470388830505,0.5611675681511316,0.5622705865500787,0.5855487030174211],"visual":[0.5656605626024357,0.5238485106158242,0.5669803281224893]},{"text":[0.5906950240843891,0.5417552147946755,0.5545372958705274,0.4870336834139556,0.5733756231737583,0.5153264295635166,0.5356297817909822,0.5373106792990618],"visual":[0.5533565915253116,0.5485275764041365,0.5475792101474951]}],"selected":{"text":{"threshold":0.7,"correct":8},"visual":{"threshold":0.69,"correct":3}},"device":"wasm"}
+  ✓   1 tests/acceptance/calibration.spec.ts:5:1 › independent calibration scores text and visual matches using real embeddings (24.2s)
+EXTRACTION {"image":"BADMINTON TEAM TRYOUTS\nSynthetic campus announcement\n\nRegister by Friday, 5 PM\n\nBring your racket to the sports hall.","webp":"BADMINTON TEAM TRYOUTS\nSynthetic campus announcement\n\nRegister by Friday, 5 PM\n\nBring your racket to the sports hall.","wavDuration":9876.417,"pdf":[{"text":"Synthetic CS437 project guidelines\nRead the rules on the next page.","location":{"kind":"page","page":1}},{"text":"CS437 project rules\nA project group may contain at most three students.","location":{"kind":"page","page":2}},{"text":"Keep a record of contributions.","location":{"kind":"page","page":3}}],"scan":[{"text":"BADMINTON TEAM TRYOUTS\nSynthetic campus announcement\n\nRegister by Friday, 5 PM\n\nBring your racket to the sports hall.","location":{"kind":"page","page":1}}],"transcript":{"text":"This is a synthetic campus announcement. Chess Club orientation will be held on Saturday afternoon in the Student Activity Center. All beginners are welcome.","chunks":[{"timestamp":[0,2.62],"text":" This is a synthetic campus announcement."},{"timestamp":[2.62,8.32],"text":" Chess Club orientation will be held on Saturday afternoon in the Student Activity Center."},{"timestamp":[8.32,9.6],"text":" All beginners are welcome."}]},"silence":{"text":"","chunks":[]},"duration":9952.653,"silent":[{"kind":"time","startMs":0,"endMs":5000},{"kind":"time","startMs":5000,"endMs":7000}],"hasAudio":false}
+  ✓   2 tests/acceptance/extraction.spec.ts:4:1 › actual OCR, page extraction, ffmpeg decoding and timestamped English transcription (5.0s)
+BROWSER: ASSETS VERIFIED
+BROWSER: ASSETS VERIFIED
+BROWSER: extracting Reading the saved original
+BROWSER: embedding Indexing part 1 of 1
+BROWSER: publishing Saving the search index
+BROWSER: ready Ready to search
+ACTUAL MODEL REPORT {"positive":[{"itemId":"a4f7ad57-01fe-40d3-811d-a10d8ed1247d","segmentId":"ededd30a-5345-4d6a-a630-665e8ff09ed7","location":{"kind":"whole"},"matchKind":"text","excerpt":"CS437 project groups may contain a maximum of three students. Submit the project report by 5 November at 6 PM.","score":0.7887546798669607}],"negative":[],"dimensions":768,"device":"wasm"}
+  ✓   3 tests/acceptance/models.spec.ts:5:1 › pinned local text and vision pipeline loads, embeds, searches and rejects unrelated query (3.6s)
+R4 REGRESSION {"expected":"1cf754b1-f206-4887-9baf-c3d3552da16a","matches":[{"itemId":"1cf754b1-f206-4887-9baf-c3d3552da16a","segmentId":"2b9310f1-1a09-4255-a08c-5c4a40c0542b","location":{"kind":"whole"},"matchKind":"text","excerpt":"Meet the mentor at the north library entrance on Tuesday afternoon.","score":0.7424579956192978}],"raw":[0.7424579956192978]}
+  ✓   4 tests/acceptance/note-regression.spec.ts:4:1 › consumed R4 regression: conversational note retrieval with a derived display title (3.5s)
+  ✓   5 tests/acceptance/offline.spec.ts:4:1 › production processing, semantic search and source viewing remain local offline (47.6s)
+  ✓   6 tests/acceptance/q4-equivalence.spec.ts:5:1 › WASM lowering equals independently recorded native quantized Gather output (1.8s)
+  ✓   7 tests/acceptance/recovery.spec.ts:4:1 › [S12] interrupt real indexing, retain the source and retry one current generation offline (3.6s)
+RETRIEVAL SUMMARY {"count":30,"failures":[],"ranks":[{"id":"R1","rank":1},{"id":"R2","rank":1},{"id":"R3","rank":1},{"id":"R4","rank":1},{"id":"R5","rank":1},{"id":"R6","rank":1}],"negatives":[0,0,0]}
+  ✓   8 tests/acceptance/retrieval.spec.ts:11:3 › S9: fresh 30-item corpus retrieves its required originals (2.4m)
+RETRIEVAL SUMMARY {"count":30,"failures":[],"ranks":[{"id":"R7","rank":1},{"id":"R8","rank":1},{"id":"R12","rank":1}],"negatives":[0,0,0]}
+  ✓   9 tests/acceptance/retrieval.spec.ts:11:3 › S10: fresh 30-item corpus retrieves its required originals (2.3m)
+RETRIEVAL SUMMARY {"count":30,"failures":[],"ranks":[{"id":"R9","rank":1},{"id":"R10","rank":1},{"id":"R11","rank":1}],"negatives":[0,0,0]}
+  ✓  10 tests/acceptance/retrieval.spec.ts:11:3 › S11: fresh 30-item corpus retrieves its required originals (2.0m)
+
+  Slow test file: tests/acceptance/retrieval.spec.ts (6.7m)
+  Consider running tests from slow files in parallel. See: https://playwright.dev/docs/test-parallel
+  10 passed (8.3m)

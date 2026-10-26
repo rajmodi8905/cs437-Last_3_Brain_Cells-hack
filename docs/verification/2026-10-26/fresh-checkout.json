@@ -1,0 +1,92 @@
+{
+  "recordedOn": "2026-10-26",
+  "timeZone": "Asia/Kolkata",
+  "baseCommit": "6a96bc0dce76a8297253b3cfced5dc2a74d8bc2d",
+  "candidate": "Follow-up package/test/setup patch applied to a new remote clone; input hashes in setup-regression.json. Runtime application sources unchanged from base.",
+  "environment": {
+    "os": "macOS-27.0.1-arm64-arm-64bit-Mach-O",
+    "node": "24.22.1",
+    "playwright": "1.64.1",
+    "browser": "Playwright Chromium",
+    "inference": "Real pinned models on WASM",
+    "limits": "Desktop macOS. No physical-phone, Safari, installed-PWA or fresh-OS result."
+  },
+  "commands": [
+    {
+      "command": "npm ci",
+      "exitCode": 0
+    },
+    {
+      "command": "npm run models:download",
+      "exitCode": 0
+    },
+    {
+      "command": "npm run check",
+      "exitCode": 0
+    },
+    {
+      "command": "npm run test:fast",
+      "exitCode": 0
+    },
+    {
+      "command": "npx playwright install chromium",
+      "exitCode": 0
+    },
+    {
+      "command": "npm run build",
+      "exitCode": 0
+    },
+    {
+      "command": "npm run test:browser",
+      "exitCode": 0
+    },
+    {
+      "command": "npm run test:acceptance",
+      "exitCode": 0
+    }
+  ],
+  "results": {
+    "fast": {
+      "passed": 50,
+      "files": 14,
+      "failed": 0
+    },
+    "browser": {
+      "passed": 8,
+      "failed": 0,
+      "skipped": 0
+    },
+    "actualModel": {
+      "passed": 10,
+      "failed": 0,
+      "skipped": 0,
+      "durationMs": 495215.671
+    },
+    "axeViolations": 0,
+    "requiredTargetsAtRankOne": 12,
+    "negativeQueriesReturnedResults": 0
+  },
+  "freezeHashChecks": "All nine recorded retrieval-freeze input SHA-256 hashes match; thresholds and queries unchanged.",
+  "loggingNote": "The browser command passed 8 tests; its first tee wrapper could not open a missing log directory. Summary and axe report were recovered from the actual Playwright report before the separate acceptance run. The wrapper failure is not concealed as an app failure or a browser-test failure.",
+  "devStartup": {
+    "command": "npm run dev -- --host 127.0.0.1 --port 5175 --strictPort",
+    "result": "Vite started successfully after predev prepared assets; HTTP smoke only, production interactions tested separately. Server stopped afterward.",
+    "http": [
+      {
+        "path": "/",
+        "status": 200,
+        "bytes": 1078
+      },
+      {
+        "path": "/src/main.tsx",
+        "status": 200,
+        "bytes": 1944
+      },
+      {
+        "path": "/asset-manifest.json",
+        "status": 200,
+        "bytes": 14602
+      }
+    ]
+  }
+}

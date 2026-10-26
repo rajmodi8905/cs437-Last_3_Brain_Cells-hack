@@ -1,0 +1,81 @@
+{
+  "recordedOn": "2026-10-26",
+  "timeZone": "Asia/Kolkata",
+  "pullRequests": [
+    {
+      "number": 4,
+      "url": "https://github.com/rajmodi8905/cs437-Last_3_Brain_Cells-hack/pull/4",
+      "mergedAt": "2026-10-21T05:33:08Z",
+      "mergeCommit": {
+        "oid": "4b9ed54ec291291d6e8344eaa1ac9db47af28a0e"
+      },
+      "headRefOid": "fd3b2abde223f4189079e41e2a20446481ea2197",
+      "reviews": [
+        {
+          "author": "copilot-pull-request-reviewer",
+          "state": "COMMENTED",
+          "submittedAt": "2026-10-19T17:43:54Z",
+          "commit": "b481f54938a862c97c52542536ebf28dc6d52a65"
+        },
+        {
+          "author": "rajmodi8905",
+          "state": "COMMENTED",
+          "submittedAt": "2026-10-20T06:18:07Z",
+          "commit": "b481f54938a862c97c52542536ebf28dc6d52a65"
+        },
+        {
+          "author": "chaitanyachaudhary30",
+          "state": "APPROVED",
+          "submittedAt": "2026-10-20T12:09:36Z",
+          "commit": "3774f520c7a1b44a2404b71bfa688388778e6d82"
+        },
+        {
+          "author": "rajmodi8905",
+          "state": "COMMENTED",
+          "submittedAt": "2026-10-20T19:15:15Z",
+          "commit": "3774f520c7a1b44a2404b71bfa688388778e6d82"
+        },
+        {
+          "author": "rajmodi8905",
+          "state": "APPROVED",
+          "submittedAt": "2026-10-21T05:31:40Z",
+          "commit": "fd3b2abde223f4189079e41e2a20446481ea2197"
+        }
+      ]
+    },
+    {
+      "number": 6,
+      "url": "https://github.com/rajmodi8905/cs437-Last_3_Brain_Cells-hack/pull/6",
+      "mergedAt": "2026-10-25T07:13:32Z",
+      "mergeCommit": {
+        "oid": "6a96bc0dce76a8297253b3cfced5dc2a74d8bc2d"
+      },
+      "headRefOid": "6f44d6f8ce269922d2cdda06fa2022fade60de45",
+      "reviews": [
+        {
+          "author": "chaitanyachaudhary30",
+          "state": "APPROVED",
+          "submittedAt": "2026-10-25T06:31:55Z",
+          "commit": "6f44d6f8ce269922d2cdda06fa2022fade60de45"
+        },
+        {
+          "author": "Nakshatra1967",
+          "state": "APPROVED",
+          "submittedAt": "2026-10-25T07:03:51Z",
+          "commit": "6f44d6f8ce269922d2cdda06fa2022fade60de45"
+        }
+      ]
+    }
+  ],
+  "mainCI": {
+    "databaseId": 40171974638,
+    "url": "https://github.com/rajmodi8905/cs437-Last_3_Brain_Cells-hack/actions/runs/40171974638",
+    "headSha": "6a96bc0dce76a8297253b3cfced5dc2a74d8bc2d",
+    "event": "push",
+    "status": "completed",
+    "conclusion": "success",
+    "createdAt": "2026-10-25T07:13:34Z",
+    "updatedAt": "2026-10-25T07:29:05Z"
+  },
+  "requiredApprovals": 2
+}

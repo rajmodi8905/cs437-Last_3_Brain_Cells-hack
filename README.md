@@ -6,7 +6,15 @@ Built by Raj Modi, Chaitanya and Nakshatra for CS437 at IIT Gandhinagar. A stude
 
 ## Run locally
 
-Use Node 24 and npm. The lockfile pins dependencies.
+Use Node 24 and npm. The lockfile pins dependencies. Start from a fresh clone:
+
+```bash
+git clone https://github.com/rajmodi8905/cs437-Last_3_Brain_Cells-hack.git
+cd cs437-Last_3_Brain_Cells-hack
+node --version  # v24.x
+```
+
+If using nvm, `nvm install` followed by `nvm use` reads the pinned `.nvmrc`. Then install and run:
 
 ```bash
 npm ci
@@ -63,12 +71,14 @@ Fast tests use actual storage logic, controlled vector arithmetic and inert HTML
 npm run check
 npm run test:fast
 npx playwright install chromium
-npm run models:download
 npm run build
+npm run models:download
 npm test
 ```
 
-`npm run models:download` verifies public assets into ignored `.models/` for reproducible testing. A localhost test-only server streams those checksum-addressed public files; it is not part of the app and receives no library data. Full tests redirect only setup downloads to this mirror, then reject unexpected external requests.
+On Linux, install browser system dependencies with `npx playwright install --with-deps chromium` instead of the browser-only install command.
+
+`npm run models:download` first generates its manifest/runtime files, so it also works directly after a fresh `npm ci` without a previous dev server or build. It then verifies public assets into ignored `.models/` for reproducible testing. A localhost test-only server streams those checksum-addressed public files; it is not part of the app and receives no library data. Full tests redirect only setup downloads to this mirror, then reject unexpected external requests.
 
 ```bash
 npm run test:browser       # production UI, responsive layouts and offline shell
@@ -82,6 +92,10 @@ Fixture regeneration needs macOS `say`, local ffmpeg and npm dependencies:
 ```bash
 node scripts/create-fixtures.mjs
 ```
+
+## Statement coverage and milestone evidence
+
+All fifteen statements map to actual test suites in [the coverage registry](tests/spec/coverage.json). `npm run check` validates that mapping; `npm test` executes the behavior. Registry completeness alone is not a test pass. See [the October milestone audit](docs/verification/milestones-2026-10.md) for the reviewed/merged evidence, late earlier milestones and remaining physical-device checks.
 
 ## Architecture
 
@@ -98,4 +112,4 @@ EmbeddingGemma 2 q4 text and vision share normalized 768-dimensional vectors. Wh
 
 ## Team workflow
 
-Implementation is on `raj_final`, from the two merged teammate packages. Preserve `Raj_setup`. Open reviewed PRs into `main`; do not merge without authorization. Keep local handovers and unrelated files out of public changes. See [implementation instructions](docs/implementation/README.md) and [AI-assisted development notes](docs/ai-use.md).
+The implementation reached `main` through reviewed [PR #6](https://github.com/rajmodi8905/cs437-Last_3_Brain_Cells-hack/pull/6). Follow-up changes use `raj_final`. Preserve `Raj_setup`. Open reviewed PRs into `main`; do not merge without authorization. Keep local handovers and unrelated files out of public changes. See [implementation instructions](docs/implementation/README.md) and [AI-assisted development notes](docs/ai-use.md).

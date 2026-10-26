@@ -1,0 +1,152 @@
+{
+  "count": 30,
+  "ids": {
+    "R1": "795cf649-dd65-4644-a717-2d2260e93e21",
+    "R2": "48f96ba2-c445-4e28-aad0-665e4c438257",
+    "R3": "f3cc6fd8-9ce5-4256-a351-1da2b5654a9e",
+    "R4": "3698e7e3-e6e9-42c9-8e9d-8001da1d1289",
+    "R5": "5370c315-79b9-4e31-846d-6ee8364fa8f6",
+    "R6": "d52a9a0d-32e6-4096-9a8c-d2110392ae06",
+    "R7": "29e26501-a88f-4716-b80d-007a9f9b45d8",
+    "R8": "0fd857ae-8e52-4256-826b-c0bc25397e32",
+    "R9": "1850b205-8f2c-4c40-a272-dae1e8eb79c8",
+    "R10": "8aa6c5fb-4c9b-498b-9b17-b6fed2492adb",
+    "R11": "e57b55f8-ac43-4bfb-a9d1-69468cd8b345",
+    "R12": "3606a0b2-f7c9-4d19-a4c1-76ef8a648386",
+    "D1": "0ecd4b8d-ee30-47be-aabd-7605bcaf9e97",
+    "D2": "8e2edb39-b98e-4de0-b95c-a1abd5cd2251",
+    "D3": "dc1f67b4-bef1-4f58-b5ed-e439860d4447",
+    "D4": "d2be274c-50af-4916-923b-21accf3ba507",
+    "D5": "4d4da645-c06d-428c-b0db-1cc2da85ae8c",
+    "D6": "57d11d0d-8153-44fe-bc52-f7ffa407a57a",
+    "D7": "6fc6f667-fd90-44a8-b21e-fb1a144dd22f",
+    "D8": "07af55ab-9c54-4c25-a5b3-f1095409e74c",
+    "D9": "a0431e23-9139-4cc6-b6db-9ef4fb8e54bb",
+    "D10": "cfe865b7-9d57-471c-b7a4-67bb9f8a2c8e",
+    "D11": "43518dad-4d0f-40d2-b620-8046c7390858",
+    "D12": "2c2ca688-0a05-45fa-b118-7b695d4f6f82",
+    "D13": "7ec785ad-ec84-40c7-ab8a-5307ac27fd11",
+    "D14": "632a5420-0939-414e-bf98-b76e9725c4bd",
+    "D15": "312d896b-43ba-4d14-b3f2-cf883289baee",
+    "D16": "9b3d3cf5-6f2f-42f1-acee-0bdd903ea703",
+    "D17": "71cfc5c7-1716-4b3d-b46e-499b5bd72e20",
+    "D18": "f5da0e13-023c-4177-aeae-e0f823d544ce"
+  },
+  "timings": {
+    "R1": 11323,
+    "R2": 8501,
+    "R3": 1438,
+    "R4": 439,
+    "R5": 562,
+    "R6": 938,
+    "R7": 8095,
+    "R8": 8064,
+    "R9": 4392,
+    "R10": 4168,
+    "R11": 25857,
+    "R12": 14911,
+    "D1": 375,
+    "D2": 407,
+    "D3": 375,
+    "D4": 473,
+    "D5": 407,
+    "D6": 407,
+    "D7": 407,
+    "D8": 376,
+    "D9": 375,
+    "D10": 376,
+    "D11": 6995,
+    "D12": 6388,
+    "D13": 6764,
+    "D14": 436,
+    "D15": 437,
+    "D16": 2840,
+    "D17": 2744,
+    "D18": 12389
+  },
+  "failures": [],
+  "positives": [
+    {
+      "id": "R7",
+      "query": "Find the red backpack on the table",
+      "expectedItemId": "29e26501-a88f-4716-b80d-007a9f9b45d8",
+      "results": [
+        {
+          "itemId": "29e26501-a88f-4716-b80d-007a9f9b45d8",
+          "segmentId": "d1212519-ba5d-40df-8c6a-5e1530d61292",
+          "location": {
+            "kind": "whole"
+          },
+          "matchKind": "visual",
+          "score": 0.8173256918650493
+        },
+        {
+          "itemId": "cfe865b7-9d57-471c-b7a4-67bb9f8a2c8e",
+          "segmentId": "0793d578-5955-4b0f-a73c-542aa6d25ed8",
+          "location": {
+            "kind": "whole"
+          },
+          "matchKind": "text",
+          "excerpt": "Return borrowed sports equipment to the front desk.",
+          "score": 0.7193893493747159
+        }
+      ],
+      "elapsedMs": 352
+    },
+    {
+      "id": "R8",
+      "query": "Find the bicycle beside the basketball court",
+      "expectedItemId": "0fd857ae-8e52-4256-826b-c0bc25397e32",
+      "results": [
+        {
+          "itemId": "0fd857ae-8e52-4256-826b-c0bc25397e32",
+          "segmentId": "e648b391-16fb-46aa-b8f6-8bae30765190",
+          "location": {
+            "kind": "whole"
+          },
+          "matchKind": "visual",
+          "score": 0.7815524892330159
+        }
+      ],
+      "elapsedMs": 335
+    },
+    {
+      "id": "R12",
+      "query": "Find the video with a yellow umbrella next to a bicycle",
+      "expectedItemId": "3606a0b2-f7c9-4d19-a4c1-76ef8a648386",
+      "results": [
+        {
+          "itemId": "3606a0b2-f7c9-4d19-a4c1-76ef8a648386",
+          "segmentId": "7a0328d4-add5-4d8a-99e7-ae92601836ee",
+          "location": {
+            "kind": "time",
+            "startMs": 5000,
+            "endMs": 7000
+          },
+          "matchKind": "visual",
+          "score": 0.7711754824146307
+        }
+      ],
+      "elapsedMs": 369
+    }
+  ],
+  "negatives": [
+    {
+      "query": "Find the instructions for replacing a car's alternator.",
+      "results": []
+    },
+    {
+      "query": "Find the sourdough bread recipe I saved.",
+      "results": []
+    },
+    {
+      "query": "Show the hotel reservation for my Paris holiday.",
+      "results": []
+    }
+  ],
+  "device": "wasm",
+  "indexVersion": "gemma2-daa72c5-q4-768-ch256o48-img70-lowered1-notitledup1-asr2-v7",
+  "dimensions": [
+    768
+  ]
+}

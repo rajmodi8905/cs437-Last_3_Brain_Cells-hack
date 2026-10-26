@@ -1,0 +1,21 @@
+{
+  "metadata": {
+    "actualWorkers": 1
+  },
+  "startTime": 1793005484394,
+  "duration": 13348.912,
+  "projectNames": [
+    ""
+  ],
+  "stats": {
+    "total": 8,
+    "expected": 8,
+    "unexpected": 0,
+    "flaky": 0,
+    "skipped": 0,
+    "ok": true
+  },
+  "errors": [],
+  "options": {},
+  "machines": []
+}

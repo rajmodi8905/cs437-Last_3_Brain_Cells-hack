@@ -189,3 +189,44 @@ test('direct webpage capture omits credentials, reports truncation and offers bl
   await page.getByRole('button', { name: 'Capture', exact: true }).click();
   await expect(page.getByRole('alert')).toContainText('Paste its text');
 });
+
+test('[S6] exported originals restore into an independent browser profile and stay queued', async ({
+  page,
+  browser,
+}) => {
+  await enter(page);
+  const title = 'Synthetic transfer note';
+  const original = 'Distinct original for manual transfer. No models or embeddings are included.';
+  await page.goto('/#/add');
+  await page.getByRole('tab', { name: 'Note', exact: true }).click();
+  await page.getByRole('textbox', { name: 'Title' }).fill(title);
+  await page.getByRole('textbox', { name: 'Note', exact: true }).fill(original);
+  await page.getByRole('button', { name: 'Save locally' }).click();
+  await expect(page.getByRole('status')).toContainText('Saved locally');
+  await page.goto('/#/settings');
+  const download = page.waitForEvent('download');
+  await page.getByRole('button', { name: 'Export library', exact: true }).click();
+  const archive = await (await download).path();
+  expect(archive).toBeTruthy();
+  const second = await browser.newContext();
+  try {
+    const restored = await second.newPage();
+    await enter(restored);
+    await expect(restored.getByText('No saved items yet.')).toBeVisible();
+    await restored.goto('/#/settings');
+    await restored.getByLabel('Choose backup ZIP').setInputFiles(archive!);
+    await expect(restored.getByRole('status')).toContainText('Restored 1 items');
+    await restored.goto('/#/library');
+    await expect(restored.locator('.item-row .status')).toHaveText('Queued');
+    await restored.getByRole('button', { name: new RegExp(title + ' Notes') }).click();
+    await expect(restored.locator('.original-text')).toHaveText(original);
+    await restored.getByRole('button', { name: 'Close original' }).click();
+    await restored.goto('/#/settings');
+    await restored.getByLabel('Choose backup ZIP').setInputFiles(archive!);
+    await expect(restored.getByRole('status')).toContainText(
+      'Restored 0 items. Skipped 1 duplicates.',
+    );
+  } finally {
+    await second.close();
+  }
+});

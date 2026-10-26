@@ -18,14 +18,15 @@ jobs:
       - run: npm ci
       - run: npm run check
       - run: npm run test:fast
-      - run: npm run build
-      - run: npx playwright install --with-deps chromium
-      - run: npm run test:browser
       - uses: actions/cache@v4
         with:
           path: .models
           key: public-models-${{ hashFiles('scripts/model-assets.json') }}
+      # Exercise model setup before any build can create its generated manifest.
       - run: npm run models:download
+      - run: npm run build
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:browser
       - run: npm run test:acceptance
       - uses: actions/upload-artifact@v4
         if: always()
