@@ -1,5 +1,13 @@
 # AI-assisted development notes
 
+## October checkpoint audit and setup repair, 26 October 2026
+
+Raj asked Codex to complete the earlier specification/test artifacts and the 27 October checkpoint, authorizing a commit and PR. The assistant checked dated Git history, actual GitHub reviews and completed main CI rather than relying on earlier completion reports. The audit records that the 9/16 October requirements were not fully met on time. It conservatively counts eight statements already tested and merged through reviewed PRs for the 27 October minimum.
+
+The assistant added executable storage-contract, independent-profile transfer and real interrupted-indexing/retry checks, plus a registry mapping all fifteen statements to test suites. The registry checker only verifies completeness; it does not certify behavior. A reproduced fresh-install model-download failure led to a manifest-generation lifecycle fix and a CI ordering guard. No application code under `src/` changed.
+
+A new remote clone with the candidate patch completed dependency/model setup, checks, production build, 50 fast tests, 8 browser tests and 10 actual-model tests. Input hashes and reports are in [dated verification evidence](verification/2026-10-26/README.md). No phone result, human review or historical deadline success was fabricated. New work uses `raj_final` because main requires two approvals; this task does not bypass review or merge the follow-up.
+
 ## Raj integration and pre-PR verification, 23–25 October 2026
 
 Tool: Codex coding assistant. Raj supplied the approved product scope, branch/publication instructions, UI restrictions and later request for a replaceable frontend. The assistant inspected the two merged teammate packages and implemented Raj’s interface, local processing/retrieval, PWA wiring, integration fixes, tests and supporting documentation on `raj_final`.

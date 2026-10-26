@@ -1,0 +1,31 @@
+{
+  "recordedOn": "2026-10-26",
+  "timeZone": "Asia/Kolkata",
+  "baseline": {
+    "baselineCommit": "6a96bc0dce76a8297253b3cfced5dc2a74d8bc2d",
+    "command": "npm run models:download",
+    "condition": "Published script/package in an empty working directory, without generated assets; script uses only Node built-ins",
+    "exitCode": 1,
+    "stdout": "\n> campus-recall@0.1.0 models:download\n> node scripts/download-assets.mjs\n\n",
+    "stderr": "node:internal/fs/promises:1345\n  return new FileHandle(await PromisePrototypeThen(\n                        ^\n\nError: ENOENT: no such file or directory, open 'public/asset-manifest.json'\n    at async open (node:internal/fs/promises:1345:25)\n    at async readFile (node:internal/fs/promises:2003:14)\n    at async <repository>/.cache/baseline-model-download-20261026/scripts/download-assets.mjs:4:31 {\n  errno: -2,\n  code: 'ENOENT',\n  syscall: 'open',\n  path: 'public/asset-manifest.json'\n}\n\nNode.js v24.22.1\n"
+  },
+  "candidate": {
+    "command": "npm ci && npm run models:download",
+    "exitCode": 0,
+    "precondition": "Fresh remote clone of baseline main with candidate patch; no existing node_modules, .models or generated public assets copied. Global npm/browser caches available.",
+    "repair": "premodels:download generates the manifest and local runtimes before the downloader reads it.",
+    "result": "50 manifest assets prepared; all 23 pinned remote model/OCR files fetched into an empty .models and SHA-256 verified. No API key required."
+  },
+  "candidateInputSha256": {
+    "package.json": "2a1914cf5dec84baaf3a67da50890b111b5f68324832f44f9ad62c4078961b32",
+    "package-lock.json": "d62cc2e26ecc5311168904a8fb78747307bfa5fbc91de85b97de3e1fb0821d81",
+    "scripts/check-spec-coverage.mjs": "b7c46c122e8da083e8dc9173f8dd2db164b244200e0d428acaf5ba6225cc0d63",
+    "scripts/prepare-assets.mjs": "7e1ed39cf4b9a30f20e36e75c7fcf52c140a486678569b7a49f326ccb57e7ebb",
+    "scripts/download-assets.mjs": "36c684b6a862c8de6423d8259ac4bb911d9576bb9d21213d8340e520ec31f627",
+    "tests/spec/coverage.json": "9feab5c4daea951d89900200b666f3efd920e14e8985de748e622c4969dad77a",
+    "tests/spec/storage-contracts.test.ts": "a2da9a7ea350e2867091fc1ac362c5fa1029267e363a967722d05a0824d7b1f4",
+    "tests/e2e/library.spec.ts": "4a5409d5790304514e3afa26970a544e1ea0a9e743d350e146f3bc92be72451e",
+    "tests/acceptance/recovery.spec.ts": "eceba7d0e8aa3d888e0bb0136b8f5356ad2b42c1fe07daec8f3b0c3a0d3b93b0"
+  },
+  "notHistoricalTddEvidence": "This is a present setup regression, not an on-time failing test for 9/16 October."
+}

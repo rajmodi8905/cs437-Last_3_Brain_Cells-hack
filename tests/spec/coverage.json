@@ -1,0 +1,130 @@
+{
+  "schemaVersion": 1,
+  "minimumGreenFor27October": 8,
+  "statements": [
+    {
+      "id": "S1",
+      "files": [
+        "tests/spec/storage-contracts.test.ts",
+        "tests/storage/integration.test.ts",
+        "tests/e2e/library.spec.ts"
+      ],
+      "scope": "Durable saves for all six kinds, transaction failure and real browser reopen",
+      "remaining": []
+    },
+    {
+      "id": "S2",
+      "files": ["tests/spec/storage-contracts.test.ts", "tests/e2e/library.spec.ts"],
+      "scope": "Combined filters, order, rename and duplicate-title source identity",
+      "remaining": []
+    },
+    {
+      "id": "S3",
+      "files": [
+        "tests/spec/storage-contracts.test.ts",
+        "tests/storage/integration.test.ts",
+        "tests/e2e/library.spec.ts"
+      ],
+      "scope": "Queued/processing/ready deletion, related records and stale publication",
+      "remaining": []
+    },
+    {
+      "id": "S4",
+      "files": ["tests/engine/capture.test.ts", "tests/e2e/library.spec.ts"],
+      "scope": "Real HTTP capture, omitted credentials, inert HTML, truncation and fallback",
+      "remaining": []
+    },
+    {
+      "id": "S5",
+      "files": [
+        "tests/e2e/library.spec.ts",
+        "tests/acceptance/offline.spec.ts",
+        "tests/acceptance/retrieval.spec.ts"
+      ],
+      "scope": "Exact original IDs, missing originals, PDF page and media seeking",
+      "remaining": []
+    },
+    {
+      "id": "S6",
+      "files": [
+        "tests/spec/storage-contracts.test.ts",
+        "tests/storage/repository.test.ts",
+        "tests/e2e/library.spec.ts"
+      ],
+      "scope": "Mixed original hashes/metadata and independent browser-profile transfer",
+      "remaining": []
+    },
+    {
+      "id": "S7",
+      "files": ["tests/engine/assets.test.ts", "tests/acceptance/offline.spec.ts"],
+      "scope": "Asset integrity/progress, real offline reload and missing-model repair",
+      "remaining": []
+    },
+    {
+      "id": "S8",
+      "files": ["tests/acceptance/extraction.spec.ts", "tests/acceptance/retrieval.spec.ts"],
+      "scope": "Actual OCR/PDF/embeddings and page provenance",
+      "remaining": ["Measure the 120-second target on the agreed physical reference phone"]
+    },
+    {
+      "id": "S9",
+      "files": [
+        "tests/engine/ranking.test.ts",
+        "tests/acceptance/retrieval.spec.ts",
+        "tests/acceptance/note-regression.spec.ts"
+      ],
+      "scope": "Frozen actual-model S9 corpus, negatives, arithmetic and deduplication",
+      "remaining": []
+    },
+    {
+      "id": "S10",
+      "files": ["tests/acceptance/retrieval.spec.ts"],
+      "scope": "Fresh S10 library, real text-free image and sampled silent-video retrieval",
+      "remaining": []
+    },
+    {
+      "id": "S11",
+      "files": ["tests/acceptance/extraction.spec.ts", "tests/acceptance/retrieval.spec.ts"],
+      "scope": "Actual English transcription, silence handling and S11 source intervals",
+      "remaining": []
+    },
+    {
+      "id": "S12",
+      "files": [
+        "tests/storage/integration.test.ts",
+        "tests/engine/model-client.test.ts",
+        "tests/acceptance/recovery.spec.ts"
+      ],
+      "scope": "Actual interrupted indexing/retry plus stale claims and worker failure",
+      "remaining": []
+    },
+    {
+      "id": "S13",
+      "files": [
+        "tests/e2e/accessibility.spec.ts",
+        "tests/e2e/library.spec.ts",
+        "tests/acceptance/offline.spec.ts"
+      ],
+      "scope": "Production responsive/offline browser behavior",
+      "remaining": [
+        "Physical iPhone/Android installation, keyboard, safe-area, zoom and playback review"
+      ]
+    },
+    {
+      "id": "S14",
+      "files": ["tests/acceptance/offline.spec.ts", "tests/acceptance/helpers.ts"],
+      "scope": "Actual all-modality offline core and unexpected-external-request rejection",
+      "remaining": []
+    },
+    {
+      "id": "S15",
+      "files": [
+        "tests/e2e/accessibility.spec.ts",
+        "tests/e2e/axe.spec.ts",
+        "tests/e2e/library.spec.ts"
+      ],
+      "scope": "Direct/offline policy routes, first-use links and automated accessibility",
+      "remaining": ["Team review of policy facts and final deployment-specific hosting behavior"]
+    }
+  ]
+}
