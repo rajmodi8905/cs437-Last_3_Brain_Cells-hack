@@ -1,0 +1,141 @@
+name: Bug report
+description: Report an observed defect or clearly identified unverified concern in Campus Recall.
+title: '[Bug]: '
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Report one defect and search existing issues first. Use synthetic files and redact private data from evidence.
+        Bug discovery and retesting: Nakshatra and Chaitanya. Implementation and fixes: Raj.
+        Static concerns must be labelled unverified; do not claim a device/test ran when it did not.
+  - type: dropdown
+    id: evidence-type
+    attributes:
+      label: Evidence type
+      options:
+        - Observed while using the app
+        - Reproduced automated test failure
+        - Static review concern - not reproduced at runtime
+    validations:
+      required: true
+  - type: input
+    id: tested-version
+    attributes:
+      label: Tested commit and build URL
+      description: Record the actual SHA, URL and any local changes. For a hosted build with an unknown SHA, say unknown; do not guess.
+      placeholder: 'main SHA or candidate SHA; app URL; clean checkout or described local changes'
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: Device and environment
+      description: Include device/RAM if known, exact OS/browser versions, browser versus installed PWA, viewport/orientation and date. Unknown details may stay unknown.
+      placeholder: |
+        Device:
+        OS / browser version:
+        Browser tab or installed PWA:
+        Viewport / orientation:
+        Date:
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: Affected area
+      multiple: true
+      options:
+        - Save / local storage / metadata
+        - Processing / retry / deletion
+        - OCR / PDF extraction
+        - Embeddings / text or visual retrieval
+        - Audio / video / timestamps
+        - Original viewer / source identity
+        - Backup / restore
+        - Setup / model download / asset repair
+        - Webpage capture / fallback
+        - Interface / accessibility / mobile layout
+        - PWA / offline / installation / update
+        - Privacy / policy accuracy
+        - Other / unsure
+    validations:
+      required: true
+  - type: input
+    id: specification
+    attributes:
+      label: Related SPEC statement
+      description: Use S1-S15 where applicable. Explain a suggestion separately; use unsure rather than inventing a requirement.
+      placeholder: 'S6 - manual library transfer; or unsure with an explanation'
+    validations:
+      required: true
+  - type: textarea
+    id: preconditions
+    attributes:
+      label: Preconditions and synthetic fixtures
+      description: Include library/profile state, network mode, model/cache readiness, cold/warm state and fixture format/size/hash when relevant. Do not upload private files or real library backups.
+      placeholder: |
+        Profile / existing library:
+        Network / offline state:
+        Models / cache / cold or warm:
+        Synthetic files or queries and independent expected source:
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Steps to reproduce
+      description: Give minimal numbered actions or the exact failing command. For an unverified static concern, state not run and cite file/line reasoning instead of inventing steps.
+      placeholder: |
+        1.
+        2.
+        3.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected result
+      description: Describe the required behavior and correct source/page/interval if relevant. Avoid exact AI/OCR wording requirements.
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual result and frequency
+      description: What happened, how often out of how many attempts, and any measured timing? For static concerns, state that no runtime outcome was observed.
+    validations:
+      required: true
+  - type: dropdown
+    id: priority
+    attributes:
+      label: Proposed priority
+      description: Select according to observed impact; priority is confirmed during triage.
+      options:
+        - P0 - observed private-data exposure or irreversible loss
+        - P1 - required core flow or device blocked
+        - P2 - incorrect behavior with a workaround
+        - P3 - cosmetic or optional improvement
+        - Unsure
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Sanitized evidence and related issues
+      description: Attach redacted screenshots/logs or reproduction links. Add relevant issue links, fixture hashes or static file/line references. State unavailable evidence explicitly.
+  - type: textarea
+    id: workaround
+    attributes:
+      label: Workaround or additional observations
+      description: Optional. Keep speculative causes separate from observed facts.
+  - type: checkboxes
+    id: reporting-checks
+    attributes:
+      label: Reporting checks
+      options:
+        - label: I searched existing issues and this report describes one distinct problem.
+          required: true
+        - label: I accurately distinguished observed results from unverified concerns and did not invent measurements or test passes.
+          required: true
+        - label: I checked the report and attachments for private documents, chats, credentials and other personal data.
+          required: true

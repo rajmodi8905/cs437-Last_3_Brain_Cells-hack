@@ -97,6 +97,10 @@ node scripts/create-fixtures.mjs
 
 All fifteen statements map to actual test suites in [the coverage registry](tests/spec/coverage.json). `npm run check` validates that mapping; `npm test` executes the behavior. Registry completeness alone is not a test pass. See [the October milestone audit](docs/verification/milestones-2026-10.md) for the reviewed/merged evidence, late earlier milestones and remaining physical-device checks.
 
+## Bug-finding handoff
+
+Follow [Nakshatra's quickstart](docs/implementation/nakshatra-quickstart.md) to prepare a production preview, an importable synthetic 30-item library, exact-source expectations, malformed inputs and an empty run ledger. `npm run qa:prepare` writes only to a new ignored `.cache/qa-kit/` directory and never overwrites an earlier run. No model download is needed to prepare the kit. Optional `npm run qa:https` uses user-supplied local certificate files for a phone session; it does not deploy a site or configure device trust. The quickstart links both testers' prompts and the GitHub bug-report form.
+
 ## Architecture
 
 - `src/shared/`: published contracts and limits from Nakshatra.
@@ -111,5 +115,7 @@ The views receive service contracts instead of accessing database tables or mode
 EmbeddingGemma 2 q4 text and vision share normalized 768-dimensional vectors. Whisper tiny.en transcribes speech separately. WASM uses a standard-operator lowering of the model's packed q4 embedding lookup because the distributed ORT WASM runtime lacks that kernel. The pinned weights and precision remain unchanged. See [retrieval notes](docs/verification/retrieval.md) for equivalence checks, prefixes, calibration and frozen versions.
 
 ## Team workflow
+
+For the current completion phase, follow [the release implementation plan](docs/implementation/release-plan.md): Raj owns all implementation; Nakshatra and Chaitanya own bug discovery and retesting. Their copy-ready prompts and the repository bug-report form are linked from [team instructions](docs/implementation/README.md).
 
 The implementation reached `main` through reviewed [PR #6](https://github.com/rajmodi8905/cs437-Last_3_Brain_Cells-hack/pull/6). Follow-up changes use `raj_final`. Preserve `Raj_setup`. Open reviewed PRs into `main`; do not merge without authorization. Keep local handovers and unrelated files out of public changes. See [implementation instructions](docs/implementation/README.md) and [AI-assisted development notes](docs/ai-use.md).
