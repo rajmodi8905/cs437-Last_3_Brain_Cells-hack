@@ -15,6 +15,12 @@ export default defineConfig({
   },
   webServer: [
     {
+      command: 'npm run qa:webpages',
+      url: 'http://127.0.0.1:4181',
+      reuseExistingServer: true,
+      timeout: 10000,
+    },
+    {
       command: 'node scripts/test-asset-server.mjs',
       url: 'http://127.0.0.1:4180',
       ignoreHTTPSErrors: true,

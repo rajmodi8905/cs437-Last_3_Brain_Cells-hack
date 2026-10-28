@@ -1,5 +1,9 @@
 # AI-assisted development notes
 
+## Chaitanya's testing prerequisites, 28 October 2026
+
+Raj requested the same complete testing handoff for Chaitanya. Codex reused PR #8's common kit on a separate branch, added the focused quickstart/prompt, UI boundary/source-content inputs, an unfilled C1–C15 ledger and a loopback-only synthetic webpage helper. New tests first recorded the missing prerequisite failures; subsequent checks passed 62 fast and eleven production browser cases. An initial browser locator incorrectly expected an old captured title; the test was corrected to explicitly name the manual fallback and the full rerun passed. [Handoff evidence](verification/2026-10-28-chaitanya-handoff.md) records results and limits. Chaitanya retains bug discovery/reporting/retests; Raj retains all implementation. No phone result, new model-accuracy claim, teammate message or deployment was fabricated.
+
 ## Nakshatra's testing prerequisites, 28 October 2026
 
 Raj authorized completing the bug-finding handoff and opening its PR. Codex added a synthetic QA-kit generator, existing-certificate HTTPS preview command and executable tester quickstart alongside the pending release plan/prompts/issue form. Regression tests were added before the generator; the initial suite failed setup for the absent script, then eight actual storage/toolkit cases passed. Full fast checks passed 58 tests; production browser checks passed nine cases, including the generated kit's real import/view/duplicate/rejection flow. A local TLS transport smoke used an explicitly trusted test certificate in one Python client without changing device trust. Actual commands and limits are recorded in [handoff verification](verification/2026-10-28-qa-handoff.md). No exploratory bug hunt was assigned to Raj, no teammate was messaged and no phone/semantic accuracy result was invented.

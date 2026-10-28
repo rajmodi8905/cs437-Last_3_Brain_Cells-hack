@@ -103,3 +103,20 @@ it('refuses to overwrite an existing kit and its tester notes', async () => {
   ).toThrow();
   expect(await readFile(join(output, 'run-ledger.md'), 'utf8')).toContain('Not run');
 });
+
+it('provides real UI stress notes at title/text boundaries and a separate unfilled Chaitanya ledger', async () => {
+  const repository = fresh();
+  expect((await repository.importArchive(await archive('ui-stress.zip'))).importedIds).toHaveLength(
+    3,
+  );
+  const records = await repository.listItems();
+  expect(records.some((item) => Array.from(item.title).length === 120)).toBe(true);
+  const sources = await Promise.all(
+    records.map(async (item) => (await repository.getOriginal(item.id))!.text()),
+  );
+  expect(sources.some((text) => Array.from(text).length === 20_000)).toBe(true);
+  expect(await readFile(join(output, 'chaitanya-ledger.md'), 'utf8')).toContain('Not run');
+  expect(await readFile(join(output, 'ui/snapshot.html'), 'utf8')).toContain(
+    'window.qaImportedScript',
+  );
+});

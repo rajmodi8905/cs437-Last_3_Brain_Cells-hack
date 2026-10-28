@@ -134,6 +134,44 @@ const exploratory = await makeLibrary(
 );
 materials.set('exploratory.zip', exploratory.archive);
 
+const longTitle = 'A'.repeat(120);
+const longNote = 'Synthetic long note. '.repeat(1000).slice(0, 20_000);
+const ui = await makeLibrary(
+  [
+    {
+      id: 'UI1',
+      title: longTitle,
+      text: 'Synthetic source for the maximum-length title. Keep this original distinct.',
+    },
+    { id: 'UI2', title: 'Long note boundary', text: longNote },
+    {
+      id: 'UI3',
+      title: 'Unicode and source content',
+      text: 'Synthetic user content: café, नमस्ते, 漢字, and a quoted em dash — retained exactly.',
+    },
+  ],
+  '4000',
+);
+materials.set('ui-stress.zip', ui.archive);
+materials.set('ui/long-title.txt', strToU8(longTitle));
+materials.set('ui/long-note.txt', strToU8(longNote));
+materials.set(
+  'ui/fallback-text.txt',
+  strToU8('Synthetic fallback snapshot: Robotics induction is on Saturday at the north workshop.'),
+);
+materials.set(
+  'ui/snapshot.html',
+  strToU8(
+    '<title>Synthetic imported snapshot</title><main><p>Robotics induction is on Saturday at the north workshop.</p><script>window.qaImportedScript=true;fetch("http://127.0.0.1:4181/probe")</script><img src="http://127.0.0.1:4181/probe" onerror="window.qaImportedScript=true"></main>',
+  ),
+);
+materials.set(
+  'chaitanya-ledger.md',
+  strToU8(
+    `# Chaitanya UI/PWA run ledger\n\nTester/date/timezone:\nCommit/build URL/local changes:\nDevice/OS/browser and browser/installed mode:\nViewport/orientation/input method:\nProfile/model/cache/network/cold-warm state:\n\nRecord actual observations, sanitized screenshots/logs and issue links. Generating this file is not a test run.\n\n| ID | Scenario | Expected | Actual / evidence / attempts | Outcome | Issue / retest |\n| --- | --- | --- | --- | --- | --- |\n| C1 | First use and policy links | Accessible before setup | Not observed | Not run | None |\n| C2 | Save before model setup | Original saved; queued; exact source after reload | Not observed | Not run | None |\n| C3 | Setup/retry/progress | Verified readiness only; no duplicate setup jobs | Not observed | Not run | None |\n| C4 | Long title/note/Unicode | Readable, usable and exact original preserved | Not observed | Not run | None |\n| C5 | Keyboard/focus/reduced motion | Usable controls and focus restoration | Not observed | Not run | None |\n| C6 | Allowed page capture | Exact source text; no script/resource execution | Not observed | Not run | None |\n| C7 | Large page capture | Visible truncation at 20000 code points | Not observed | Not run | None |\n| C8 | Blocked/error/type capture | Honest error; manual fallback remains usable | Not observed | Not run | None |\n| C9 | HTML snapshot | Inert extracted text; no probe execution | Not observed | Not run | None |\n| C10 | Original viewers | Exact item/page/interval; no substitute | Not observed | Not run | None |\n| C11 | Responsive routes | No overflow at 390/768/1440 | Not observed | Not run | None |\n| C12 | Offline shell/policies/original | Production reopen works after caching | Not observed | Not run | None |\n| C13 | Phone/installed PWA | Record real device evidence separately | Not observed | Not run | None |\n| C14 | Policy facts/style review | Matches actual implementation/host; restrictions respected | Not observed | Not run | None |\n| C15 | Update and retest | Library preserved; original reported failure resolved | Not observed | Not run | None |\n\nFor redesign findings record Before | After | Why separately; no private imported files in public evidence.\n`,
+  ),
+);
+
 const invalid = (name, change) => {
   const manifest = structuredClone(sameTitle.manifest);
   const files = { ...sameTitle.files };
@@ -172,6 +210,7 @@ const expected = {
   negativeQueries: corpus.negatives,
   sameTitle: sameTitle.expected,
   exploratory: exploratory.expected,
+  uiStress: ui.expected,
   phoneTarget: {
     milliseconds: 120_000,
     fixtureFiles: ['sample-01.jpg', 'sample-02.png', 'ocr.webp', 'sample-03.pdf', 'scanned.pdf'],

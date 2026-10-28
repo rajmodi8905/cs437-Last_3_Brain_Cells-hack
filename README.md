@@ -101,6 +101,8 @@ All fifteen statements map to actual test suites in [the coverage registry](test
 
 Follow [Nakshatra's quickstart](docs/implementation/nakshatra-quickstart.md) to prepare a production preview, an importable synthetic 30-item library, exact-source expectations, malformed inputs and an empty run ledger. `npm run qa:prepare` writes only to a new ignored `.cache/qa-kit/` directory and never overwrites an earlier run. No model download is needed to prepare the kit. Optional `npm run qa:https` uses user-supplied local certificate files for a phone session; it does not deploy a site or configure device trust. The quickstart links both testers' prompts and the GitHub bug-report form.
 
+[Chaitanya's quickstart](docs/implementation/chaitanya-quickstart.md) adds UI boundary/source-content fixtures, a C1–C15 run ledger and `npm run qa:webpages` for deterministic desktop capture/truncation/blocked-fetch tests. The helper is loopback-only, synthetic and separate from the deployed application.
+
 ## Architecture
 
 - `src/shared/`: published contracts and limits from Nakshatra.
