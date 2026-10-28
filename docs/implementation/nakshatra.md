@@ -1,5 +1,7 @@
 # Nakshatra: foundation, persistence, and transfer
 
+**Historical implementation handoff.** For the current release phase, use [the release plan](release-plan.md) and [Nakshatra's bug-finding prompt](bug-hunt-nakshatra.md). Nakshatra now finds/reports defects and retests fixes; Raj implements all further changes. Do not restart this old package.
+
 Branch: `Nakshatra_setup`. Start after the planning PR merges into `main`. Follow [the team read order and Git rules](README.md). Do not stage or commit before asking.
 
 ## Goal and ownership

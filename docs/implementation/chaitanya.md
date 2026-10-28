@@ -1,5 +1,7 @@
 # Chaitanya: policy content, user documentation, and review checklists
 
+**Historical implementation handoff.** For the current release phase, use [the release plan](release-plan.md) and [Chaitanya's bug-finding prompt](bug-hunt-chaitanya.md). Chaitanya now finds/reports defects and retests fixes; Raj implements all further changes, including policy corrections. Do not restart this old package.
+
 Branch: `Chaitanya_setup`. Read [team instructions](README.md), [plan](../../IMPLEMENTATION_PLAN.md), [SPEC](../../SPEC.md), [contracts](contracts.md), and [acceptance design](acceptance.md). Start drafting after the planning PR merges; use Nakshatra's merged foundation to verify available setup instructions. Ask before staging/committing.
 
 ## Goal and ownership

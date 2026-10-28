@@ -17,8 +17,10 @@
     "test:browser": "playwright test tests/e2e",
     "test:acceptance": "playwright test tests/acceptance",
     "preview": "vite preview --host 127.0.0.1",
+    "qa:prepare": "node scripts/prepare-qa-kit.mjs",
+    "qa:https": "node scripts/qa-https.mjs",
     "models:download": "node scripts/download-assets.mjs",
-    "format:check": "prettier --check src/ui src/app src/engine src/shared/browser-assets.ts src/main.tsx scripts tests/app tests/acceptance tests/e2e tests/engine tests/storage/integration.test.ts tests/spec vite.config.ts playwright.config.ts eslint.config.js src/sw.ts",
+    "format:check": "prettier --check src/ui src/app src/engine src/shared/browser-assets.ts src/main.tsx scripts tests/app tests/acceptance tests/e2e tests/engine tests/storage/integration.test.ts tests/spec tests/tooling vite.config.ts playwright.config.ts eslint.config.js src/sw.ts",
     "premodels:download": "node scripts/prepare-assets.mjs"
   },
   "dependencies": {

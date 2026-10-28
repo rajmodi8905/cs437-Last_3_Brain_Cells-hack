@@ -1,5 +1,13 @@
 # AI-assisted development notes
 
+## Nakshatra's testing prerequisites, 28 October 2026
+
+Raj authorized completing the bug-finding handoff and opening its PR. Codex added a synthetic QA-kit generator, existing-certificate HTTPS preview command and executable tester quickstart alongside the pending release plan/prompts/issue form. Regression tests were added before the generator; the initial suite failed setup for the absent script, then eight actual storage/toolkit cases passed. Full fast checks passed 58 tests; production browser checks passed nine cases, including the generated kit's real import/view/duplicate/rejection flow. A local TLS transport smoke used an explicitly trusted test certificate in one Python client without changing device trust. Actual commands and limits are recorded in [handoff verification](verification/2026-10-28-qa-handoff.md). No exploratory bug hunt was assigned to Raj, no teammate was messaged and no phone/semantic accuracy result was invented.
+
+## Release planning and issue intake, 28 October 2026
+
+Raj requested a complete release plan with all further implementation assigned to him and all exploratory bug finding/reporting assigned to Nakshatra and Chaitanya. Codex wrote the [release plan](implementation/release-plan.md), separate copy-ready prompts and a repository GitHub issue form. Earlier handoffs now point to the current assignments so an AI does not restart the completed packages. The assistant checked local document links and issue-form YAML structure/formatting. No new bug findings, phone results, runtime test passes, GitHub form rendering or deployment are claimed by this documentation work.
+
 ## October checkpoint audit and setup repair, 26 October 2026
 
 Raj asked Codex to complete the earlier specification/test artifacts and the 27 October checkpoint, authorizing a commit and PR. The assistant checked dated Git history, actual GitHub reviews and completed main CI rather than relying on earlier completion reports. The audit records that the 9/16 October requirements were not fully met on time. It conservatively counts eight statements already tested and merged through reviewed PRs for the 27 October minimum.

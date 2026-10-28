@@ -1,13 +1,17 @@
 # Team implementation handoffs
 
+**Current assignments, 28 October 2026:** use [the completion and release plan](release-plan.md). Raj implements all further changes. Nakshatra and Chaitanya find/report bugs and retest fixes; they do not implement their old packages again. Copy-ready AI prompts: [Nakshatra](bug-hunt-nakshatra.md), [Chaitanya](bug-hunt-chaitanya.md). File reports with [the GitHub issue form](../../.github/ISSUE_TEMPLATE/bug-report.yml), available in New issue after it is merged into the default branch.
+
 Current integration, 23 October 2026: Nakshatra’s and Chaitanya’s packages are merged. Raj explicitly requested completing integration on `raj_final` from current `main`, preserving `Raj_setup`. The original member-branch instructions below describe the earlier handoff. Current evidence and release checks are in [verification](../verification/README.md).
 
 Status: the original planning handoffs below are retained for ownership and contract history. The foundation, support documents and Raj’s integration now exist. Use the repository code, current README and verification report for implemented behavior and actual test results.
 
 ## Read order
 
+For the current bug-finding round, begin with [the executable tester quickstart](nakshatra-quickstart.md), then use the release plan and your named prompt below.
+
 1. Applicable local/repository instructions.
-2. [Implementation plan](../../IMPLEMENTATION_PLAN.md).
+2. [Current release plan](release-plan.md), then the [historical implementation plan](../../IMPLEMENTATION_PLAN.md) for product context.
 3. [SPEC.md](../../SPEC.md).
 4. [Shared contracts](contracts.md).
 5. [Acceptance design](acceptance.md).
@@ -38,7 +42,9 @@ Raj retains the existing `Raj_setup` and incorporates current `origin/main` norm
 
 Raj can work independently on UI/engine contracts after the plan merges. The runtime depends on Nakshatra's repository; policy-page content depends on Chaitanya's reviewed documents. There is no dependency on a teammate-built interface.
 
-## Instructions to paste into each member's AI
+## Historical implementation prompt
+
+Do not use this earlier implementation prompt for the current release bug-finding phase. Use the named bug-finding prompts linked above.
 
 > Read the implementation plan, shared contracts, acceptance design, and my named handoff. Implement only my package on my specified branch after the prerequisite planning/foundation PRs have merged. Preserve existing work. Add meaningful tests before features, run the package checks, and report actual results. Do not substitute mocks for retrieval evidence or silently change contracts. Ask me before staging/committing and obtain publication authorization before unapproved pushes or deployment. Prepare the work and a PR description for review. Do not bypass branch protection or merge without authorization.
 
