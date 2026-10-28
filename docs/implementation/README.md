@@ -8,7 +8,7 @@ Status: the original planning handoffs below are retained for ownership and cont
 
 ## Read order
 
-For the current bug-finding round, begin with [the executable tester quickstart](nakshatra-quickstart.md), then use the release plan and your named prompt below.
+For the current bug-finding round, begin with your executable quickstart: [Nakshatra](nakshatra-quickstart.md) or [Chaitanya](chaitanya-quickstart.md), then use the release plan and your named prompt below.
 
 1. Applicable local/repository instructions.
 2. [Current release plan](release-plan.md), then the [historical implementation plan](../../IMPLEMENTATION_PLAN.md) for product context.

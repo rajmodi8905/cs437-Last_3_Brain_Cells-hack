@@ -50,6 +50,8 @@ Do not postpone first phone inference until after the redesign. If phone feasibi
 
 Executable handoff: [tester quickstart](nakshatra-quickstart.md). `npm run qa:prepare` generates the synthetic library/invalid cases/expected-source data/blank ledger; `npm run qa:https` accepts existing local TLS files for the physical-device session. These commands do not publish a site or configure phone trust. Desktop testing does not wait for a phone connection.
 
+[Chaitanya's focused quickstart](chaitanya-quickstart.md) uses the shared kit plus UI-stress notes, inert HTML, a C1–C15 ledger and the local `qa:webpages` helper for controlled capture failures. It does not depend on Nakshatra finishing her bug-finding round.
+
 Raj prepares the implementation environment and test kit; Nakshatra and Chaitanya execute their assigned testing.
 
 1. Obtain commit/publication approval, publish this documentation and issue form through a reviewed PR, and merge only with authorization. The issue form is available through GitHub's New issue screen only after it reaches the default branch.
