@@ -3,7 +3,8 @@ export function meaningfulOcrText(text: string): string {
   const words = text.match(/[\p{L}\p{N}]{3,}/gu) ?? [];
   return words.join('').length >= 4 ? text.trim() : '';
 }
-/** A query needs at least two letters or digits; "a" or "?" cannot describe an original. */
+/** "a", "?" or one character repeated ("xxxx") cannot describe an original, so it is not searched. */
 export function isSearchableQuery(query: string): boolean {
-  return (query.match(/[\p{L}\p{N}]/gu) ?? []).length >= 2;
+  const characters = query.toLocaleLowerCase().match(/[\p{L}\p{N}]/gu) ?? [];
+  return characters.length >= 2 && new Set(characters).size >= 2;
 }
