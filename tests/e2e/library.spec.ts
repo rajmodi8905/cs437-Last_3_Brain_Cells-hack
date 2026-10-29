@@ -105,6 +105,13 @@ test('a partially saved batch reports remaining files instead of losing its erro
   await expect(page.getByRole('status')).toContainText('Saved locally');
   await expect(page.getByRole('alert')).toContainText('1 remaining file(s) were not saved');
   await expect(page.getByText('one', { exact: true })).toBeVisible();
+  await page.goto('/#/add');
+  await page.getByRole('tab', { name: 'Note', exact: true }).click();
+  await page.getByRole('textbox', { name: 'Title' }).fill('Later note');
+  await page.getByRole('textbox', { name: 'Note', exact: true }).fill('Saved after the batch.');
+  await page.getByRole('button', { name: 'Save locally' }).click();
+  await expect(page.getByText('Later note', { exact: true })).toBeVisible();
+  await expect(page.getByRole('alert')).toHaveCount(0);
 });
 test('duplicate titles open exact originals and a missing source never substitutes another', async ({
   page,

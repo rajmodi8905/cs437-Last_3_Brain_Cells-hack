@@ -739,15 +739,25 @@ export class DexieLibraryRepository implements ProcessingRepository {
       this.database.originals,
       this.database.jobs,
       async () => {
+        // Each item already in the library absorbs at most one archive entry, so entries that
+        // share bytes inside one archive (and items added by this restore) are never "duplicates".
+        const matched = new Set<string>();
         for (const entry of prepared) {
-          const existingDuplicate = await this.database.items
+          const candidates = await this.database.items
             .where('contentSha256')
             .equals(entry.item.contentSha256)
             .filter(
-              (item) => item.kind === entry.item.kind && item.sourceUrl === entry.item.sourceUrl,
+              (item) =>
+                item.kind === entry.item.kind &&
+                item.sourceUrl === entry.item.sourceUrl &&
+                !matched.has(item.id) &&
+                !importedIds.includes(item.id),
             )
-            .first();
+            .toArray();
+          const existingDuplicate =
+            candidates.find((item) => item.title === entry.item.title) ?? candidates[0];
           if (existingDuplicate) {
+            matched.add(existingDuplicate.id);
             skippedDuplicateIds.push(existingDuplicate.id);
             continue;
           }

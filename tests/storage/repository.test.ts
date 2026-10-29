@@ -143,6 +143,36 @@ describe('DexieLibraryRepository', () => {
     expect(duplicateReport.skippedDuplicateIds).toEqual([imported!.id]);
   });
 
+  it('restores every entry when two exported items share the same bytes', async () => {
+    const club = await repository.save({ kind: 'note', text: 'Badminton at 6', title: 'Club group' });
+    const hostel = await repository.save({ kind: 'note', text: 'Badminton at 6', title: 'Hostel group' });
+    const archive = await repository.exportItems([club.id, hostel.id]);
+
+    const targetDatabase = new CampusRecallDatabase(`test-${crypto.randomUUID()}`);
+    const target = new DexieLibraryRepository(targetDatabase);
+    await target.open();
+    const report = await target.importArchive(archive);
+    const restored = await target.listItems();
+
+    expect(report.importedIds).toHaveLength(2);
+    expect(report.skippedDuplicateIds).toHaveLength(0);
+    expect(restored.map((item) => [item.title, item.createdAt]).sort()).toEqual(
+      [[club.title, club.createdAt], [hostel.title, hostel.createdAt]].sort(),
+    );
+
+    const again = await target.importArchive(archive);
+    expect(again.importedIds).toHaveLength(0);
+    expect([...again.skippedDuplicateIds].sort()).toEqual(restored.map((item) => item.id).sort());
+
+    const partialDatabase = new CampusRecallDatabase(`test-${crypto.randomUUID()}`);
+    const partial = new DexieLibraryRepository(partialDatabase);
+    await partial.open();
+    await partial.importArchive(await repository.exportItems([club.id]));
+    const topUp = await partial.importArchive(archive);
+    expect(topUp.importedIds).toHaveLength(1);
+    expect((await partial.getItem(topUp.importedIds[0]!))?.title).toBe('Hostel group');
+  });
+
   it('serializes concurrent imports so only one creates the item', async () => {
     const item = await repository.save({ kind: 'webpage', url: 'https://example.test/concurrent', text: 'snapshot', title: 'Page' });
     const archive = await repository.exportItems([item.id]);

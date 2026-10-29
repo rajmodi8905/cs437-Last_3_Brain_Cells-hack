@@ -10,10 +10,12 @@ import {
 import { DexieLibraryRepository } from '../storage';
 import { ModelClient } from '../app/model-client';
 import { getManifest, offlineStatus, setupAssets, type AssetManifest } from './assets';
-import { extractMedia, extractPdf, ocr, type Extracted } from './extract';
+import { assertDecodableImage, extractMedia, extractPdf, ocr, type Extracted } from './extract';
 import { rankSegments } from './ranking';
 import { embeddingTitle } from './documents';
-export const INDEX_VERSION = 'gemma2-daa72c5-q4-768-ch256o48-img70-lowered1-notitledup1-asr2-v7';
+import { isSearchableQuery } from './text-guards';
+export const INDEX_VERSION =
+  'gemma2-daa72c5-q4-768-ch256o48-img70-lowered1-notitledup1-asr2-ocrwords1-v8';
 export class LocalEngine implements EngineClient {
   readonly models = new ModelClient();
   private listeners = new Set<ProgressListener>();
@@ -124,6 +126,7 @@ export class LocalEngine implements EngineClient {
                   };
                   break;
                 case 'image':
+                  await assertDecodableImage(original);
                   extracted = {
                     parts: [
                       { image: original, text: await ocr(original), location: { kind: 'whole' } },
@@ -252,7 +255,7 @@ export class LocalEngine implements EngineClient {
           'Set up offline search in Settings first. Saved originals are available in Library.',
         retryable: false,
       });
-    if (!query.trim()) return [];
+    if (!isSearchableQuery(query)) return [];
     if (Array.from(query).length > 1000)
       throw new Error('Keep your search under 1,000 characters.');
     const vector = await this.models.query(query.trim());
