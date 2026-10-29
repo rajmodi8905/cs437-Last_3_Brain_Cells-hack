@@ -1,5 +1,5 @@
 /// <reference lib="webworker" />
-import { precacheAndRoute, cleanupOutdatedCaches } from 'workbox-precaching';
+import { precacheAndRoute, cleanupOutdatedCaches, getCacheKeyForURL } from 'workbox-precaching';
 import { ASSET_CACHE } from './engine/assets';
 declare const self: ServiceWorkerGlobalScope & { __WB_MANIFEST: any };
 precacheAndRoute(self.__WB_MANIFEST);
@@ -11,6 +11,8 @@ self.addEventListener('message', (event) => {
 // Explicit setup owns the asset cache. Ordinary use can only read cached assets.
 self.addEventListener('fetch', (event) => {
   if (event.request.method !== 'GET') return;
+  // App-shell runtime files, such as the PDF viewer worker, are served by the precache route.
+  if (getCacheKeyForURL(event.request.url)) return;
   if (new URL(event.request.url).pathname.includes('/runtime/'))
     event.respondWith(
       (async () => {

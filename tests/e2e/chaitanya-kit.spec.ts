@@ -51,7 +51,7 @@ test('Chaitanya fixtures exercise capture, truncation, blocked fallback and iner
     .getByRole('textbox', { name: 'Public webpage URL' })
     .fill('https://example.test/snapshot');
   await page
-    .getByLabel('Import an HTML text snapshot')
+    .getByLabel('Import an HTML or PDF snapshot')
     .setInputFiles(join(kit, 'ui/snapshot.html'));
   await expect(page.getByRole('textbox', { name: 'Saved page text' })).toHaveValue(
     'Robotics induction is on Saturday at the north workshop.',

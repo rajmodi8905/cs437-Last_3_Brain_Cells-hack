@@ -1,4 +1,5 @@
 import { AppOperationError, LIMITS } from '../shared';
+import { pdfjs } from '../shared/browser-assets';
 export function extractHtml(html: string): { title: string; text: string; truncated: boolean } {
   // Template contents are inert. Never attach them to the active document.
   const template = document.createElement('template');
@@ -21,6 +22,55 @@ export function extractHtml(html: string): { title: string; text: string; trunca
     truncated: Array.from(text).length > LIMITS.maxTextCodePoints,
     text: Array.from(text).slice(0, LIMITS.maxTextCodePoints).join(''),
   };
+}
+/** Selectable text from a PDF snapshot. Scanned pages need the Files tab, where OCR runs. */
+export async function extractPdfText(
+  file: Blob,
+): Promise<{ title: string; text: string; truncated: boolean }> {
+  if (file.size > LIMITS.maxPdfBytes) throw new Error('PDF snapshot must be 20 MB or smaller.');
+  const pdf = await pdfjs();
+  const task = pdf.getDocument({
+    data: await file.arrayBuffer(),
+    useSystemFonts: true,
+    useWasm: false,
+  });
+  try {
+    const document = await task.promise.catch(() => {
+      throw new Error('This PDF snapshot could not be read. It may be encrypted or damaged.');
+    });
+    if (document.numPages > LIMITS.maxPdfPages)
+      throw new Error('This PDF exceeds 50 pages. Split it into smaller documents.');
+    const pages: string[] = [];
+    for (let n = 1; n <= document.numPages; n++) {
+      const page = await document.getPage(n);
+      const content = await page.getTextContent();
+      pages.push(
+        content.items
+          .map((item) =>
+            'str' in item ? item.str + ('hasEOL' in item && item.hasEOL ? '\n' : ' ') : '',
+          )
+          .join(''),
+      );
+      page.cleanup();
+    }
+    const text = pages
+      .join('\n')
+      .replace(/[\t ]+/g, ' ')
+      .replace(/\n\s*\n/g, '\n')
+      .trim();
+    if (!text)
+      throw new Error('This PDF has no selectable text. Save it from the Files tab instead.');
+    const info = (await document.getMetadata().catch(() => undefined))?.info as
+      { Title?: unknown } | undefined;
+    const title = typeof info?.Title === 'string' ? info.Title.trim() : '';
+    return {
+      title: Array.from(title).slice(0, LIMITS.maxTitleCodePoints).join(''),
+      truncated: Array.from(text).length > LIMITS.maxTextCodePoints,
+      text: Array.from(text).slice(0, LIMITS.maxTextCodePoints).join(''),
+    };
+  } finally {
+    await task.destroy();
+  }
 }
 export function validateWebUrl(value: string): URL {
   const url = new URL(value);

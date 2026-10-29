@@ -30,7 +30,11 @@
     },
     {
       "id": "S4",
-      "files": ["tests/engine/capture.test.ts", "tests/e2e/library.spec.ts"],
+      "files": [
+        "tests/engine/capture.test.ts",
+        "tests/e2e/library.spec.ts",
+        "tests/e2e/chaitanya-fixes.spec.ts"
+      ],
       "scope": "Real HTTP capture, omitted credentials, inert HTML, truncation and fallback",
       "remaining": []
     },
@@ -103,7 +107,8 @@
       "files": [
         "tests/e2e/accessibility.spec.ts",
         "tests/e2e/library.spec.ts",
-        "tests/acceptance/offline.spec.ts"
+        "tests/acceptance/offline.spec.ts",
+        "tests/e2e/chaitanya-fixes.spec.ts"
       ],
       "scope": "Production responsive/offline browser behavior",
       "remaining": [

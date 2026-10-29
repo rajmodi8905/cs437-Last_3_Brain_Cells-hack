@@ -1,7 +1,7 @@
 import { liveQuery } from 'dexie';
 import { CampusRecallDatabase, DexieLibraryRepository } from '../storage';
 import { LocalEngine } from '../engine';
-import { captureWebpage, extractHtml, validateWebUrl } from '../engine/capture';
+import { captureWebpage, extractHtml, extractPdfText, validateWebUrl } from '../engine/capture';
 import type { EngineClient, LibraryItem, LibraryRepository } from '../shared';
 
 export interface ApplicationEngine extends EngineClient {
@@ -11,6 +11,7 @@ export interface ApplicationEngine extends EngineClient {
 export interface CaptureService {
   captureWebpage: typeof captureWebpage;
   extractHtml: typeof extractHtml;
+  extractPdfText: typeof extractPdfText;
   validateWebUrl: typeof validateWebUrl;
 }
 /** Stable boundary for any future React skin or other presentation layer. */
@@ -34,7 +35,7 @@ export function createCampusRecallServices(): CampusRecallServices {
   return {
     library,
     engine,
-    capture: { captureWebpage, extractHtml, validateWebUrl },
+    capture: { captureWebpage, extractHtml, extractPdfText, validateWebUrl },
     async initialize() {
       await library.open();
       await engine.initialize();

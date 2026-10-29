@@ -50,14 +50,19 @@ export function LibrarySearchScreen({ model }: { model: CampusRecallModel }) {
         </div>
       )}
       <div className="library-toolbar">
-        <div className="type-filters" aria-label="Filter by file type">
-          <button className={!filter ? 'selected' : ''} onClick={() => chooseFilter(undefined)}>
+        <div className="type-filters" role="group" aria-label="Filter by file type">
+          <button
+            className={!filter ? 'selected' : ''}
+            aria-pressed={!filter}
+            onClick={() => chooseFilter(undefined)}
+          >
             All files <span className="count">{items.length}</span>
           </button>
           {kinds.map((kind) => (
             <button
               key={kind}
               className={filter === kind ? 'selected' : ''}
+              aria-pressed={filter === kind}
               onClick={() => chooseFilter(kind)}
             >
               {kindLabels[kind]}{' '}
