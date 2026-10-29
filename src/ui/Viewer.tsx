@@ -12,6 +12,7 @@ import {
 import type { LibraryItem, LibraryRepository, SourceLocation } from '../shared';
 import { pdfjs } from '../shared/browser-assets';
 import { downloadBlob, time, useObjectUrl } from './hooks';
+import { useViewerFocus } from './useViewerFocus';
 export function Viewer({
   item,
   location,
@@ -32,6 +33,9 @@ export function Viewer({
   const [pages, setPages] = useState(0);
   const canvas = useRef<HTMLCanvasElement>(null);
   const media = useRef<HTMLMediaElement | null>(null);
+  const section = useRef<HTMLElement>(null);
+  const closeButton = useRef<HTMLButtonElement>(null);
+  useViewerFocus(item.id, section, closeButton);
   useEffect(() => {
     let current = true;
     setBlob(undefined);
@@ -109,10 +113,15 @@ export function Viewer({
   }, [location, url]);
   const titleId = `source-${item.id}`;
   return (
-    <section className="viewer" aria-labelledby={titleId}>
+    <section className="viewer" aria-labelledby={titleId} ref={section}>
       <div className="viewer-header">
         <span className="eyebrow">ORIGINAL SOURCE</span>
-        <button className="icon-button" onClick={onClose} aria-label="Close original">
+        <button
+          ref={closeButton}
+          className="icon-button"
+          onClick={onClose}
+          aria-label="Close original"
+        >
           <X size={19} />
         </button>
       </div>

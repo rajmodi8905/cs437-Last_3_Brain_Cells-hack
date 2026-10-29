@@ -66,3 +66,28 @@ it('rejects corrupt bytes, never marks ready, and reuses complete verified asset
   await store.delete(manifest.assets[0].url);
   expect(await offlineStatus(manifest)).toBe(false);
 });
+it('withdraws readiness when a cached asset was replaced after setup (#11)', async () => {
+  const store = cache();
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async () => new Response(content)),
+  );
+  const manifest = await fixture();
+  await setupAssets(manifest, () => {});
+  expect(await offlineStatus(manifest)).toBe(true);
+  await store.put(manifest.assets[0].url, new Response('corrupted by QA'));
+  expect(await offlineStatus(manifest)).toBe(false);
+});
+it('repairs a damaged cached asset in one verification run (#11)', async () => {
+  const store = cache();
+  const manifest = await fixture();
+  await store.put(manifest.assets[0].url, new Response('corrupted by QA'));
+  const fetch = vi.fn(async () => new Response(content));
+  vi.stubGlobal('fetch', fetch);
+  await setupAssets(manifest, () => {});
+  expect(fetch).toHaveBeenCalledOnce();
+  expect(await offlineStatus(manifest)).toBe(true);
+  expect(new Uint8Array(await (await store.match(manifest.assets[0].url))!.arrayBuffer())).toEqual(
+    content,
+  );
+});

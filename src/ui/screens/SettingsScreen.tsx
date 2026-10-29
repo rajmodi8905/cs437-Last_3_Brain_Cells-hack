@@ -41,8 +41,8 @@ export function SettingsScreen({ model }: { model: CampusRecallModel }) {
           </div>
           <p>
             Text and vision embeddings, English speech, OCR and media tools.{' '}
-            {downloadBytes ? `${bytes(downloadBytes)} of assets.` : 'Asset size is loading.'}
-            Model inference uses this device, without API keys or content uploads.
+            {downloadBytes ? `${bytes(downloadBytes)} of assets.` : 'Asset size is loading.'} Model
+            inference uses this device, without API keys or content uploads.
           </p>
           {progress?.stage === 'setup' && (
             <div className="setup-progress">

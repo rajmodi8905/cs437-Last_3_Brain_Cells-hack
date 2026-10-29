@@ -1,6 +1,19 @@
 import { defineConfig } from 'vitest/config';
 import react from '@vitejs/plugin-react';
 import { VitePWA } from 'vite-plugin-pwa';
+import { createHash } from 'node:crypto';
+import { existsSync, readFileSync } from 'node:fs';
+// Saved PDFs must open before offline setup, so the viewer's worker belongs to the app shell.
+// prepare-assets copies it here before every build.
+const pdfWorker = 'public/runtime/pdf.worker.min.mjs';
+const appShellRuntime = existsSync(pdfWorker)
+  ? [
+      {
+        url: 'runtime/pdf.worker.min.mjs',
+        revision: createHash('sha256').update(readFileSync(pdfWorker)).digest('hex'),
+      },
+    ]
+  : [];
 export default defineConfig({
   base: process.env.APP_BASE || '/',
   build:
@@ -36,6 +49,7 @@ export default defineConfig({
       injectManifest: {
         globPatterns: ['**/*.{js,css,html,svg,png,json}'],
         globIgnores: ['runtime/**'],
+        additionalManifestEntries: appShellRuntime,
         maximumFileSizeToCacheInBytes: 6_000_000,
       },
     }),

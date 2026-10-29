@@ -10,6 +10,8 @@
   padding: 28px 24px 22px;
   display: flex;
   flex-direction: column;
+  overflow-y: auto;
+  overscroll-behavior: contain;
   z-index: 20;
 }
 .brand {

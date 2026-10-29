@@ -58,7 +58,7 @@ test('responsive screens, policy direct routes, safe HTML fallback and offline s
   await page
     .getByRole('textbox', { name: 'Public webpage URL' })
     .fill('https://example.test/campus');
-  await page.getByLabel('Import an HTML text snapshot').setInputFiles({
+  await page.getByLabel('Import an HTML or PDF snapshot').setInputFiles({
     name: 'snapshot.html',
     mimeType: 'text/html',
     buffer: Buffer.from(
