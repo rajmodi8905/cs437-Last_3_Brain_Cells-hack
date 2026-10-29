@@ -1,21 +1,11 @@
 import { lazy, Suspense } from 'react';
-import {
-  ArrowUpRight,
-  CheckCircle2,
-  HardDrive,
-  Library,
-  Plus,
-  Search,
-  Settings,
-  ShieldCheck,
-  WifiOff,
-  X,
-} from 'lucide-react';
+import { ArrowUpRight, Search, ShieldCheck, WifiOff, X } from 'lucide-react';
 import type { CampusRecallServices } from '../app/services';
 import { useCampusRecall } from '../app/useCampusRecall';
 import { Add } from './Add';
 import { Viewer } from './Viewer';
 import { Dialogs } from './Dialogs';
+import { Landing } from './Landing';
 import { LibrarySearchScreen } from './screens/LibrarySearchScreen';
 import { SettingsScreen } from './screens/SettingsScreen';
 import { useModalFocus } from './useModalFocus';
@@ -43,6 +33,7 @@ export function App({ services }: { services: CampusRecallServices }) {
     toast,
     setToast,
   } = model;
+  if (screen === 'home') return <Landing />;
   return (
     <div className={`app ${selected ? 'has-preview' : ''}`}>
       <a
@@ -57,25 +48,20 @@ export function App({ services }: { services: CampusRecallServices }) {
       </a>
       <aside className="sidebar">
         <a href="#/library" className="brand" aria-label="Campus Recall home">
-          <span className="brand-icon">
-            <Library size={22} />
-          </span>
-          <span>
-            Campus
-            <br />
-            <strong>Recall</strong>
-          </span>
+          <span className="brand-mark" aria-hidden="true" />
+          Campus
+          <strong>Recall</strong>
         </a>
         <span className="sidebar-label">WORKSPACE</span>
         <nav aria-label="Main navigation">
           <a className={screen === 'library' ? 'current' : ''} href="#/library">
-            <Library size={18} /> Library <span className="nav-count">{items.length}</span>
+            Library <span className="nav-count">{items.length}</span>
           </a>
           <a className={screen === 'search' ? 'current' : ''} href="#/search">
-            <Search size={18} /> Search
+            Search
           </a>
           <a className={screen === 'add' ? 'current' : ''} href="#/add">
-            <Plus size={18} /> Add to library
+            Add to library
           </a>
         </nav>
         <div className="sidebar-bottom">
@@ -84,21 +70,22 @@ export function App({ services }: { services: CampusRecallServices }) {
             <span>
               On this device<strong>{ready ? 'Offline assets ready' : 'Local library'}</strong>
             </span>
-            <HardDrive size={17} />
           </div>
           <a
             className={`settings-link ${screen === 'settings' ? 'current' : ''}`}
             href="#/settings"
           >
-            <Settings size={18} /> Settings
+            Settings
           </a>
-          <span className="sidebar-foot">Campus Recall · Student project</span>
+          <a className="sidebar-foot" href="#/">
+            About Campus Recall
+          </a>
         </div>
       </aside>
       <div className="workspace">
         <header className="topbar">
           <a className="mobile-brand" href="#/library">
-            <Library size={20} /> Campus Recall
+            Campus Recall
           </a>
           <form className="searchbox" onSubmit={runSearch} role="search">
             <Search size={19} />
@@ -183,20 +170,18 @@ export function App({ services }: { services: CampusRecallServices }) {
       )}
       <nav className="mobile-nav" aria-label="Mobile navigation">
         {[
-          ['library', 'Library', Library],
-          ['search', 'Search', Search],
-          ['add', 'Add', Plus],
-          ['settings', 'Settings', Settings],
-        ].map(([id, label, Icon]: any) => (
+          ['library', 'Library'],
+          ['search', 'Search'],
+          ['add', 'Add'],
+          ['settings', 'Settings'],
+        ].map(([id, label]) => (
           <a key={id} className={screen === id ? 'current' : ''} href={`#/${id}`}>
-            <Icon size={20} />
-            <span>{label}</span>
+            {label}
           </a>
         ))}
       </nav>
       {toast && (
         <div className="toast" role="status">
-          <CheckCircle2 size={19} />
           <span>{toast}</span>
           <button
             className="icon-button"

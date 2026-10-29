@@ -21,7 +21,7 @@ test('Chaitanya fixtures exercise capture, truncation, blocked fallback and iner
 }) => {
   const errors: string[] = [];
   page.on('pageerror', (error) => errors.push(error.message));
-  await page.goto('/');
+  await page.goto('/#/library');
   await page.getByRole('button', { name: 'Open my library' }).click();
   await page.goto('/#/add');
   await page.getByRole('tab', { name: 'Webpage', exact: true }).click();
@@ -66,7 +66,7 @@ test('UI stress library remains readable on a phone viewport and policy routes r
   context,
 }) => {
   await page.setViewportSize({ width: 390, height: 844 });
-  await page.goto('/');
+  await page.goto('/#/library');
   await page.getByRole('button', { name: 'Open my library' }).click();
   await page.goto('/#/settings');
   await page.getByLabel('Choose backup ZIP').setInputFiles(join(kit, 'ui-stress.zip'));

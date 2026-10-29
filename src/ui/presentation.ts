@@ -1,4 +1,3 @@
-import { FileAudio, FileImage, FileText, Film, Globe } from 'lucide-react';
 import type { ItemKind } from '../shared';
 export const kinds: ItemKind[] = ['image', 'pdf', 'note', 'webpage', 'audio', 'video'];
 export const kindLabels: Record<ItemKind, string> = {
@@ -9,11 +8,11 @@ export const kindLabels: Record<ItemKind, string> = {
   audio: 'Audio',
   video: 'Video',
 };
-export const kindIcons = {
-  image: FileImage,
-  pdf: FileText,
-  note: FileText,
-  webpage: Globe,
-  audio: FileAudio,
-  video: Film,
+export const kindCodes: Record<ItemKind, string> = {
+  image: 'Img',
+  pdf: 'PDF',
+  note: 'Note',
+  webpage: 'Web',
+  audio: 'Aud',
+  video: 'Vid',
 };

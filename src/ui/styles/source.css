@@ -1,118 +1,96 @@
-.preview-panel {
-  position: fixed;
-  right: 0;
-  top: 0;
-  bottom: 0;
-  background: #fff;
-  border-left: 1px solid var(--border);
-  z-index: 40;
-  width: 420px;
-  box-shadow: -8px 0 30px #22344e08;
-}
-.has-preview .workspace {
-  margin-right: 420px;
-}
-.has-preview .main-content {
-  padding-left: 27px;
-  padding-right: 27px;
-}
-.has-preview .topbar {
-  padding-left: 27px;
-  padding-right: 27px;
-}
-.has-preview .local-indicator {
-  display: none;
-}
-.has-preview .page-heading {
-  align-items: flex-start;
-}
-.has-preview .setup-banner {
-  flex-wrap: wrap;
-}
-.has-preview .type-filters {
-  gap: 20px;
-}
 .viewer {
   display: flex;
   flex-direction: column;
   height: 100%;
-  padding: 23px 23px 25px;
+  padding: 22px 24px 24px;
 }
 .viewer-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 17px;
+  border-bottom: var(--rule);
+  padding-bottom: 8px;
+  margin-bottom: 18px;
 }
 .viewer-header .eyebrow {
   margin: 0;
 }
 .viewer h2 {
-  font-size: 19px;
-  line-height: 1.5;
+  font-size: 28px;
+  letter-spacing: -0.04em;
+  line-height: 1.05;
   overflow-wrap: anywhere;
-  margin: 0 0 9px;
+  margin: 0 0 8px;
 }
 .source-meta {
-  font-size: 10px;
+  font-family: var(--mono);
+  font-size: 13px;
   overflow-wrap: anywhere;
-  margin: 0 0 15px;
+  margin: 0 0 14px;
 }
 .source-link {
   display: flex;
   align-items: center;
-  gap: 5px;
-  font-size: 11px;
-  margin-bottom: 20px;
+  gap: 6px;
+  font-size: 15px;
+  font-weight: 700;
+  margin-bottom: 16px;
 }
 .source-body {
   flex: 1;
-  overflow: auto;
   min-height: 0;
-  background: #f7f8fa;
-  border: 1px solid #e7ebf0;
-  border-radius: 4px;
-  padding: 12px;
+  overflow: auto;
   overscroll-behavior: contain;
+  background: var(--paper);
+  border: var(--rule);
+  padding: 12px;
 }
 .original-image {
-  max-width: 100%;
   display: block;
+  max-width: 100%;
   height: auto;
   margin: auto;
 }
+.original-image.zoomed {
+  max-width: none;
+  width: 200%;
+}
+.zoom-control {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  margin: 0 0 12px;
+}
 .original-text {
-  font:
-    12px/1.9 -apple-system,
-    BlinkMacSystemFont,
-    'Segoe UI',
-    sans-serif;
+  font: 16px/1.75 var(--sans);
   white-space: pre-wrap;
   overflow-wrap: anywhere;
   margin: 0;
-  padding: 10px;
-  color: #465468;
+  padding: 6px;
+  color: var(--ink);
 }
 .pdf-canvas {
+  display: block;
   max-width: 100%;
   height: auto;
   background: #fff;
-  display: block;
+  border: 1px solid var(--ink);
 }
 .pdf-navigation {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  font-size: 11px;
-  margin-bottom: 14px;
-  gap: 6px;
+  gap: 8px;
+  font-family: var(--mono);
+  font-size: 14px;
+  margin-bottom: 12px;
 }
 .pdf-navigation input {
   display: inline-block;
-  width: 46px;
+  width: 56px;
   padding: 6px;
-  font-size: 11px;
   text-align: center;
+  font-size: 16px;
 }
 .source-body video {
   width: 100%;
@@ -124,25 +102,34 @@
 .audio-source {
   display: flex;
   flex-direction: column;
-  align-items: center;
+  gap: 14px;
   justify-content: center;
-  gap: 16px;
-  min-height: 250px;
-  color: #8b9aab;
+  min-height: 220px;
+}
+.audio-source svg {
+  display: none;
 }
 .audio-source p {
-  font-size: 12px;
+  font-family: var(--mono);
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  margin: 0;
 }
 .source-download {
-  margin-top: 17px;
+  margin-top: 18px;
   flex-shrink: 0;
+}
+.viewer > .text-button {
+  align-self: flex-start;
+  margin-top: 6px;
 }
 .loading {
   display: flex;
   gap: 10px;
   justify-content: center;
   align-items: center;
-  font-size: 12px;
   padding: 40px 0;
-  color: #8a99ac;
+  font-family: var(--mono);
+  font-size: 14px;
 }

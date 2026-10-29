@@ -1,12 +1,4 @@
-import {
-  ArrowUpRight,
-  ChevronRight,
-  FolderOpen,
-  LoaderCircle,
-  Plus,
-  Search,
-  ShieldCheck,
-} from 'lucide-react';
+import { ArrowUpRight, ChevronRight, LoaderCircle } from 'lucide-react';
 import type { CampusRecallModel } from '../../app/useCampusRecall';
 import { kinds, kindLabels } from '../presentation';
 import { ItemRow } from '../ItemRow';
@@ -37,18 +29,17 @@ export function LibrarySearchScreen({ model }: { model: CampusRecallModel }) {
           <p>
             {screen === 'search'
               ? 'Use a detail, a topic or a description. Open the source to check.'
-              : 'Screenshots, documents and details. Right where you left them.'}
+              : items.length
+                ? `${items.length} saved, ${readyCount} ready to search.`
+                : 'Nothing saved yet.'}
           </p>
         </div>
         <a href="#/add" className="button primary">
-          <Plus size={17} /> Save something
+          Save something
         </a>
       </div>
       {!ready && (
         <div className="setup-banner">
-          <span className="banner-icon">
-            <ShieldCheck size={21} />
-          </span>
           <div>
             <strong>Your files stay here. Search runs here, too.</strong>
             <p>Set up the local models once to search by meaning, images and speech.</p>
@@ -61,7 +52,7 @@ export function LibrarySearchScreen({ model }: { model: CampusRecallModel }) {
       <div className="library-toolbar">
         <div className="type-filters" aria-label="Filter by file type">
           <button className={!filter ? 'selected' : ''} onClick={() => chooseFilter(undefined)}>
-            All files
+            All files <span className="count">{items.length}</span>
           </button>
           {kinds.map((kind) => (
             <button
@@ -69,7 +60,8 @@ export function LibrarySearchScreen({ model }: { model: CampusRecallModel }) {
               className={filter === kind ? 'selected' : ''}
               onClick={() => chooseFilter(kind)}
             >
-              {kindLabels[kind]}
+              {kindLabels[kind]}{' '}
+              <span className="count">{items.filter((i) => i.kind === kind).length}</span>
             </button>
           ))}
         </div>
@@ -99,9 +91,6 @@ export function LibrarySearchScreen({ model }: { model: CampusRecallModel }) {
             </div>
           ) : (
             <div className="empty-state">
-              <span className="empty-symbol">
-                <FolderOpen size={34} strokeWidth={1.4} />
-              </span>
               <h2>
                 {filter || statusFilter ? 'No items match these filters.' : 'No saved items yet.'}
               </h2>
@@ -111,13 +100,12 @@ export function LibrarySearchScreen({ model }: { model: CampusRecallModel }) {
                   : 'Save a screenshot, a document or a note. Come back whenever you need it.'}
               </p>
               <a className="button primary" href="#/add">
-                <Plus size={16} /> Add your first item
+                Add your first item
               </a>
               <span className="small muted">No account. A separate library on each device.</span>
             </div>
           )}
           <div className="library-footer">
-            <ShieldCheck size={15} />
             <span>Originals are stored in this browser. Keep a backup of anything important.</span>
             <a href="#/settings">
               Backup settings <ArrowUpRight size={13} />
@@ -152,7 +140,6 @@ export function LibrarySearchScreen({ model }: { model: CampusRecallModel }) {
                 </div>
               ) : (
                 <div className="empty-state">
-                  <Search size={30} />
                   <h2>Try another detail.</h2>
                   <p>
                     Nothing matched strongly enough. Try another description or check Recent saves.
@@ -169,7 +156,6 @@ export function LibrarySearchScreen({ model }: { model: CampusRecallModel }) {
             </>
           ) : (
             <div className="empty-state">
-              <Search size={32} strokeWidth={1.4} />
               <h2>Remember the idea, not the filename.</h2>
               <p>Try a course instruction, a poster detail or something said in a recording.</p>
               <button className="button secondary" onClick={() => searchInput.current?.focus()}>

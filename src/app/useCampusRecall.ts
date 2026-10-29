@@ -9,7 +9,7 @@ import type {
 import type { CampusRecallServices } from './services';
 import { useLibraryItems } from './useLibraryItems';
 import { downloadBlob } from './download';
-const route = () => window.location.hash.slice(2).split('?')[0] || 'library';
+const route = () => window.location.hash.slice(2).split('?')[0] || 'home';
 export function useCampusRecall(services: CampusRecallServices) {
   const { library: repository, engine } = services;
   const [statusFilter, setStatusFilter] = useState('');

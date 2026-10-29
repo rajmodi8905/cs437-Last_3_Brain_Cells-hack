@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
 async function enter(page: any) {
-  await page.goto('/');
+  await page.goto('/#/library');
   await page.getByRole('button', { name: 'Open my library' }).click();
 }
 test('save, reopen exact original, rename, backup and delete without models', async ({ page }) => {
