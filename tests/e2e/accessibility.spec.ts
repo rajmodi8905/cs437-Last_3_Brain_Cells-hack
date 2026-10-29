@@ -6,7 +6,7 @@ test('first-use policy access, keyboard dialogs, long titles and reduced motion'
   await page.goto('/#/privacy');
   await expect(page.getByRole('heading', { name: 'Privacy Policy', exact: true })).toBeVisible();
   await expect(page.getByRole('dialog')).toHaveCount(0);
-  await page.goto('/');
+  await page.goto('/#/library');
   await page.reload();
   const dialog = page.getByRole('dialog');
   await expect(dialog).toBeVisible();

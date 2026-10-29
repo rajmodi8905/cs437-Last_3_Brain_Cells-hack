@@ -1,15 +1,4 @@
-import {
-  ArrowDownToLine,
-  ArrowUpFromLine,
-  ArrowUpRight,
-  CheckCircle2,
-  ChevronRight,
-  Download,
-  HardDrive,
-  Info,
-  LoaderCircle,
-  ShieldCheck,
-} from 'lucide-react';
+import { ArrowUpRight, ChevronRight, LoaderCircle } from 'lucide-react';
 import type { CampusRecallModel } from '../../app/useCampusRecall';
 import { bytes } from '../hooks';
 export function SettingsScreen({ model }: { model: CampusRecallModel }) {
@@ -42,7 +31,6 @@ export function SettingsScreen({ model }: { model: CampusRecallModel }) {
       <div className="settings-grid">
         <section className="surface settings-section">
           <div className="section-title">
-            <ShieldCheck size={21} />
             <div>
               <h2>Offline search</h2>
               <p>Download once. Process and search locally.</p>
@@ -78,13 +66,7 @@ export function SettingsScreen({ model }: { model: CampusRecallModel }) {
             </div>
           )}
           <button className="button primary" disabled={setup} onClick={() => void doSetup()}>
-            {setup ? (
-              <LoaderCircle size={16} className="spin" />
-            ) : ready ? (
-              <CheckCircle2 size={16} />
-            ) : (
-              <Download size={16} />
-            )}{' '}
+            {setup && <LoaderCircle size={16} className="spin" />}{' '}
             {setup
               ? 'Downloading and verifying…'
               : ready
@@ -98,7 +80,6 @@ export function SettingsScreen({ model }: { model: CampusRecallModel }) {
         </section>
         <section className="surface settings-section">
           <div className="section-title">
-            <HardDrive size={21} />
             <div>
               <h2>Browser storage</h2>
               <p>Local to this browser and device.</p>
@@ -139,7 +120,6 @@ export function SettingsScreen({ model }: { model: CampusRecallModel }) {
         </section>
         <section className="surface settings-section">
           <div className="section-title">
-            <ArrowDownToLine size={21} />
             <div>
               <h2>Backup & transfer</h2>
               <p>Move a copy to another device manually.</p>
@@ -155,7 +135,6 @@ export function SettingsScreen({ model }: { model: CampusRecallModel }) {
               disabled={!items.length || !!busy}
               onClick={() => void exportAll()}
             >
-              <ArrowDownToLine size={16} />{' '}
               {busy === 'export' ? 'Creating backup…' : 'Export library'}
             </button>
             <button
@@ -163,7 +142,7 @@ export function SettingsScreen({ model }: { model: CampusRecallModel }) {
               disabled={!!busy}
               onClick={() => restoreInput.current?.click()}
             >
-              <ArrowUpFromLine size={16} /> {busy === 'restore' ? 'Restoring…' : 'Restore backup'}
+              {busy === 'restore' ? 'Restoring…' : 'Restore backup'}
             </button>
             <input
               type="file"
@@ -189,7 +168,6 @@ export function SettingsScreen({ model }: { model: CampusRecallModel }) {
         </section>
         <section className="surface settings-section">
           <div className="section-title">
-            <Info size={21} />
             <div>
               <h2>About this project</h2>
               <p>Built by IIT Gandhinagar students.</p>

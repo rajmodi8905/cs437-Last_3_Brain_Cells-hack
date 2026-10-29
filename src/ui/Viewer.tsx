@@ -4,7 +4,6 @@ import {
   ChevronLeft,
   ChevronRight,
   ExternalLink,
-  FileText,
   LoaderCircle,
   X,
   ZoomIn,
@@ -206,7 +205,6 @@ export function Viewer({
             )}
             {item.kind === 'audio' && (
               <div className="audio-source">
-                <FileText size={32} />
                 <p>Original audio</p>
                 <audio
                   ref={(el) => {

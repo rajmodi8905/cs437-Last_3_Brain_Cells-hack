@@ -1,7 +1,7 @@
-import { ArrowUpRight, Check, LoaderCircle, MoreHorizontal } from 'lucide-react';
+import { ArrowUpRight, MoreHorizontal } from 'lucide-react';
 import type { LibraryItem, SearchResult, SourceLocation } from '../shared';
 import type { CampusRecallModel } from '../app/useCampusRecall';
-import { kindIcons, kindLabels } from './presentation';
+import { kindCodes, kindLabels } from './presentation';
 import { bytes, humanDate, time } from './hooks';
 const locationLabel = (source?: SourceLocation) =>
   source?.kind === 'page'
@@ -20,7 +20,6 @@ export function ItemRow({
   model: CampusRecallModel;
 }) {
   const { itemProgress, selected, setSelected, menu, setMenu, action } = model;
-  const Icon = kindIcons[value.kind];
   const event = itemProgress[value.id];
   return (
     <article
@@ -32,8 +31,8 @@ export function ItemRow({
         className="item-open"
         onClick={() => setSelected({ id: value.id, location: result?.location })}
       >
-        <span className={`file-icon ${value.kind}`}>
-          <Icon size={23} strokeWidth={1.6} />
+        <span className={`file-icon ${value.kind}`} aria-hidden="true">
+          {kindCodes[value.kind]}
         </span>
         <span className="item-copy">
           <span className="item-title">{value.title}</span>
@@ -43,8 +42,9 @@ export function ItemRow({
                 {result.excerpt ?? 'Visual match from your saved original'}
               </span>
               <span className="item-meta">
-                {result.matchKind === 'visual' ? 'Visual content' : 'Extracted content'} ·{' '}
-                {locationLabel(result.location)}
+                <strong className="loc">{locationLabel(result.location)}</strong>
+                {' · '}
+                {result.matchKind === 'visual' ? 'Visual content' : 'Extracted content'}
               </span>
             </>
           ) : (
@@ -56,11 +56,6 @@ export function ItemRow({
         <span className="row-tail">
           {!result && (
             <span className={`status ${value.status}`}>
-              {value.status === 'ready' ? (
-                <Check size={12} />
-              ) : value.status === 'processing' ? (
-                <LoaderCircle size={12} className="spin" />
-              ) : null}
               {value.status === 'queued'
                 ? 'Queued'
                 : value.status === 'processing'

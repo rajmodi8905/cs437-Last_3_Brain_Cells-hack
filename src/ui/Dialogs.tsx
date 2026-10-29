@@ -1,4 +1,4 @@
-import { ChevronRight, HardDrive, Library, ShieldCheck, Trash2 } from 'lucide-react';
+import { ChevronRight } from 'lucide-react';
 import type { CampusRecallModel } from '../app/useCampusRecall';
 export function Dialogs({ model }: { model: CampusRecallModel }) {
   const {
@@ -25,9 +25,6 @@ export function Dialogs({ model }: { model: CampusRecallModel }) {
             aria-modal="true"
             aria-labelledby="welcome-title"
           >
-            <span className="brand-icon">
-              <Library size={25} />
-            </span>
             <span className="eyebrow">WELCOME TO CAMPUS RECALL</span>
             <h2 id="welcome-title">Save it here. Find it again.</h2>
             <p>
@@ -35,14 +32,12 @@ export function Dialogs({ model }: { model: CampusRecallModel }) {
               the local models when you are ready to search.
             </p>
             <div className="intro-detail">
-              <ShieldCheck size={19} />
               <span>
                 No account or cloud inference. Model downloads and explicit website requests need
                 internet.
               </span>
             </div>
             <div className="intro-detail">
-              <HardDrive size={19} />
               <span>
                 Browser storage can be cleared or evicted. Back up important originals in Settings.
               </span>
@@ -140,7 +135,7 @@ export function Dialogs({ model }: { model: CampusRecallModel }) {
                   })
                 }
               >
-                <Trash2 size={16} /> Delete item
+                Delete item
               </button>
             </div>
           </section>

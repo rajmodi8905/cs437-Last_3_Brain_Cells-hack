@@ -2,7 +2,7 @@ import { test, expect } from '@playwright/test';
 import { writeFile } from 'node:fs/promises';
 import AxeBuilder from '@axe-core/playwright';
 test('critical library routes have no automated WCAG A/AA violations', async ({ page }) => {
-  await page.goto('/');
+  await page.goto('/#/library');
   await page.getByRole('button', { name: 'Open my library' }).click();
   const findings: any[] = [];
   for (const width of [390, 1440])

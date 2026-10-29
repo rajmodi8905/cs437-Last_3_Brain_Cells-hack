@@ -1,48 +1,61 @@
 .settings-grid {
+  counter-reset: section;
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 22px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 40px 48px;
 }
 .settings-section {
-  padding: 25px;
+  counter-increment: section;
   min-width: 0;
+  padding: 0;
+  background: transparent;
+  border: 0;
+  border-top: var(--rule);
+  padding-top: 14px;
 }
 .section-title {
-  display: flex;
-  gap: 11px;
-  align-items: flex-start;
-  margin-bottom: 23px;
-  color: #7388a4;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 4px 16px;
+  margin-bottom: 18px;
 }
-.section-title div {
-  flex: 1;
+.section-title::before {
+  content: counter(section, decimal-leading-zero);
+  grid-column: 1 / -1;
+  font-family: var(--mono);
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--signal-text);
+}
+.section-title svg {
+  display: none;
 }
 .section-title h2 {
-  font-size: 14px;
-  color: #344457;
-  margin: 1px 0 6px;
+  grid-column: 1;
+  font-size: 30px;
+  letter-spacing: -0.04em;
+  margin: 0;
 }
 .section-title p {
-  font-size: 10px;
+  grid-column: 1;
   margin: 0;
-  color: #8b97a5;
+  font-size: 15px;
+  color: var(--muted);
 }
 .section-title .status {
-  font-size: 9px;
-  margin-top: 4px;
+  grid-row: 2;
+  grid-column: 2;
+  align-self: start;
+  margin-top: 10px;
 }
 .settings-section > p {
-  font-size: 11px;
-  color: #7c899a;
-  line-height: 1.8;
+  font-size: 16px;
+  color: var(--ink-2);
   margin-bottom: 20px;
-}
-.settings-section .button {
-  font-size: 11px;
+  max-width: 56ch;
 }
 .settings-section > .field-help {
-  font-size: 10px;
-  margin: 17px 0 0;
+  margin-top: 16px;
 }
 .setup-progress {
   margin: 18px 0;
@@ -50,80 +63,99 @@
 .setup-progress > div {
   display: flex;
   justify-content: space-between;
-  gap: 15px;
-  color: #6d7f97;
-  font-size: 10px;
-  margin-bottom: 9px;
+  gap: 16px;
+  font-family: var(--mono);
+  font-size: 13px;
+  margin-bottom: 8px;
   overflow-wrap: anywhere;
 }
 .setup-progress progress {
   width: 100%;
-  height: 6px;
-  accent-color: var(--blue);
+  height: 14px;
+  appearance: none;
+  border: var(--rule);
+  background: var(--card);
+  accent-color: var(--signal);
+}
+.setup-progress progress::-webkit-progress-bar {
+  background: var(--card);
+}
+.setup-progress progress::-webkit-progress-value {
+  background: var(--signal);
+}
+.setup-progress progress::-moz-progress-bar {
+  background: var(--signal);
 }
 .storage-summary {
   display: flex;
   align-items: baseline;
-  gap: 10px;
-  margin-bottom: 12px;
+  gap: 12px;
   flex-wrap: wrap;
+  margin-bottom: 12px;
 }
 .storage-summary strong {
-  font-size: 27px;
-  font-weight: 500;
-  letter-spacing: -1px;
-  color: #3d4d61;
+  font-size: 52px;
+  font-weight: 700;
+  letter-spacing: -0.05em;
+  line-height: 1;
 }
 .storage-summary span {
-  color: #93a0af;
-  font-size: 10px;
-}
-.button-row {
-  display: flex;
-  gap: 10px;
-  flex-wrap: wrap;
-}
-.end {
-  justify-content: flex-end;
+  font-family: var(--mono);
+  font-size: 13px;
+  color: var(--muted);
 }
 .settings-policy {
   display: flex;
   justify-content: space-between;
+  align-items: center;
   gap: 12px;
-  font-size: 11px;
-  border-top: 1px solid #e9edf2;
-  padding: 13px 0;
-  color: #577399;
+  min-height: 48px;
+  border-top: 1px solid var(--ink);
+  font-size: 16px;
+  font-weight: 700;
+  text-decoration: none;
+}
+.settings-policy:last-child {
+  border-bottom: 1px solid var(--ink);
 }
 .policy {
   max-width: 720px;
-  padding: 0 10px 40px;
+  padding-bottom: 48px;
 }
 .policy > .text-link {
-  margin-bottom: 36px;
+  margin-bottom: 28px;
 }
 .policy h1 {
-  margin-bottom: 25px;
+  font-size: clamp(36px, 5vw, 60px);
+  margin-bottom: 28px;
 }
 .policy h2 {
-  margin: 30px 0 13px;
+  font-size: 24px;
+  margin: 36px 0 12px;
+  padding-top: 12px;
+  border-top: var(--rule);
 }
 .policy h3 {
-  font-size: 15px;
-  margin-top: 25px;
+  font-size: 17px;
+  margin-top: 24px;
 }
 .policy p {
-  font-size: 13px;
-  line-height: 1.85;
-  color: #667384;
+  font-size: 16px;
+  line-height: 1.7;
+  color: var(--ink-2);
   overflow-wrap: anywhere;
 }
 .policy-bullet {
-  padding-left: 20px;
+  padding-left: 22px;
   position: relative;
 }
-.policy-bullet:before {
-  content: '•';
+.policy-bullet::before {
+  content: '';
   position: absolute;
-  left: 4px;
+  left: 2px;
+  top: 0.7em;
+  width: 8px;
+  height: 8px;
+  background: var(--signal);
+  border: 1px solid var(--ink);
 }

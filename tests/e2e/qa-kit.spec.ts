@@ -18,7 +18,7 @@ test.afterAll(async () => {
 test('QA kit restores thirty exact originals through the production interface before setup', async ({
   page,
 }) => {
-  await page.goto('/');
+  await page.goto('/#/library');
   await page.getByRole('button', { name: 'Open my library' }).click();
   await page.goto('/#/settings');
   await page.getByLabel('Choose backup ZIP').setInputFiles(join(kit, 'library-30.zip'));

@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react';
-import { FilePlus2, FileText, Globe, Upload, ArrowRight, LoaderCircle } from 'lucide-react';
+import { ArrowRight, LoaderCircle } from 'lucide-react';
 import type { LibraryItem, LibraryRepository, SaveInput } from '../shared';
 import type { CaptureService } from '../app/services';
 export function Add({
@@ -93,11 +93,11 @@ export function Add({
           <div className="tab-bar" role="tablist" aria-label="Save type">
             {(
               [
-                ['file', 'Files', FilePlus2],
-                ['note', 'Note', FileText],
-                ['webpage', 'Webpage', Globe],
+                ['file', 'Files'],
+                ['note', 'Note'],
+                ['webpage', 'Webpage'],
               ] as const
-            ).map(([id, label, Icon]) => (
+            ).map(([id, label]) => (
               <button
                 key={id}
                 role="tab"
@@ -110,7 +110,6 @@ export function Add({
                   setError('');
                 }}
               >
-                <Icon size={17} />
                 {label}
               </button>
             ))}
@@ -144,9 +143,6 @@ export function Add({
                   setFiles(Array.from(e.dataTransfer.files));
                 }}
               >
-                <span className="upload-symbol">
-                  <Upload size={25} />
-                </span>
                 <strong>
                   {files.length
                     ? `${files.length} file${files.length === 1 ? '' : 's'} selected`
@@ -159,7 +155,6 @@ export function Add({
                 <ul className="selected-files">
                   {files.map((f, i) => (
                     <li key={i}>
-                      <FileText size={15} />
                       <span>{f.name}</span>
                       <span className="muted">{(f.size / 1e6).toFixed(1)} MB</span>
                     </li>
@@ -209,8 +204,7 @@ export function Add({
                     disabled={capturing || !url}
                     onClick={() => void capture()}
                   >
-                    {capturing ? <LoaderCircle size={16} className="spin" /> : <Globe size={16} />}{' '}
-                    Capture
+                    {capturing && <LoaderCircle size={16} className="spin" />} Capture
                   </button>
                 </div>
               </label>
