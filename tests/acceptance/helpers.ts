@@ -1,6 +1,25 @@
 import { access, readFile } from 'node:fs/promises';
 import path from 'node:path';
-import type { Page, BrowserContext } from '@playwright/test';
+import type { Page, BrowserContext, Route } from '@playwright/test';
+// WebKit cannot synthesize a redirect in route.fulfill. Serve the same pinned
+// local mirror bytes directly there; Chromium retains its streaming redirect.
+export async function mirrorSetupAsset(route: Route, sha256: string, page: Page) {
+  if (page.context().browser()?.browserType().name() === 'webkit') {
+    await route.fulfill({
+      status: 200,
+      body: await readFile(path.resolve('.models', sha256)),
+      headers: { 'content-type': 'application/octet-stream', 'access-control-allow-origin': '*' },
+    });
+  } else {
+    await route.fulfill({
+      status: 302,
+      headers: {
+        location: `http://127.0.0.1:4180/${sha256}`,
+        'access-control-allow-origin': '*',
+      },
+    });
+  }
+}
 export async function prepare(page: Page, context: BrowserContext) {
   const manifest = JSON.parse(await readFile('public/asset-manifest.json', 'utf8'));
   for (const asset of manifest.assets.filter((a: any) => a.url.startsWith('https:')))
@@ -18,13 +37,7 @@ export async function prepare(page: Page, context: BrowserContext) {
       await route.abort();
       return;
     }
-    await route.fulfill({
-      status: 302,
-      headers: {
-        location: `http://127.0.0.1:4180/${asset.sha256}`,
-        'access-control-allow-origin': '*',
-      },
-    });
+    await mirrorSetupAsset(route, asset.sha256, page);
   });
   page.on('console', (msg) => {
     if (msg.type() === 'error') console.log('BROWSER:', msg.text());
