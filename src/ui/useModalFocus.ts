@@ -6,9 +6,13 @@ export function useModalFocus(model: CampusRecallModel) {
     const dialog = document.querySelector<HTMLElement>('.modal');
     if (!dialog) return;
     const previous = document.activeElement as HTMLElement | null;
+    // The opening menu item is removed and autoFocus may already be inside the dialog,
+    // so the item's Actions button is the fallback return target.
+    const itemId = rename?.id ?? deleting?.id;
     const backgrounds = Array.from(
       document.querySelectorAll<HTMLElement>('.sidebar,.workspace,.mobile-nav,.preview-panel'),
     );
+    const wasInert = backgrounds.map((el) => el.inert);
     backgrounds.forEach((el) => (el.inert = true));
     const oldOverflow = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
@@ -39,10 +43,17 @@ export function useModalFocus(model: CampusRecallModel) {
     };
     document.addEventListener('keydown', trap, true);
     return () => {
-      backgrounds.forEach((el) => (el.inert = false));
+      backgrounds.forEach((el, i) => (el.inert = wasInert[i]));
       document.body.style.overflow = oldOverflow;
       document.removeEventListener('keydown', trap, true);
-      previous?.focus();
+      const actions = Array.from(document.querySelectorAll<HTMLElement>('[data-item-id]'))
+        .find((el) => itemId && el.dataset.itemId === itemId)
+        ?.querySelector<HTMLElement>('.more');
+      const target =
+        previous && previous !== document.body && previous.isConnected && !dialog.contains(previous)
+          ? previous
+          : (actions ?? document.getElementById('main'));
+      target?.focus();
     };
   }, [firstUse, !!rename, !!deleting]);
 }

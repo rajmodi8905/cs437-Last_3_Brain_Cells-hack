@@ -70,7 +70,12 @@ it('a replacement view can search and open the exact source using only injected 
       subscribeProgress: () => () => {},
       dispose: vi.fn(),
     },
-    capture: { captureWebpage: vi.fn(), extractHtml: vi.fn(), validateWebUrl: vi.fn() },
+    capture: {
+      captureWebpage: vi.fn(),
+      extractHtml: vi.fn(),
+      extractPdfText: vi.fn(),
+      validateWebUrl: vi.fn(),
+    },
   };
   render(<App services={services} />);
   await waitFor(() => expect(services.initialize).toHaveBeenCalledOnce());

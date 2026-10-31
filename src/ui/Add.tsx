@@ -4,7 +4,7 @@ import type { LibraryItem, LibraryRepository, SaveInput } from '../shared';
 import type { CaptureService } from '../app/services';
 export function Add({
   repository,
-  capture: { captureWebpage, extractHtml, validateWebUrl },
+  capture: { captureWebpage, extractHtml, extractPdfText, validateWebUrl },
   onSaved,
 }: {
   repository: Pick<LibraryRepository, 'save'>;
@@ -213,16 +213,21 @@ export function Add({
                 a snapshot below.
               </p>
               <label className="snapshot-input">
-                Import an HTML text snapshot
+                Import an HTML or PDF snapshot
                 <input
                   type="file"
-                  accept=".html,.htm,text/html"
+                  accept=".html,.htm,text/html,.pdf,application/pdf"
                   onChange={async (e) => {
+                    setError('');
                     try {
                       const f = e.target.files?.[0];
                       if (!f) return;
-                      if (f.size > 2_000_000) throw new Error('HTML snapshot must be under 2 MB.');
-                      const captured = extractHtml(await f.text());
+                      const isPdf = f.type === 'application/pdf' || /\.pdf$/i.test(f.name);
+                      if (!isPdf && f.size > 2_000_000)
+                        throw new Error('HTML snapshot must be under 2 MB.');
+                      const captured = isPdf
+                        ? await extractPdfText(f)
+                        : extractHtml(await f.text());
                       setText(captured.text);
                       lastCapture.current = undefined;
                       setCaptureNotice(
@@ -232,7 +237,7 @@ export function Add({
                       );
                       if (!title) setTitle(captured.title);
                     } catch (cause) {
-                      setError(String(cause));
+                      setError(cause instanceof Error ? cause.message : String(cause));
                     }
                   }}
                 />

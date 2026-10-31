@@ -34,6 +34,11 @@ export function App({ services }: { services: CampusRecallServices }) {
     setToast,
   } = model;
   if (screen === 'home') return <Landing />;
+  // The class drives the visual state; aria-current exposes the same state to assistive technology.
+  const current = (id: string) =>
+    screen === id
+      ? { className: 'current', 'aria-current': 'page' as const }
+      : { className: '', 'aria-current': undefined };
   return (
     <div className={`app ${selected ? 'has-preview' : ''}`}>
       <a
@@ -54,13 +59,13 @@ export function App({ services }: { services: CampusRecallServices }) {
         </a>
         <span className="sidebar-label">WORKSPACE</span>
         <nav aria-label="Main navigation">
-          <a className={screen === 'library' ? 'current' : ''} href="#/library">
+          <a {...current('library')} href="#/library">
             Library <span className="nav-count">{items.length}</span>
           </a>
-          <a className={screen === 'search' ? 'current' : ''} href="#/search">
+          <a {...current('search')} href="#/search">
             Search
           </a>
-          <a className={screen === 'add' ? 'current' : ''} href="#/add">
+          <a {...current('add')} href="#/add">
             Add to library
           </a>
         </nav>
@@ -73,6 +78,7 @@ export function App({ services }: { services: CampusRecallServices }) {
           </div>
           <a
             className={`settings-link ${screen === 'settings' ? 'current' : ''}`}
+            aria-current={screen === 'settings' ? 'page' : undefined}
             href="#/settings"
           >
             Settings
@@ -175,7 +181,7 @@ export function App({ services }: { services: CampusRecallServices }) {
           ['add', 'Add'],
           ['settings', 'Settings'],
         ].map(([id, label]) => (
-          <a key={id} className={screen === id ? 'current' : ''} href={`#/${id}`}>
+          <a key={id} {...current(id)} href={`#/${id}`}>
             {label}
           </a>
         ))}
