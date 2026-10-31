@@ -1,5 +1,9 @@
 # Verification evidence
 
+Current integration candidate: [31 October combined-main validation](2026-10-31-integration.md). It includes Chaitanya's merged fixes and the outstanding local landing/device/release changes; Nakshatra's still-open PR and Android execution remain separate gates. Earlier reports below retain their original dates and build identities.
+
+Latest local work: [29 October Safari, installed-iPhone and iOS 26.5 continuation](2026-10-29-release-preparation.md#29-october-continuation-with-the-iphone-available), [automated release preparation](2026-10-29-release-preparation.md) and [28 October measured iPhone session](2026-10-28-device-preparation.md). The continuation isolates the development-WebKit crash without application code, records shipping-Safari and simulator inference, and separates owner-confirmed physical interactions from direct diagnostics. These changes are not yet committed or deployed.
+
 Update, 26 October: [PR #6](https://github.com/rajmodi8905/cs437-Last_3_Brain_Cells-hack/pull/6) is now reviewed and merged, and main CI passed. See the [October checkpoint audit](milestones-2026-10.md) for current per-statement coverage, fresh-checkout results and remaining gates. The pre-PR measurements below are retained as their original evidence.
 
 Implementation branch: `raj_final`, based on merged main `11cb2c4`. This report distinguishes implementation, automated evidence and manual release gates. This branch is a review candidate; no deployment is claimed.

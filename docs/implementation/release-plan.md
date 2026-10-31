@@ -121,6 +121,8 @@ Maintain the dependency versions and current model/index policy unless a separat
 
 ## 7. Package D: initial physical-device compatibility
 
+Use [the local device-session runbook](device-session.md) for the isolated production snapshot, source/asset/fixture identities, temporary HTTPS preparation and blank physical-test record. The plan/issue form and both testers' handoffs are now merged in main; the [28 October device evidence](../verification/2026-10-28-device-preparation.md) now records the actual iPhone Safari session and its remaining physical checks.
+
 Raj prepares and fixes the build/diagnostic setup. Nakshatra owns processing/retrieval test execution; Chaitanya owns installation and interface test execution. Device owners perform required physical taps and permission prompts. Raj is not assigned a separate exploratory phone bug hunt.
 
 Primary matrix: MacBook M4/16 GB in Chrome and Safari; iPhone 17 in Safari and installed PWA; iQOO Neo9 Pro/8 GB in Chrome and installed PWA. Compatibility: Moto G85/12 GB and HP Pavilion/16 GB; additional gaming laptop where available. Record exact OS/browser versions and unavailable devices.
@@ -195,3 +197,5 @@ Issue flow: reported → clarified/reproduced → prioritized → linked impleme
 Release readiness requires all fifteen statements genuinely green; no unresolved P0/P1 or other issue that violates a statement; reporter retests; final-device evidence; factual reviewed policies; passing final CI; and a fresh README-run check. Publication and post-deployment verification are separate final actions. Deferred nonessential polish must have an explicit issue and reason.
 
 **Status:** this document is a work plan, not a claim that phone tests, redesign, publication or final acceptance have happened.
+
+Local deployment preparation now has a [runbook and manual release workflow](deployment.md), a read-only artifact checker, and an actual service-worker update/preserved-original regression. These files do not select a host, publish a deployment or replace team/physical-device review.

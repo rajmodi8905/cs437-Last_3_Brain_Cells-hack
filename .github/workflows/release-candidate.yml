@@ -1,0 +1,80 @@
+name: Prepare Campus Recall release
+on:
+  workflow_dispatch:
+    inputs:
+      publish:
+        description: Publish to GitHub Pages after the team has approved this release
+        type: boolean
+        required: true
+        default: false
+permissions:
+  contents: read
+concurrency:
+  group: campus-recall-release
+  cancel-in-progress: false
+jobs:
+  verify-and-build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Require main
+        env:
+          SELECTED_REF: ${{ github.ref }}
+        run: test "$SELECTED_REF" = refs/heads/main
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run check
+      - run: npm run format:check
+      - uses: actions/cache@v4
+        with:
+          path: .models
+          key: public-models-${{ hashFiles('scripts/model-assets.json') }}
+      - run: npm run models:download
+      - run: npm run build
+      - run: npx playwright install --with-deps chromium
+      - run: npm test
+      - name: Build project-path production candidate
+        env:
+          APP_BASE: /${{ github.event.repository.name }}/
+        run: |
+          npm run build
+          mkdir -p .cache
+          node scripts/check-release.mjs dist "$APP_BASE" > .cache/release-artifact.json
+          git rev-parse HEAD > .cache/release-source-sha.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-identity
+          path: |
+            .cache/release-artifact.json
+            .cache/release-source-sha.txt
+          retention-days: 7
+      - uses: actions/upload-pages-artifact@v4
+        with:
+          path: dist
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: release-verification
+          path: |
+            test-results/
+            playwright-report/
+          retention-days: 7
+  publish:
+    if: ${{ inputs.publish }}
+    needs: verify-and-build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Publish the verified artifact
+        id: deployment
+        uses: actions/deploy-pages@v4
