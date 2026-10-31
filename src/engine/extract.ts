@@ -12,8 +12,27 @@ export interface Extracted {
   samples?: Float32Array;
 }
 import { runtime, pdfjs } from '../shared/browser-assets';
+import { meaningfulImageOcrText } from './text-guards';
 export { pdfjs } from '../shared/browser-assets';
+/** Fails with conversion guidance before OCR when the browser cannot decode the image. */
+export async function assertDecodableImage(blob: Blob): Promise<void> {
+  try {
+    (await createImageBitmap(blob)).close();
+  } catch {
+    throw new Error(
+      'This image could not be decoded. Re-save it as a JPEG, PNG or WebP file and add it again.',
+    );
+  }
+}
 export async function ocr(blob: Blob): Promise<string> {
+  return (await recognize(blob)).text.trim();
+}
+/** OCR for a standalone image; noise is dropped because the image keeps its visual vector. */
+export async function imageOcr(blob: Blob): Promise<string> {
+  const { text, confidence } = await recognize(blob);
+  return meaningfulImageOcrText(text, confidence);
+}
+async function recognize(blob: Blob): Promise<{ text: string; confidence: number }> {
   const { createWorker } = await import('tesseract.js');
   const worker = await createWorker('eng', 1, {
     workerPath: runtime('ocr/worker.min.js'),
@@ -23,8 +42,8 @@ export async function ocr(blob: Blob): Promise<string> {
     gzip: true,
   });
   try {
-    const result = await worker.recognize(blob);
-    return result.data.text.trim();
+    const { data } = await worker.recognize(blob);
+    return { text: data.text, confidence: data.confidence };
   } finally {
     await worker.terminate();
   }
@@ -41,7 +60,14 @@ export async function extractPdf(
     useWasm: false,
   });
   try {
-    const document = await task.promise;
+    const document = await task.promise.catch((cause: unknown) => {
+      throw new Error(
+        (cause as { name?: string })?.name === 'PasswordException'
+          ? 'This PDF is password-protected. Remove the password (for example, print or export it to a new PDF) and add it again.'
+          : 'This PDF could not be read. Re-export or print it to a new PDF and add it again.',
+        { cause },
+      );
+    });
     if (document.numPages > LIMITS.maxPdfPages)
       throw new Error('This PDF exceeds 50 pages. Split it into smaller documents.');
     const parts: ExtractedPart[] = [];
@@ -139,7 +165,9 @@ export async function extractMedia(
     }
     const durationMs = Number(probe.format?.duration) * 1000;
     if (!Number.isFinite(durationMs) || durationMs <= 0)
-      throw new Error('Media duration is unavailable.');
+      throw new Error(
+        'The length of this media file could not be read. Convert it to an H.264 MP4, MP3, WAV or M4A and add it again.',
+      );
     const limit = item.kind === 'video' ? LIMITS.maxVideoDurationMs : LIMITS.maxAudioDurationMs;
     if (durationMs > limit + 1)
       throw new Error(

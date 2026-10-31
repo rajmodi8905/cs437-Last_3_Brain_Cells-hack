@@ -158,7 +158,7 @@ export function useCampusRecall(services: CampusRecallServices) {
   const saved = (savedItems: LibraryItem[], warning?: string) => {
     setFilter(undefined);
     setStatusFilter('');
-    if (warning) setError(warning);
+    setError(warning ?? '');
     notify(
       `${savedItems.length === 1 ? 'Saved locally' : `${savedItems.length} items saved locally`}. ${engine.ready ? 'Processing for search.' : 'Set up offline search when you are ready.'}`,
     );
