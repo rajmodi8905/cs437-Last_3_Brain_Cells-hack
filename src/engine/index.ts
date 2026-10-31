@@ -10,12 +10,18 @@ import {
 import { DexieLibraryRepository } from '../storage';
 import { ModelClient } from '../app/model-client';
 import { getManifest, offlineStatus, setupAssets, type AssetManifest } from './assets';
-import { assertDecodableImage, extractMedia, extractPdf, ocr, type Extracted } from './extract';
+import {
+  assertDecodableImage,
+  extractMedia,
+  extractPdf,
+  imageOcr,
+  type Extracted,
+} from './extract';
 import { rankSegments } from './ranking';
 import { embeddingTitle } from './documents';
 import { isSearchableQuery } from './text-guards';
 export const INDEX_VERSION =
-  'gemma2-daa72c5-q4-768-ch256o48-img70-lowered1-notitledup1-asr2-ocrwords1-v8';
+  'gemma2-daa72c5-q4-768-ch256o48-img70-lowered1-notitledup1-asr2-ocrconf1-v8';
 export class LocalEngine implements EngineClient {
   readonly models = new ModelClient();
   private listeners = new Set<ProgressListener>();
@@ -129,7 +135,11 @@ export class LocalEngine implements EngineClient {
                   await assertDecodableImage(original);
                   extracted = {
                     parts: [
-                      { image: original, text: await ocr(original), location: { kind: 'whole' } },
+                      {
+                        image: original,
+                        text: await imageOcr(original),
+                        location: { kind: 'whole' },
+                      },
                     ],
                   };
                   break;

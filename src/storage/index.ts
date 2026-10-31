@@ -740,25 +740,38 @@ export class DexieLibraryRepository implements ProcessingRepository {
       this.database.jobs,
       async () => {
         // Each item already in the library absorbs at most one archive entry, so entries that
-        // share bytes inside one archive (and items added by this restore) are never "duplicates".
-        const matched = new Set<string>();
+        // share bytes inside one archive are never "duplicates" of each other. Within a group of
+        // same-content entries, exact-title matches are reserved first so that an untitled
+        // fallback match cannot take the existing item that belongs to a later entry.
+        const duplicateOf = new Map<(typeof prepared)[number], string>();
+        const groups = new Map<string, typeof prepared>();
         for (const entry of prepared) {
+          const key = JSON.stringify([
+            entry.item.kind,
+            entry.item.contentSha256,
+            entry.item.sourceUrl,
+          ]);
+          groups.set(key, [...(groups.get(key) ?? []), entry]);
+        }
+        for (const group of groups.values()) {
+          const { kind, contentSha256, sourceUrl } = group[0]!.item;
           const candidates = await this.database.items
             .where('contentSha256')
-            .equals(entry.item.contentSha256)
-            .filter(
-              (item) =>
-                item.kind === entry.item.kind &&
-                item.sourceUrl === entry.item.sourceUrl &&
-                !matched.has(item.id) &&
-                !importedIds.includes(item.id),
-            )
+            .equals(contentSha256)
+            .filter((item) => item.kind === kind && item.sourceUrl === sourceUrl)
             .toArray();
-          const existingDuplicate =
-            candidates.find((item) => item.title === entry.item.title) ?? candidates[0];
+          for (const entry of group) {
+            const index = candidates.findIndex((item) => item.title === entry.item.title);
+            if (index >= 0) duplicateOf.set(entry, candidates.splice(index, 1)[0]!.id);
+          }
+          for (const entry of group)
+            if (!duplicateOf.has(entry) && candidates.length)
+              duplicateOf.set(entry, candidates.shift()!.id);
+        }
+        for (const entry of prepared) {
+          const existingDuplicate = duplicateOf.get(entry);
           if (existingDuplicate) {
-            matched.add(existingDuplicate.id);
-            skippedDuplicateIds.push(existingDuplicate.id);
+            skippedDuplicateIds.push(existingDuplicate);
             continue;
           }
           await this.database.items.add(entry.item);

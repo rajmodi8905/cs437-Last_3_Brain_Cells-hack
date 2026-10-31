@@ -12,7 +12,7 @@ export interface Extracted {
   samples?: Float32Array;
 }
 import { runtime, pdfjs } from '../shared/browser-assets';
-import { meaningfulOcrText } from './text-guards';
+import { meaningfulImageOcrText } from './text-guards';
 export { pdfjs } from '../shared/browser-assets';
 /** Fails with conversion guidance before OCR when the browser cannot decode the image. */
 export async function assertDecodableImage(blob: Blob): Promise<void> {
@@ -25,6 +25,14 @@ export async function assertDecodableImage(blob: Blob): Promise<void> {
   }
 }
 export async function ocr(blob: Blob): Promise<string> {
+  return (await recognize(blob)).text.trim();
+}
+/** OCR for a standalone image; noise is dropped because the image keeps its visual vector. */
+export async function imageOcr(blob: Blob): Promise<string> {
+  const { text, confidence } = await recognize(blob);
+  return meaningfulImageOcrText(text, confidence);
+}
+async function recognize(blob: Blob): Promise<{ text: string; confidence: number }> {
   const { createWorker } = await import('tesseract.js');
   const worker = await createWorker('eng', 1, {
     workerPath: runtime('ocr/worker.min.js'),
@@ -34,8 +42,8 @@ export async function ocr(blob: Blob): Promise<string> {
     gzip: true,
   });
   try {
-    const result = await worker.recognize(blob);
-    return meaningfulOcrText(result.data.text);
+    const { data } = await worker.recognize(blob);
+    return { text: data.text, confidence: data.confidence };
   } finally {
     await worker.terminate();
   }

@@ -164,13 +164,27 @@ describe('DexieLibraryRepository', () => {
     expect(again.importedIds).toHaveLength(0);
     expect([...again.skippedDuplicateIds].sort()).toEqual(restored.map((item) => item.id).sort());
 
-    const partialDatabase = new CampusRecallDatabase(`test-${crypto.randomUUID()}`);
-    const partial = new DexieLibraryRepository(partialDatabase);
-    await partial.open();
-    await partial.importArchive(await repository.exportItems([club.id]));
-    const topUp = await partial.importArchive(archive);
-    expect(topUp.importedIds).toHaveLength(1);
-    expect((await partial.getItem(topUp.importedIds[0]!))?.title).toBe('Hostel group');
+    // Either partial library, whichever position its item has in the archive, gains the other.
+    for (const [kept, missing] of [[club, hostel], [hostel, club]]) {
+      const partialDatabase = new CampusRecallDatabase(`test-${crypto.randomUUID()}`);
+      const partial = new DexieLibraryRepository(partialDatabase);
+      await partial.open();
+      await partial.importArchive(await repository.exportItems([kept!.id]));
+      const topUp = await partial.importArchive(archive);
+      expect(topUp.importedIds).toHaveLength(1);
+      expect((await partial.getItem(topUp.importedIds[0]!))?.title).toBe(missing!.title);
+      expect((await partial.listItems()).map((item) => item.title).sort()).toEqual(['Club group', 'Hostel group']);
+    }
+  });
+
+  it('treats a renamed same-content item as a duplicate of its archive entry', async () => {
+    const item = await repository.save({ kind: 'note', text: 'Lab opens at 9', title: 'Lab' });
+    const archive = await repository.exportItems([item.id]);
+    await repository.renameItem(item.id, 'Lab timing');
+
+    const report = await repository.importArchive(archive);
+    expect(report.importedIds).toHaveLength(0);
+    expect(report.skippedDuplicateIds).toEqual([item.id]);
   });
 
   it('serializes concurrent imports so only one creates the item', async () => {
