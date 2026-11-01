@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 const formats: [string, string][] = [
   ['Images', 'JPEG, PNG, WebP / 20 MB'],
   ['PDFs', 'Up to 50 pages / 20 MB'],
@@ -74,8 +74,17 @@ function useLandingEffects(root: React.RefObject<HTMLDivElement | null>) {
       }, ms);
       timers.add(id);
     };
-    let alive = true;
     const observers: IntersectionObserver[] = [];
+    const measureHeader = () => {
+      el.style.setProperty(
+        '--lp-header-height',
+        `${q('header.top').getBoundingClientRect().height}px`,
+      );
+    };
+    measureHeader();
+    const headerObserver =
+      'ResizeObserver' in window ? new ResizeObserver(measureHeader) : undefined;
+    headerObserver?.observe(q('header.top'));
 
     const revealed = all('.rv');
     if ('IntersectionObserver' in window && !still) {
@@ -134,6 +143,7 @@ function useLandingEffects(root: React.RefObject<HTMLDivElement | null>) {
     };
     window.addEventListener('scroll', onScroll, { passive: true });
     window.addEventListener('resize', onScroll);
+    window.addEventListener('resize', measureHeader);
     frame();
     if (still) {
       nums.forEach((node) => {
@@ -146,58 +156,94 @@ function useLandingEffects(root: React.RefObject<HTMLDivElement | null>) {
       });
     }
 
-    const typed = q<HTMLElement>('.lp-typed');
-    const res = q<HTMLElement>('.res');
-    const show = (s: (typeof samples)[number]) => {
-      q<HTMLElement>('.lp-kind').textContent = s.kind;
-      q<HTMLElement>('.lp-title').textContent = s.t;
-      q<HTMLElement>('.lp-text').textContent = s.x;
-      q<HTMLElement>('.lp-loc').textContent = s.l;
-      res.classList.add('show');
-    };
-    if (still) {
-      typed.textContent = samples[0].q;
-      show(samples[0]);
-    } else {
-      let visible = true;
-      const demoObserver = new IntersectionObserver((e) => {
-        visible = e[0].isIntersecting;
-      });
-      observers.push(demoObserver);
-      demoObserver.observe(q('.demo'));
-      let si = 0;
-      const run = () => {
-        if (!alive) return;
-        const s = samples[si % samples.length];
-        let i = 0;
-        res.classList.remove('show');
-        typed.textContent = '';
-        const type = () => {
-          if (!alive) return;
-          if (!visible) return later(type, 400);
-          typed.textContent = s.q.slice(0, ++i);
-          if (i < s.q.length) later(type, 38 + Math.random() * 40);
-          else
-            later(() => {
-              show(s);
-              later(() => {
-                si++;
-                run();
-              }, 3800);
-            }, 380);
-        };
-        type();
-      };
-      run();
-    }
     return () => {
-      alive = false;
       timers.forEach((id) => window.clearTimeout(id));
       observers.forEach((o) => o.disconnect());
+      headerObserver?.disconnect();
       window.removeEventListener('scroll', onScroll);
       window.removeEventListener('resize', onScroll);
+      window.removeEventListener('resize', measureHeader);
     };
   }, [root]);
+}
+
+function SearchDemo() {
+  const root = useRef<HTMLDivElement>(null);
+  const [paused, setPaused] = useState(false);
+  const [visible, setVisible] = useState(true);
+  const [still, setStill] = useState(
+    () => window.matchMedia('(prefers-reduced-motion: reduce)').matches,
+  );
+  const [demo, setDemo] = useState({ sample: 0, length: 0, show: false });
+  useEffect(() => {
+    const media = window.matchMedia('(prefers-reduced-motion: reduce)');
+    const update = () => setStill(media.matches);
+    media.addEventListener('change', update);
+    const observer =
+      'IntersectionObserver' in window
+        ? new IntersectionObserver(([entry]) => setVisible(entry.isIntersecting))
+        : undefined;
+    if (root.current) observer?.observe(root.current);
+    return () => {
+      media.removeEventListener('change', update);
+      observer?.disconnect();
+    };
+  }, []);
+  useEffect(() => {
+    if (paused || still || !visible) return;
+    const typing = demo.length < samples[demo.sample].q.length;
+    const delay = typing ? 38 + Math.random() * 40 : demo.show ? 3800 : 380;
+    const timer = window.setTimeout(() => {
+      setDemo(
+        typing
+          ? { ...demo, length: demo.length + 1 }
+          : demo.show
+            ? { sample: (demo.sample + 1) % samples.length, length: 0, show: false }
+            : { ...demo, show: true },
+      );
+    }, delay);
+    return () => window.clearTimeout(timer);
+  }, [demo, paused, still, visible]);
+  const sample = samples[still ? 0 : demo.sample];
+  return (
+    <div
+      className="demo rv"
+      ref={root}
+      data-paused={paused}
+      style={{ '--d': 2 } as React.CSSProperties}
+    >
+      <div className="bar mono">
+        <span>Search</span>
+        <span>Sample data, not a real library</span>
+      </div>
+      <div role="img" aria-label={`Example: “${sample.q}” finds ${sample.t}, ${sample.l}`}>
+        <div className="q">
+          <span className="lp-typed">{still ? sample.q : sample.q.slice(0, demo.length)}</span>
+          <span className="caret" aria-hidden="true" />
+        </div>
+        <div className={`res ${still || demo.show ? 'show' : ''}`}>
+          <span className="mono lp-kind" style={{ color: 'var(--muted)' }}>
+            {sample.kind}
+          </span>
+          <h3 className="lp-title">{sample.t}</h3>
+          <p className="lp-text">{sample.x}</p>
+          <span className="loc lp-loc">{sample.l}</span>
+        </div>
+      </div>
+      {!still && (
+        <div className="demo-controls">
+          <button
+            type="button"
+            className="demo-toggle"
+            aria-pressed={paused}
+            onClick={() => setPaused(!paused)}
+          >
+            {paused ? 'Resume demo' : 'Pause demo'}
+          </button>
+        </div>
+      )}
+    </div>
+  );
 }
 export function Landing() {
   const root = useRef<HTMLDivElement>(null);
@@ -280,27 +326,7 @@ export function Landing() {
               </div>
               <p className="note">No account. No cloud inference. Works offline after one setup.</p>
             </div>
-            <div
-              className="demo rv"
-              style={{ '--d': 2 } as React.CSSProperties}
-              role="img"
-              aria-label="Animated example: a search for a remembered detail returns a saved PDF at page 2"
-            >
-              <div className="bar mono">
-                <span>Search</span>
-                <span>Sample data, not a real library</span>
-              </div>
-              <div className="q">
-                <span className="lp-typed" />
-                <span className="caret" aria-hidden="true" />
-              </div>
-              <div className="res">
-                <span className="mono lp-kind" style={{ color: 'var(--muted)' }} />
-                <h3 className="lp-title" />
-                <p className="lp-text" />
-                <span className="loc lp-loc" />
-              </div>
-            </div>
+            <SearchDemo />
           </div>
         </div>
 

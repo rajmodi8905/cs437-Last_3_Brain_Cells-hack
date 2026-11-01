@@ -27,7 +27,8 @@ export function useCampusRecall(services: CampusRecallServices) {
   const [setup, setSetup] = useState(false);
   const [progress, setProgress] = useState<EngineProgress>();
   const [itemProgress, setItemProgress] = useState<Record<string, EngineProgress>>({});
-  const [firstUse, setFirstUse] = useState(false);
+  const [introPending, setFirstUse] = useState(false);
+  const firstUse = introPending && !['home', 'privacy', 'terms'].includes(screen);
   const [offline, setOffline] = useState(!navigator.onLine);
   const [update, setUpdate] = useState<ServiceWorkerRegistration>();
   const [storage, setStorage] = useState<{ usage?: number; quota?: number; persistent?: boolean }>(
@@ -64,7 +65,7 @@ export function useCampusRecall(services: CampusRecallServices) {
       .initialize()
       .then(async () => {
         const setting = await services.preferences.get<boolean>('intro-seen');
-        if (alive) setFirstUse(!setting && !['privacy', 'terms'].includes(route()));
+        if (alive) setFirstUse(!setting);
         if (alive) {
           setReady(engine.ready);
           setDownloadBytes(engine.downloadBytes);

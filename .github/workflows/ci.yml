@@ -17,6 +17,7 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run check
+      - run: npm run format:check
       - run: npm run test:fast
       - uses: actions/cache@v4
         with:
@@ -25,6 +26,7 @@ jobs:
       # Exercise model setup before any build can create its generated manifest.
       - run: npm run models:download
       - run: npm run build
+      - run: npm run release:check
       - run: npx playwright install --with-deps chromium
       - run: npm run test:browser
       - run: npm run test:acceptance

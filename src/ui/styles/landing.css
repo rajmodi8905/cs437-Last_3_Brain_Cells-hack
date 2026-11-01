@@ -205,6 +205,22 @@
   border: var(--rule);
   box-shadow: var(--hard);
 }
+.landing .demo-controls {
+  display: flex;
+  justify-content: flex-end;
+  padding: 0 16px 12px;
+}
+.landing .demo-toggle {
+  min-height: 44px;
+  padding: 8px 12px;
+  border: 1px solid var(--ink);
+  background: var(--paper);
+  color: var(--ink);
+  font: 700 14px var(--sans);
+}
+.landing .demo[data-paused='true'] .caret {
+  animation-play-state: paused;
+}
 .landing .demo .bar {
   display: flex;
   justify-content: space-between;
@@ -287,6 +303,9 @@
       section {
   border-top: var(--rule);
 }
+.landing section[id] {
+  scroll-margin-top: calc(var(--lp-header-height, 66px) + 12px);
+}
 .landing .sec-head {
   display: flex;
   justify-content: space-between;
@@ -309,9 +328,9 @@
 }
 .landing .pin {
   position: sticky;
-  top: 64px;
-  height: calc(100vh - 64px);
-  height: calc(100dvh - 64px);
+  top: var(--lp-header-height, 66px);
+  height: calc(100vh - var(--lp-header-height, 66px));
+  height: calc(100dvh - var(--lp-header-height, 66px));
   display: flex;
   flex-direction: column;
   justify-content: center;

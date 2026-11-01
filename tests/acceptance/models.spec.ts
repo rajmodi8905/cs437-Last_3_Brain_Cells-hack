@@ -1,6 +1,7 @@
 import { test, expect } from '@playwright/test';
 import { readFile, access } from 'node:fs/promises';
 import path from 'node:path';
+import { mirrorSetupAsset } from './helpers';
 test.use({ trace: 'off' });
 test('pinned local text and vision pipeline loads, embeds, searches and rejects unrelated query', async ({
   page,
@@ -17,13 +18,7 @@ test('pinned local text and vision pipeline loads, embeds, searches and rejects 
   await context.route(/^https:\/\//, async (route) => {
     const a = manifest.assets.find((a: any) => a.url === route.request().url());
     if (!a) throw Error(`Unexpected external request: ${route.request().url()}`);
-    await route.fulfill({
-      status: 302,
-      headers: {
-        location: `http://127.0.0.1:4180/${a.sha256}`,
-        'access-control-allow-origin': '*',
-      },
-    });
+    await mirrorSetupAsset(route, a.sha256, page);
   });
   page.on('console', (msg) => {
     if (msg.type() === 'error' || msg.type() === 'log') console.log('BROWSER:', msg.text());

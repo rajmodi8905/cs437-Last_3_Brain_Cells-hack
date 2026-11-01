@@ -32,6 +32,8 @@ npm run build
 npm run preview
 ```
 
+For artifact validation, the prepared manual release workflow, hosting facts and rollback steps, see [deployment preparation](docs/implementation/deployment.md). No publication is performed automatically.
+
 The static output is `dist/`. Serve it over HTTPS for installation and secure browser capabilities. Localhost works for desktop development; an ordinary HTTP LAN address is insufficient for phone PWA/WebGPU testing. No deployment is performed by these commands.
 
 For a subdirectory deployment, set the complete base path at build time:
@@ -83,7 +85,11 @@ On Linux, install browser system dependencies with `npx playwright install --wit
 ```bash
 npm run test:browser       # production UI, responsive layouts and offline shell
 npm run test:acceptance    # actual extraction and retrieval
+npx playwright install webkit
+npm run test:webkit        # additional WebKit UI and real local-model checks
 ```
+
+Playwright WebKit provides additional desktop engine coverage. Its version is reported by the installed browser package; it does not establish compatibility with a particular physical iOS/Safari version.
 
 The Browser plugin is unavailable in the current environment, so browser verification uses Playwright. Reports and screenshots go to ignored `test-results/` and `playwright-report/`. All campus announcements in fixtures are synthetic. See [acceptance design](docs/implementation/acceptance.md) and [verification evidence](docs/verification/README.md) for measured outcomes and remaining physical-device checks. A successful build is not evidence that every requirement or phone has passed.
 
@@ -102,6 +108,10 @@ All fifteen statements map to actual test suites in [the coverage registry](test
 Follow [Nakshatra's quickstart](docs/implementation/nakshatra-quickstart.md) to prepare a production preview, an importable synthetic 30-item library, exact-source expectations, malformed inputs and an empty run ledger. `npm run qa:prepare` writes only to a new ignored `.cache/qa-kit/` directory and never overwrites an earlier run. No model download is needed to prepare the kit. Optional `npm run qa:https` uses user-supplied local certificate files for a phone session; it does not deploy a site or configure device trust. The quickstart links both testers' prompts and the GitHub bug-report form.
 
 [Chaitanya's quickstart](docs/implementation/chaitanya-quickstart.md) adds UI boundary/source-content fixtures, a C1–C15 run ledger and `npm run qa:webpages` for deterministic desktop capture/truncation/blocked-fetch tests. The helper is loopback-only, synthetic and separate from the deployed application.
+
+For the physical-phone session, follow [device preparation](docs/implementation/device-session.md). `qa:device:prepare` builds an isolated identified snapshot and public synthetic downloads under ignored `.cache/`; `qa:device:serve` verifies it before serving local HTTPS. Temporary certificate trust and physical tests require device-owner action and are never performed automatically.
+
+The next Android round has a dedicated [validation runbook](docs/implementation/android-validation.md), covering Chrome and installed-app setup, fixture timings, exact originals, offline operation and manual transfer.
 
 ## Architecture
 

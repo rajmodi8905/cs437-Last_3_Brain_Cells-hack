@@ -58,7 +58,11 @@ test('Chaitanya fixtures exercise capture, truncation, blocked fallback and iner
   );
   expect(await page.evaluate(() => (window as any).qaImportedScript)).toBeUndefined();
   expect((await (await request.get('http://127.0.0.1:4181/probe-count')).json()).requests).toBe(0);
-  expect(errors).toEqual([]);
+  // WebKit reports this deliberate CORS fixture through pageerror as well.
+  const unexpected = errors.filter(
+    (message) => !(message.includes('127.0.0.1:4181/blocked') && /access control/i.test(message)),
+  );
+  expect(unexpected).toEqual([]);
 });
 
 test('UI stress library remains readable on a phone viewport and policy routes reopen offline', async ({

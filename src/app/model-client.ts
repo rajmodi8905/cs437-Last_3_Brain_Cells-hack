@@ -8,6 +8,7 @@ export class ModelClient {
     { resolve: (value: unknown) => void; reject: (cause: Error) => void; request: ModelRequest }
   >();
   private forceWasm = false;
+  private disposal?: Promise<void>;
   device?: 'webgpu' | 'wasm';
   private start() {
     if (this.worker) return;
@@ -17,7 +18,12 @@ export class ModelClient {
     this.worker.onmessage = ({ data }: MessageEvent<ModelResponse>) => {
       const pending = this.pending.get(data.id);
       if (!pending) return;
-      if ('error' in data && data.retryWasm && !this.forceWasm) {
+      if (
+        'error' in data &&
+        data.retryWasm &&
+        !this.forceWasm &&
+        pending.request.method !== 'dispose'
+      ) {
         this.worker?.terminate();
         this.worker = undefined;
         this.forceWasm = true;
@@ -46,6 +52,8 @@ export class ModelClient {
     method: K,
     args: ModelCalls[K]['args'],
   ): Promise<ModelCalls[K]['result']> {
+    if (this.disposal)
+      return Promise.reject(new Error('Local models are stopping. Retry shortly.'));
     this.start();
     const id = ++this.nextId;
     const request = {
@@ -84,9 +92,40 @@ export class ModelClient {
   transcribe(samples: Float32Array) {
     return this.call('transcribe', { samples });
   }
-  async dispose() {
-    this.worker?.terminate();
-    this.worker = undefined;
+  dispose(): Promise<void> {
+    if (this.disposal) return this.disposal;
+    const worker = this.worker;
     this.failAll(new Error('Processing stopped.'));
+    if (!worker) return Promise.resolve();
+    // Give idle GPU sessions a chance to release before destroying their context.
+    // A stuck/in-flight worker still has a bounded shutdown and cannot block reopen.
+    const shutdown = new Promise<void>((resolve) => {
+      const id = ++this.nextId;
+      const finish = () => {
+        clearTimeout(timer);
+        this.pending.delete(id);
+        worker.terminate();
+        if (this.worker === worker) this.worker = undefined;
+        resolve();
+      };
+      const timer = setTimeout(finish, 2000);
+      const request: ModelRequest = {
+        id,
+        method: 'dispose',
+        args: {},
+        base: new URL(import.meta.env.BASE_URL, document.baseURI).href,
+        forceWasm: this.forceWasm,
+      };
+      this.pending.set(id, { resolve: finish, reject: finish, request });
+      try {
+        worker.postMessage(request);
+      } catch {
+        finish();
+      }
+    });
+    this.disposal = shutdown.finally(() => {
+      this.disposal = undefined;
+    });
+    return this.disposal;
   }
 }

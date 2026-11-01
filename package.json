@@ -20,9 +20,13 @@
     "qa:prepare": "node scripts/prepare-qa-kit.mjs",
     "qa:https": "node scripts/qa-https.mjs",
     "qa:webpages": "node scripts/qa-webpages.mjs",
+    "qa:device:prepare": "node scripts/device-session.mjs prepare",
+    "qa:device:serve": "node scripts/device-session.mjs serve",
     "models:download": "node scripts/download-assets.mjs",
-    "format:check": "prettier --check src/ui src/app src/engine src/shared/browser-assets.ts src/main.tsx scripts tests/app tests/acceptance tests/e2e tests/engine tests/storage/integration.test.ts tests/spec tests/tooling vite.config.ts playwright.config.ts eslint.config.js src/sw.ts",
-    "premodels:download": "node scripts/prepare-assets.mjs"
+    "format:check": "prettier --check src/ui src/app src/engine src/shared/browser-assets.ts src/main.tsx scripts tests/app tests/acceptance tests/e2e tests/engine tests/storage/integration.test.ts tests/spec tests/tooling vite.config.ts playwright.config.ts playwright.webkit.config.ts eslint.config.js src/sw.ts",
+    "premodels:download": "node scripts/prepare-assets.mjs",
+    "release:check": "node scripts/check-release.mjs",
+    "test:webkit": "playwright test --config playwright.webkit.config.ts"
   },
   "dependencies": {
     "@ffmpeg/core": "0.12.10",

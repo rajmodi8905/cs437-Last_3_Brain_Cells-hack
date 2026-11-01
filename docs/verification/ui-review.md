@@ -58,3 +58,19 @@ Correction: the Playwright preview server on port 4174 serves `dist/` without re
 | --- | --- | --- |
 | Root URL opened the library and a welcome dialog | Root URL opens the landing page; the library and dialog open from its buttons | A proper first impression for new visitors; installed app still starts in the library |
 | No way back to an explanation page | "About Campus Recall" link in the sidebar | Orientation from inside the app |
+
+### Landing audit fixes on `raj_all_fixes` (29 October 2026)
+
+The three additional audit findings are fixed locally on `raj_all_fixes`, based on UI revamp commit `d8e5545`. Existing unstaged device/release work is preserved. This checkpoint does not implement or close the eight separate teammate reports.
+
+| Before | After | Why |
+| --- | --- | --- |
+| First visit to the landing page set welcome state before its dialog mounted; policy links opened underneath onboarding and library entry skipped the focus effect | Pending introduction is separate from route-dependent dialog visibility; home/policy routes stay unobstructed and library entry mounts the existing focus-managed dialog | Policy access before setup, keyboard containment and durable dismissal |
+| The sample search demo advanced indefinitely without a user control | Accessible Pause/Resume button freezes the typed query, result and caret; timers stop while paused/off screen and reduced-motion changes select the static example | Let users read the example without continuing motion |
+| Section jumps aligned labels beneath the sticky header | Measured header height drives section scroll margins and the desktop pinned section offset, including wrapped narrow headers | Keep the destination label visible after navigation |
+
+Five new browser tests first failed against the previous production build: two policy transitions, onboarding focus/dismissal, demo pause/resume and section offsets. After implementation, a visual check caught an unintended reveal-class reset on pause; this was corrected using a stable reveal class and a separate pause data attribute, with explicit opacity assertions added. Final Chromium UI results: **19 passed**, no failures/skips, 36.0 seconds. The fast suite passed **78/78**; TypeScript/lint/product/coverage-map checks, formatting and production build passed.
+
+The final render check used Playwright Chromium at 1440, 390 and 320 px: correct page identity, no framework overlay or horizontal overflow, zero page errors, visible paused demo with a 44 px control, keyboard Space activation and unobstructed first-use Privacy access. Screenshots of the corrected desktop landing, phone demo and phone policy were inspected. Browser plugin unavailable, so the existing Playwright workflow was used. No physical-phone, Android, real-model or WebKit rerun is claimed for this UI checkpoint. All nine frozen retrieval hashes match; no model, worker, storage, threshold, dependency or index change was made.
+
+Raw local logs and screenshots are outside the repository under `/tmp/campus-recall-fixes-*`. No commit, push, PR, issue update or deployment was performed; the branch is the local collection point for later fixes and the eventual reviewed PR.
