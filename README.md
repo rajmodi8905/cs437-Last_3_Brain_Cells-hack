@@ -4,6 +4,34 @@ A free, local personal library for screenshots, PDFs, notes, webpages and short 
 
 Built by Raj Modi, Chaitanya and Nakshatra for CS437 at IIT Gandhinagar. A student project, not an official IITGN service. Interview evidence and testable requirements are in [SPEC.md](SPEC.md).
 
+## Current status: 2 November 2026
+
+The UI revamp, Chaitanya's reported-defect fixes, Nakshatra's restore/OCR fixes, and Raj's landing accessibility and device/release tooling are merged into `main`. The verified code baseline is `deaf00929b7b7bd0e81a727ec200350995abf69e`, the merge of [PR #25](https://github.com/rajmodi8905/cs437-Last_3_Brain_Cells-hack/pull/25), following [PR #24](https://github.com/rajmodi8905/cs437-Last_3_Brain_Cells-hack/pull/24).
+
+[Main CI run 41279019226](https://github.com/rajmodi8905/cs437-Last_3_Brain_Cells-hack/actions/runs/41279019226) completed successfully on **1 November** at that exact commit. Its logs were checked on 2 November:
+
+| Automated check | Recorded result |
+| --- | --- |
+| TypeScript, ESLint, product restrictions and coverage-registry structure | Passed |
+| Formatting | Passed |
+| Fast tests | 85 passed across 19 files |
+| Production Chromium browser tests | 27 passed |
+| Actual-model acceptance tests | 11 passed |
+| Production build and root release-artifact validation | Passed |
+
+These are completed CI results, not a newly executed final-freeze round. The 2 November local fast run also passed all 85 tests. Actual-model tests use pinned real models and synthetic fixtures. The fixed retrieval corpus is consumed regression data, not a general accuracy estimate. Structural coverage of all fifteen statements alone does not establish final release readiness.
+
+### Physical-device evidence
+
+| Device | Evidence and scope |
+| --- | --- |
+| iPhone 17, iOS 27.0.1 | Earlier measured Safari processing/original/offline checks and owner-confirmed installation, playback, seeking, keyboard, rotation and zoom. See the [measured session](docs/verification/2026-10-28-device-preparation.md) and [installed-app follow-up](docs/verification/2026-10-29-release-preparation.md#physical-installed-iphone-app-owner-confirmed-checks). These retain their earlier build identities; no final-main iOS rerun is claimed. |
+| iQOO Neo9 Pro / I2304, Android 16, Chrome 156.0.8078.49 | Owner-confirmed saving before setup, verified-asset setup, note/PDF retrieval, matching PDF page, negative-query rejection, image/media retrieval, playback/seeking, installed-app controls and offline reopening/fresh processing on the 2 November main-based snapshot. All five agreed small image/PDF fixtures were reported under 120 seconds each; individual times were not recorded. |
+
+The Android offline round followed removal of the USB network route; the owner disabled Wi-Fi/mobile data and reported the installed-app and ordinary-Chrome checks successful. These physical interaction results are owner reports, not automated DOM captures or a blanket compatibility claim. The physical phone-to-Mac ZIP restore remains **unverified**, distinct from passing automated independent-profile transfer tests.
+
+Next work is documented in the dated [final-readiness and specification-freeze plan](docs/implementation/2026-11-02-spec-freeze-plan.md). **That plan has not started and requires Raj's approval.** Hosting remains undecided; final evidence consolidation, fresh-checkout verification and team policy review remain pending. No hosted deployment or all-statements-green freeze is claimed.
+
 ## Run locally
 
 Use Node 24 and npm. The lockfile pins dependencies. Start from a fresh clone:
@@ -71,11 +99,12 @@ Fast tests use actual storage logic, controlled vector arithmetic and inert HTML
 
 ```bash
 npm run check
-npm run test:fast
+npm run format:check
 npx playwright install chromium
-npm run build
 npm run models:download
+npm run build
 npm test
+npm run release:check
 ```
 
 On Linux, install browser system dependencies with `npx playwright install --with-deps chromium` instead of the browser-only install command.
@@ -91,6 +120,8 @@ npm run test:webkit        # additional WebKit UI and real local-model checks
 
 Playwright WebKit provides additional desktop engine coverage. Its version is reported by the installed browser package; it does not establish compatibility with a particular physical iOS/Safari version.
 
+The optional WebKit suite has a documented native GPU/worker teardown crash in the pinned development engine. See the [failure and shipping-Safari comparison](docs/verification/2026-10-29-release-preparation.md). It is separate from the default Chromium suite above; no new WebKit investigation is included in the pending freeze plan.
+
 The Browser plugin is unavailable in the current environment, so browser verification uses Playwright. Reports and screenshots go to ignored `test-results/` and `playwright-report/`. All campus announcements in fixtures are synthetic. See [acceptance design](docs/implementation/acceptance.md) and [verification evidence](docs/verification/README.md) for measured outcomes and remaining physical-device checks. A successful build is not evidence that every requirement or phone has passed.
 
 Fixture regeneration needs macOS `say`, local ffmpeg and npm dependencies:
@@ -101,7 +132,7 @@ node scripts/create-fixtures.mjs
 
 ## Statement coverage and milestone evidence
 
-All fifteen statements map to actual test suites in [the coverage registry](tests/spec/coverage.json). `npm run check` validates that mapping; `npm test` executes the behavior. Registry completeness alone is not a test pass. See [the October milestone audit](docs/verification/milestones-2026-10.md) for the reviewed/merged evidence, late earlier milestones and remaining physical-device checks.
+All fifteen statements map to actual test suites in [the coverage registry](tests/spec/coverage.json). `npm run check` validates that mapping; `npm test` executes the behavior. Registry completeness alone is not a test pass. The current CI and device summary is above; the dated final-readiness plan defines the remaining evidence review. See [the October milestone audit](docs/verification/milestones-2026-10.md) for historical checkpoint evidence and late earlier milestones. Older reports retain their original dates and builds rather than representing current status.
 
 ## Bug-finding handoff
 
@@ -111,7 +142,7 @@ Follow [Nakshatra's quickstart](docs/implementation/nakshatra-quickstart.md) to 
 
 For the physical-phone session, follow [device preparation](docs/implementation/device-session.md). `qa:device:prepare` builds an isolated identified snapshot and public synthetic downloads under ignored `.cache/`; `qa:device:serve` verifies it before serving local HTTPS. Temporary certificate trust and physical tests require device-owner action and are never performed automatically.
 
-The next Android round has a dedicated [validation runbook](docs/implementation/android-validation.md), covering Chrome and installed-app setup, fixture timings, exact originals, offline operation and manual transfer.
+The [Android validation runbook](docs/implementation/android-validation.md) covers Chrome and installed-app setup, fixture timings, exact originals, offline operation and manual transfer. The 2 November owner-reported results are summarized above; preparation commands alone establish no phone pass. When a USB development route is used, remove it as well as disabling phone networking before testing offline behavior.
 
 ## Architecture
 
@@ -128,6 +159,6 @@ EmbeddingGemma 2 q4 text and vision share normalized 768-dimensional vectors. Wh
 
 ## Team workflow
 
-For the current completion phase, follow [the release implementation plan](docs/implementation/release-plan.md): Raj owns all implementation; Nakshatra and Chaitanya own bug discovery and retesting. Their copy-ready prompts and the repository bug-report form are linked from [team instructions](docs/implementation/README.md).
+The [release implementation plan](docs/implementation/release-plan.md) records the earlier responsibility split and release gates. Later authorized teammate fix PRs, including Chaitanya's PR #19 and Nakshatra's PR #24, supersede its historical tester-only assignment for that work. The immediate next work is the approval-gated 2 November final-readiness plan linked above. Tester prompts and the repository bug-report form remain in [team instructions](docs/implementation/README.md).
 
-The implementation reached `main` through reviewed [PR #6](https://github.com/rajmodi8905/cs437-Last_3_Brain_Cells-hack/pull/6). Follow-up changes use `raj_final`. Preserve `Raj_setup`. Open reviewed PRs into `main`; do not merge without authorization. Keep local handovers and unrelated files out of public changes. See [implementation instructions](docs/implementation/README.md) and [AI-assisted development notes](docs/ai-use.md).
+The original integration reached `main` through reviewed [PR #6](https://github.com/rajmodi8905/cs437-Last_3_Brain_Cells-hack/pull/6); the current merged fixes are summarized above. Current local documentation work uses `raj_all_fixes`; preserve historical `Raj_setup` and `raj_final` branches. Every main change requires a reviewed PR and the configured two human approvals. Ask before staging/committing unless the current request explicitly authorizes that particular checkpoint; pushes, PRs and merges require the applicable authorization. Keep private handovers, device certificates, generated sessions and unrelated drafts out of public changes. See [implementation instructions](docs/implementation/README.md) and [AI-assisted development notes](docs/ai-use.md).
