@@ -4,7 +4,7 @@
 
 **Target:** 3 November specification freeze, per the recorded course checkpoint
 
-**Status:** Draft. Execution requires Raj's explicit approval. Saving and committing this plan and the README does not authorize starting the work below.
+**Status:** Raj authorized local execution on 2 November 2026, excluding deployment. All planned local verification completed successfully; see the [checkpoint results](../verification/2026-11-03-spec-freeze.md). Owner-delegated [policy fact review](../verification/2026-11-02-policy-review.md) and independently reviewed [dependency remediation](../verification/2026-11-02-dependency-remediation.md) are complete. This does not claim named teammate or human GitHub PR approvals. Later commits/publication still require their applicable authorization.
 
 ## 1. Goal and boundaries
 

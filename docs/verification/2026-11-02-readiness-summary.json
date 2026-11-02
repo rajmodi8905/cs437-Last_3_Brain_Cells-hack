@@ -1,0 +1,231 @@
+{
+  "schemaVersion": 1,
+  "recordedAt": "2026-11-02T22:55:43.613041+05:30",
+  "targetCheckpoint": "2026-11-03",
+  "executedDate": "2026-11-02",
+  "candidate": "deaf00929b7b7bd0e81a727ec200350995abf69e",
+  "environment": {
+    "os": "macOS 27.0.1 arm64",
+    "hardware": "Available Apple M4 Mac",
+    "node": "24.22.1",
+    "npm": "11.20.0",
+    "playwright": "1.64.1",
+    "chromium": "156.0.8078.4",
+    "browserRouting": "Browser plugin not available; repository Playwright used",
+    "freshCheckout": true,
+    "newOperatingSystemOrLaptop": false,
+    "copiedDependencyOrModelCache": false
+  },
+  "checks": [
+    {
+      "name": "dev-smoke",
+      "exitCode": 0,
+      "elapsedSeconds": 1.65
+    },
+    {
+      "name": "check",
+      "exitCode": 0,
+      "elapsedSeconds": 2.83
+    },
+    {
+      "name": "format-check",
+      "exitCode": 0,
+      "elapsedSeconds": 0.8
+    },
+    {
+      "name": "build-root",
+      "exitCode": 0,
+      "elapsedSeconds": 4.24
+    },
+    {
+      "name": "release-root",
+      "exitCode": 0,
+      "elapsedSeconds": 0.21
+    },
+    {
+      "name": "production-root-smoke",
+      "exitCode": 0,
+      "elapsedSeconds": 1.66
+    },
+    {
+      "name": "test",
+      "exitCode": 0,
+      "elapsedSeconds": 458.51
+    },
+    {
+      "name": "build-subpath",
+      "exitCode": 0,
+      "elapsedSeconds": 5.07
+    },
+    {
+      "name": "release-subpath",
+      "exitCode": 0,
+      "elapsedSeconds": 0.2
+    },
+    {
+      "name": "production-subpath-smoke",
+      "exitCode": 0,
+      "elapsedSeconds": 1.63
+    }
+  ],
+  "tests": {
+    "fast": {
+      "passed": 85,
+      "files": 19
+    },
+    "browser": {
+      "passed": 27,
+      "failed": 0,
+      "skipped": 0
+    },
+    "actualModel": {
+      "passed": 11,
+      "failed": 0,
+      "skipped": 0
+    }
+  },
+  "retrieval": {
+    "S9": {
+      "items": 30,
+      "processingFailures": 0,
+      "ranks": [
+        {
+          "id": "R1",
+          "rank": 1
+        },
+        {
+          "id": "R2",
+          "rank": 1
+        },
+        {
+          "id": "R3",
+          "rank": 1
+        },
+        {
+          "id": "R4",
+          "rank": 1
+        },
+        {
+          "id": "R5",
+          "rank": 1
+        },
+        {
+          "id": "R6",
+          "rank": 1
+        }
+      ],
+      "negativeResultCounts": [
+        0,
+        0,
+        0
+      ],
+      "backend": "wasm"
+    },
+    "S10": {
+      "items": 30,
+      "processingFailures": 0,
+      "ranks": [
+        {
+          "id": "R7",
+          "rank": 1
+        },
+        {
+          "id": "R8",
+          "rank": 1
+        },
+        {
+          "id": "R12",
+          "rank": 1
+        }
+      ],
+      "negativeResultCounts": [
+        0,
+        0,
+        0
+      ],
+      "backend": "wasm"
+    },
+    "S11": {
+      "items": 30,
+      "processingFailures": 0,
+      "ranks": [
+        {
+          "id": "R9",
+          "rank": 1
+        },
+        {
+          "id": "R10",
+          "rank": 1
+        },
+        {
+          "id": "R11",
+          "rank": 1
+        }
+      ],
+      "negativeResultCounts": [
+        0,
+        0,
+        0
+      ],
+      "backend": "wasm"
+    }
+  },
+  "retrievalEvidenceLimit": "Consumed regression corpus; original R4 miss retained; no general accuracy claim",
+  "frozenInputHashes": {
+    "matched": 9,
+    "total": 9
+  },
+  "unchangedCandidateInputs": 142,
+  "artifacts": {
+    "root": {
+      "basePath": "/",
+      "files": 43,
+      "totalBytes": 110125013,
+      "largestFile": "runtime/ffmpeg/ffmpeg-core.wasm",
+      "largestBytes": 32232419,
+      "assetManifestSha256": "b1105d0d38961eefda12c2310c141c026eda01f092c325bf73bdfa313c9c27e9",
+      "artifactSha256": "d604a57dab335b8812f8c023245b55f40b1804b56eb34b6113f8629caceb1f62",
+      "note": "Local artifact validation only. No publication, hosted MIME/offline test or final release approval is established."
+    },
+    "subpath": {
+      "basePath": "/cs437-Last_3_Brain_Cells-hack/",
+      "files": 43,
+      "totalBytes": 110125493,
+      "largestFile": "runtime/ffmpeg/ffmpeg-core.wasm",
+      "largestBytes": 32232419,
+      "assetManifestSha256": "b1105d0d38961eefda12c2310c141c026eda01f092c325bf73bdfa313c9c27e9",
+      "artifactSha256": "317059d0e4daf2233ea41ce605f31193b55f8e4c12774f8f30012059bc30b0e7",
+      "note": "Local artifact validation only. No publication, hosted MIME/offline test or final release approval is established."
+    }
+  },
+  "dependencyAudit": {
+    "all": {
+      "info": 0,
+      "low": 2,
+      "moderate": 18,
+      "high": 0,
+      "critical": 0,
+      "total": 20
+    },
+    "omitDev": {
+      "info": 0,
+      "low": 0,
+      "moderate": 0,
+      "high": 0,
+      "critical": 0,
+      "total": 0
+    },
+    "disposition": "Dev/build findings retained for review; no lockfile or major-tooling change"
+  },
+  "physicalEvidence": "Owner reports retained with build identities; no new phone tests; missing physical ZIP restore remains unverified",
+  "humanPolicySignoffs": {
+    "Raj": "pending",
+    "Chaitanya": "pending",
+    "Nakshatra": "pending"
+  },
+  "hosting": "undecided",
+  "deployment": "not performed",
+  "freezeApproval": "pending human policy sign-offs and tooling audit disposition",
+  "rollbackReference": "deaf00929b7b7bd0e81a727ec200350995abf69e",
+  "note": "Prepared local evidence only; no staging, commit, push, PR, merge or deployment during this execution."
+}

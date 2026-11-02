@@ -1,0 +1,249 @@
+{
+  "schemaVersion": 1,
+  "recordedAt": "2026-11-02T23:23:10.561970+05:30",
+  "baseCommit": "643fb32b4f2e0fabf3392648685cd166a5aee83f",
+  "applicationMainBaseline": "deaf00929b7b7bd0e81a727ec200350995abf69e",
+  "uncommittedInputsSha256": "dcf41ac8e8029cefbed98329f17cd5c0354311334bb706fba5cc14aa00507263",
+  "unchangedRecordedInputs": 150,
+  "runtimeModelChanges": false,
+  "dependencyFixes": {
+    "glob": "14.0.3",
+    "minimatch": "11.0.4",
+    "deepmerge": "Private local MIT fork @campus-recall/deepmerge@4.3.1-campus.1; root file dependency and $deepmerge override"
+  },
+  "localForkAuditLimit": "No upstream patched release is claimed. Audit has no published advisory for the private fork; reviewed source and exploit regressions provide patch evidence. No advisory suppressed.",
+  "audits": {
+    "isolated-audit-after": {
+      "info": 0,
+      "low": 0,
+      "moderate": 0,
+      "high": 0,
+      "critical": 0,
+      "total": 0
+    },
+    "isolated-audit-production-after": {
+      "info": 0,
+      "low": 0,
+      "moderate": 0,
+      "high": 0,
+      "critical": 0,
+      "total": 0
+    }
+  },
+  "focusedSecurityTests": {
+    "before": {
+      "failed": 3,
+      "passed": 2
+    },
+    "after": {
+      "failed": 0,
+      "passed": 5
+    }
+  },
+  "independentSubagentReview": {
+    "result": "approved",
+    "exactForkAssertionsPassed": 18,
+    "scope": "Patch, installed consumer, portable lock, compatibility scope, CI and documentation; final suite supplied by parent"
+  },
+  "tests": {
+    "fast": {
+      "passed": 90,
+      "files": 20
+    },
+    "browser": {
+      "passed": 27,
+      "failed": 0,
+      "skipped": 0
+    },
+    "actualModel": {
+      "passed": 11,
+      "failed": 0,
+      "skipped": 0
+    }
+  },
+  "checks": [
+    {
+      "name": "dev-smoke",
+      "exitCode": 0,
+      "elapsedSeconds": 2.5
+    },
+    {
+      "name": "check",
+      "exitCode": 0,
+      "elapsedSeconds": 3.16
+    },
+    {
+      "name": "format-check",
+      "exitCode": 0,
+      "elapsedSeconds": 0.81
+    },
+    {
+      "name": "build-root",
+      "exitCode": 0,
+      "elapsedSeconds": 4.69
+    },
+    {
+      "name": "release-root",
+      "exitCode": 0,
+      "elapsedSeconds": 0.23
+    },
+    {
+      "name": "production-root-smoke",
+      "exitCode": 0,
+      "elapsedSeconds": 1.73
+    },
+    {
+      "name": "test",
+      "exitCode": 0,
+      "elapsedSeconds": 827.14
+    },
+    {
+      "name": "build-subpath",
+      "exitCode": 0,
+      "elapsedSeconds": 6.12
+    },
+    {
+      "name": "release-subpath",
+      "exitCode": 0,
+      "elapsedSeconds": 0.22
+    },
+    {
+      "name": "production-subpath-smoke",
+      "exitCode": 0,
+      "elapsedSeconds": 1.74
+    }
+  ],
+  "artifacts": {
+    "root": {
+      "basePath": "/",
+      "files": 43,
+      "totalBytes": 110125013,
+      "largestFile": "runtime/ffmpeg/ffmpeg-core.wasm",
+      "largestBytes": 32232419,
+      "assetManifestSha256": "b1105d0d38961eefda12c2310c141c026eda01f092c325bf73bdfa313c9c27e9",
+      "artifactSha256": "d604a57dab335b8812f8c023245b55f40b1804b56eb34b6113f8629caceb1f62",
+      "note": "Local artifact validation only. No publication, hosted MIME/offline test or final release approval is established."
+    },
+    "subpath": {
+      "basePath": "/cs437-Last_3_Brain_Cells-hack/",
+      "files": 43,
+      "totalBytes": 110125493,
+      "largestFile": "runtime/ffmpeg/ffmpeg-core.wasm",
+      "largestBytes": 32232419,
+      "assetManifestSha256": "b1105d0d38961eefda12c2310c141c026eda01f092c325bf73bdfa313c9c27e9",
+      "artifactSha256": "317059d0e4daf2233ea41ce605f31193b55f8e4c12774f8f30012059bc30b0e7",
+      "note": "Local artifact validation only. No publication, hosted MIME/offline test or final release approval is established."
+    }
+  },
+  "bothArtifactsIdenticalToPreRemediation": true,
+  "retrieval": {
+    "S9": {
+      "items": 30,
+      "processingFailures": 0,
+      "ranks": [
+        {
+          "id": "R1",
+          "rank": 1
+        },
+        {
+          "id": "R2",
+          "rank": 1
+        },
+        {
+          "id": "R3",
+          "rank": 1
+        },
+        {
+          "id": "R4",
+          "rank": 1
+        },
+        {
+          "id": "R5",
+          "rank": 1
+        },
+        {
+          "id": "R6",
+          "rank": 1
+        }
+      ],
+      "negativeResultCounts": [
+        0,
+        0,
+        0
+      ],
+      "backend": "wasm"
+    },
+    "S10": {
+      "items": 30,
+      "processingFailures": 0,
+      "ranks": [
+        {
+          "id": "R7",
+          "rank": 1
+        },
+        {
+          "id": "R8",
+          "rank": 1
+        },
+        {
+          "id": "R12",
+          "rank": 1
+        }
+      ],
+      "negativeResultCounts": [
+        0,
+        0,
+        0
+      ],
+      "backend": "wasm"
+    },
+    "S11": {
+      "items": 30,
+      "processingFailures": 0,
+      "ranks": [
+        {
+          "id": "R9",
+          "rank": 1
+        },
+        {
+          "id": "R10",
+          "rank": 1
+        },
+        {
+          "id": "R11",
+          "rank": 1
+        }
+      ],
+      "negativeResultCounts": [
+        0,
+        0,
+        0
+      ],
+      "backend": "wasm"
+    }
+  },
+  "frozenInputsMatched": 9,
+  "policyTechnicalSignoff": "Approved by Codex under Raj explicit delegation; no named teammate or GitHub human approval claimed",
+  "deployment": "not performed; excluded",
+  "physicalPhoneZipRestore": "unverified; no new phone round",
+  "technicalDecision": "Dependency remediation and delegated technical review signed off; required human PR protection and future deployment checks remain separate",
+  "environment": {
+    "node": "24.22.1",
+    "npm": "11.20.0",
+    "os": "macOS27.0.1 arm64",
+    "chromium": "156.0.8078.4",
+    "models": "Reused and reverified pinned public bytes from earlier fresh download",
+    "browserRouting": "Browser plugin absent; repository Playwright"
+  },
+  "publication": "No staging/commit/push/PR/merge/deployment in this execution",
+  "documentationFinalizedOn": "2026-11-03",
+  "auditRecheckedOn": "2026-11-03",
+  "auditRecheck": {
+    "info": 0,
+    "low": 0,
+    "moderate": 0,
+    "high": 0,
+    "critical": 0,
+    "total": 0
+  }
+}

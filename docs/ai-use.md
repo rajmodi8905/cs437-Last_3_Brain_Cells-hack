@@ -1,5 +1,13 @@
 # AI-assisted development notes
 
+## Readiness, dependency remediation and course check-in, 2–3 November 2026
+
+Raj asked Codex to execute the approved local readiness plan, excluding deployment, then explicitly requested an independent subagent to review and fix the dependency findings. The assistant verified a fresh main checkout, preserved actual phone owner reports and missing evidence, and prepared the [S1–S15 checkpoint](verification/2026-11-03-spec-freeze.md). The dependency work added patched glob/minimatch overrides and a documented private MIT deepmerge fork, with three failing security regressions before the fix and all five focused cases passing afterward. The requested subagent reviewed the exact fork, consumer resolution, license and compatibility scope. Its technical review and the owner-delegated policy fact review are recorded as agent reviews, not human PR approvals.
+
+The post-change isolated candidate passed 90 fast, 27 Chromium and 11 actual-model tests. Full and production-only audits reported zero, with the private-fork audit limitation stated explicitly. Both production artifacts were byte-identical to the baseline. The [dependency report](verification/2026-11-02-dependency-remediation.md) retains the invalid first local-override installation attempt, development-reload smoke failure, actual test dates and model-cache reuse. No model, retrieval threshold, application schema or runtime contract was changed.
+
+On 3 November, Raj authorized committing this work and opening a PR. Codex checked the current course, hackathon, Class 15 and Class 19 pages, repository rules and instructor access, then updated README's reviewer entry points, course deadlines and check-in status. No hosted link, outside-group usage count, completed cross-group review or unseen acceptance result was fabricated. Deployment remains excluded. Each member's required personal `lab-notes/class-NN.md` remains their own course record; this summary does not claim to complete it.
+
 ## Release integration and Android preparation, 31 October 2026
 
 At Raj's request, Codex preserved the local working files and updated `raj_all_fixes` normally to Chaitanya's merged main. The pending landing accessibility fixes and earlier device/release tooling were reconciled without conflicts. The assistant prepared Android Chrome/installed-app steps for the confirmed iQOO Neo9 Pro and ran the combined candidate's validation. [The dated checkpoint](verification/2026-10-31-integration.md) records actual results and remaining gates. Nakshatra's still-open PR was not treated as merged or modified. Existing iPhone evidence was retained; no new iOS/Android result, WebKit rerun, human approval or deployment is claimed.
