@@ -1,8 +1,8 @@
 // Runs one test suite into its own evidence directory and records how the run ended.
 // Earlier evidence for the same suite is moved to history/, never overwritten.
 import { execFileSync, spawn } from 'node:child_process';
-import { existsSync } from 'node:fs';
-import { mkdir, readFile, rename, writeFile } from 'node:fs/promises';
+import { existsSync, statSync } from 'node:fs';
+import { cp, mkdir, readFile, rename, writeFile } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 
 const COMMANDS = {
@@ -60,6 +60,7 @@ const record = {
 const save = (fields) =>
   writeFile(join(dir, 'run.json'), JSON.stringify({ ...record, ...fields }, null, 2) + '\n');
 await save({ exitCode: null, status: 'running' });
+const started = Date.now();
 const child = spawn(process.execPath, args, {
   stdio: 'inherit',
   env: { ...process.env, CR_SUITE_DIR: dir },
@@ -74,6 +75,16 @@ const [exitCode, signal] = await new Promise((done) => {
   });
   child.on('exit', (code, sig) => done([code, sig]));
 });
+// Some tests write reports straight to test-results/ (axe findings, route screenshots,
+// retrieval and calibration reports). Keep this run's copies with its evidence.
+if (existsSync('test-results'))
+  await cp('test-results', join(dir, 'test-results'), {
+    recursive: true,
+    filter: (path) => {
+      const stats = statSync(path);
+      return stats.isDirectory() || stats.mtimeMs >= started - 2000;
+    },
+  });
 await save({
   exitCode,
   signal,
