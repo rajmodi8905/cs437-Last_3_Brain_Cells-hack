@@ -245,5 +245,8 @@
     "high": 0,
     "critical": 0,
     "total": 0
-  }
+  },
+  "recordKind": "historical_validation_snapshot",
+  "currentReleaseStatus": "docs/verification/README.md",
+  "statusInterpretation": "Statuses and methods in this artifact describe its captured validation round; they are not the current release backlog."
 }

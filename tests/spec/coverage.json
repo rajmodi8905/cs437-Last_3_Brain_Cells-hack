@@ -68,13 +68,14 @@
       "id": "S8",
       "files": ["tests/acceptance/extraction.spec.ts", "tests/acceptance/retrieval.spec.ts"],
       "scope": "Actual OCR/PDF/embeddings and page provenance",
-      "remaining": [
-        "Independent per-file Android timings were not recorded; the owner confirmed each of five small fixtures was under 120 seconds. See docs/verification/2026-11-03-spec-freeze.md for evidence limits."
-      ],
       "manualEvidence": [
         "Earlier measured iPhone processing: docs/verification/2026-10-28-device-preparation.md",
         "2 November iQOO owner-observed processing bounds: docs/verification/2026-11-03-spec-freeze.md"
-      ]
+      ],
+      "evidenceNotes": [
+        "Independent per-file Android timings were not recorded; the owner confirmed each of five small fixtures was under 120 seconds. See docs/verification/2026-11-03-spec-freeze.md for evidence limits."
+      ],
+      "remaining": []
     },
     {
       "id": "S9",
@@ -117,13 +118,14 @@
         "tests/e2e/chaitanya-fixes.spec.ts"
       ],
       "scope": "Production responsive/offline browser behavior",
-      "remaining": [
-        "Physical reports retain their recorded build identities; no final-main iOS rerun or blanket device compatibility is claimed."
-      ],
       "manualEvidence": [
         "Installed iPhone owner checks: docs/verification/2026-10-29-release-preparation.md",
         "2 November installed iQOO keyboard, Files picker, rotation, zoom, media and offline owner checks: docs/verification/2026-11-03-spec-freeze.md"
-      ]
+      ],
+      "evidenceNotes": [
+        "Physical reports retain their recorded build identities; no final-main iOS rerun or blanket device compatibility is claimed."
+      ],
+      "remaining": []
     },
     {
       "id": "S14",
@@ -139,12 +141,21 @@
         "tests/e2e/library.spec.ts"
       ],
       "scope": "Direct/offline policy routes, first-use links and automated accessibility",
-      "remaining": [
-        "Hosting remains undecided; actual host review and hosted verification are deferred until deployment is separately authorized."
-      ],
       "manualEvidence": [
         "Raj explicitly delegated technical policy sign-off to Codex on 2 November; factual source review completed without claiming named teammate approvals: docs/verification/2026-11-02-policy-review.md"
-      ]
+      ],
+      "evidenceNotes": [
+        "Policy/source factual review completed under Raj delegation; deployment-specific facts are reviewed when a host is selected."
+      ],
+      "remaining": []
     }
-  ]
+  ],
+  "releaseStatus": {
+    "implementation": "complete",
+    "acceptance": "passed",
+    "behavioralCandidate": "5420b374785b3cf7418372dbd2495178db5fce4e",
+    "ciRun": "https://github.com/rajmodi8905/cs437-Last_3_Brain_Cells-hack/actions/runs/41529035494",
+    "nextPhase": "deployment",
+    "note": "Evidence notes describe validation methods and bounds, not unfinished specification statements."
+  }
 }

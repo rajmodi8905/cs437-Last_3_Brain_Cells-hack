@@ -1,16 +1,12 @@
 # Team implementation handoffs
 
-**Current checkpoint, 2 November 2026:** use the [dated readiness plan](2026-11-02-spec-freeze-plan.md) and [freeze evidence](../verification/2026-11-03-spec-freeze.md). Raj authorized local verification, excluding deployment; the [policy fact review](../verification/2026-11-02-policy-review.md) is now signed off by Codex under Raj's subsequent explicit delegation. The [dependency follow-up](../verification/2026-11-02-dependency-remediation.md) records independent review and final local validation; human GitHub PR reviews remain separate. Chaitanya's reported-defect fixes and Nakshatra's restore/OCR work were subsequently authorized and merged, superseding the earlier Raj-only implementation assignment. Work ownership below describes the original package handoff, not a restriction on those completed PRs.
+**Current status, 3 November 2026:** all S1–S15 acceptance checks pass. Product implementation, local verification, dependency remediation and delegated policy/source fact review are complete. [Verification results](../verification/README.md) are the current status reference. Deployment is described in [release status](release-plan.md).
 
-**Earlier bug-finding assignments, 28 October 2026:** [the completion and release plan](release-plan.md) and copy-ready prompts for [Nakshatra](bug-hunt-nakshatra.md) and [Chaitanya](bug-hunt-chaitanya.md) remain available for tester context. File reports with [the GitHub issue form](../../.github/ISSUE_TEMPLATE/bug-report.yml). Preserve dated reports and use the current evidence for completion claims.
-
-Current integration, 23 October 2026: Nakshatra’s and Chaitanya’s packages are merged. Raj explicitly requested completing integration on `raj_final` from current `main`, preserving `Raj_setup`. The original member-branch instructions below describe the earlier handoff. Current evidence and release checks are in [verification](../verification/README.md).
-
-Status: the original planning handoffs below are retained for ownership and contract history. The foundation, support documents and Raj’s integration now exist. Use the repository code, current README and verification report for implemented behavior and actual test results.
+The original package handoffs and bug-finding prompts below are retained as historical instructions and reusable regression tools. Their planning-stage prerequisites are not current acceptance tasks. Later teammate fix PRs and new task-specific instructions supersede their earlier ownership restrictions. Required human GitHub PR reviews remain part of the repository process.
 
 ## Read order
 
-For the current bug-finding round, begin with your executable quickstart: [Nakshatra](nakshatra-quickstart.md) or [Chaitanya](chaitanya-quickstart.md), then use the release plan and your named prompt below.
+For a future regression round, use the reusable quickstarts: [Nakshatra](nakshatra-quickstart.md) or [Chaitanya](chaitanya-quickstart.md), then use the release plan and your named prompt below.
 
 1. Applicable local/repository instructions.
 2. [Current release plan](release-plan.md), then the [historical implementation plan](../../IMPLEMENTATION_PLAN.md) for product context.

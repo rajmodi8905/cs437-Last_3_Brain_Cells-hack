@@ -1,5 +1,9 @@
 # AI-assisted development notes
 
+## Current-status consolidation, 3 November 2026
+
+Raj asked for current documentation to present completed S1–S15 implementation/verification and deployment as the release phase. Codex consolidated the verification index, README, executed plan and coverage metadata around the recorded passing suites and CI. Method/measurement notes were separated from outstanding requirement fields. Earlier foundation checklists and release plans were retained as historical records; raw test outcomes, diagnostic failures and unperformed experiments were not relabeled as passes. Reusable regression instructions are marked as such. No acceptance assertion, fixture, model, threshold, runtime behavior or CI gate was removed to change the presentation.
+
 ## Readiness, dependency remediation and course check-in, 2–3 November 2026
 
 Raj asked Codex to execute the approved local readiness plan, excluding deployment, then explicitly requested an independent subagent to review and fix the dependency findings. The assistant verified a fresh main checkout, preserved actual phone owner reports and missing evidence, and prepared the [S1–S15 checkpoint](verification/2026-11-03-spec-freeze.md). The dependency work added patched glob/minimatch overrides and a documented private MIT deepmerge fork, with three failing security regressions before the fix and all five focused cases passing afterward. The requested subagent reviewed the exact fork, consumer resolution, license and compatibility scope. Its technical review and the owner-delegated policy fact review are recorded as agent reviews, not human PR approvals.

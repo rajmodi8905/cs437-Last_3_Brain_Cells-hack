@@ -227,5 +227,8 @@
   "deployment": "not performed",
   "freezeApproval": "pending human policy sign-offs and tooling audit disposition",
   "rollbackReference": "deaf00929b7b7bd0e81a727ec200350995abf69e",
-  "note": "Prepared local evidence only; no staging, commit, push, PR, merge or deployment during this execution."
+  "note": "Prepared local evidence only; no staging, commit, push, PR, merge or deployment during this execution.",
+  "recordKind": "historical_validation_snapshot",
+  "currentReleaseStatus": "docs/verification/README.md",
+  "statusInterpretation": "Statuses and methods in this artifact describe its captured validation round; they are not the current release backlog."
 }

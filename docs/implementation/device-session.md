@@ -1,10 +1,12 @@
 # Prepare and run the real-phone session
 
+> Reusable device-session runbook. The completed device evidence and S1–S15 results are in [current verification](../verification/README.md); the instructions below are not an open acceptance task list.
+
 For Android Chrome and installed-app execution, use the [Android validation runbook](android-validation.md) alongside this transport/build preparation. Earlier iPhone results retain their original build identities; a prepared Android snapshot is not a new device pass.
 
 This completes local infrastructure for the 28 October work in [the release plan](release-plan.md). Raj prepares the build/diagnostics and implements fixes. Nakshatra and Chaitanya execute their assigned scenarios and report findings. Device owners perform unlock, trust, certificate, installation and physical interaction steps. Preparation alone never establishes a phone pass.
 
-## What is ready and what still needs a phone
+## Identified device-session tooling
 
 The plan, issue form, prompts and both testers' kits reached main through PRs #8 and #9. Main `59756cc9aac759776dbb578b1f85d2822ad56d65` has a successful [CI run](https://github.com/rajmodi8905/cs437-Last_3_Brain_Cells-hack/actions/runs/40663915386).
 

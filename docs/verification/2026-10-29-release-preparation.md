@@ -1,5 +1,7 @@
 # Release preparation, 28–29 October 2026
 
+> Historical execution record. [Current S1–S15 verification](README.md) is complete. Earlier counts, diagnostic failures and checks not performed in this dated round are preserved as evidence, not a current acceptance backlog.
+
 Working branch: `raj_oct28_device_setup`, based on main `59756cc9aac759776dbb578b1f85d2822ad56d65`. These are local, uncommitted changes. No push, PR, merge, hosted deployment or remote configuration change is claimed.
 
 ## What changed

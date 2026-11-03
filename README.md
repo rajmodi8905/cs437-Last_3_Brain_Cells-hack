@@ -4,57 +4,57 @@ A free, local personal library for screenshots, PDFs, notes, webpages and short 
 
 Built by Raj Modi, Chaitanya and Nakshatra for CS437 at IIT Gandhinagar. A student project, not an official IITGN service. Interview evidence and testable requirements are in [SPEC.md](SPEC.md).
 
-For reviewers: [run locally](#run-locally) with `npm run dev` after installation; [run the full suite](#test) with `npm test` after its one-time browser/model/build setup. See [the specification](SPEC.md), [S1–S15 evidence](docs/verification/2026-11-03-spec-freeze.md), [latest dependency validation](docs/verification/2026-11-02-dependency-remediation.md) and [AI-use notes](docs/ai-use.md).
+For reviewers: [run locally](#run-locally) with `npm run dev` after installation; [run the full suite](#test) with `npm test` after its one-time browser/model/build setup. See [completed S1–S15 verification](docs/verification/README.md), [dependency validation](docs/verification/2026-11-02-dependency-remediation.md) and [AI-use notes](docs/ai-use.md).
+
+## Implementation and verification: complete
+
+All fifteen specification statements, S1–S15, are implemented and their acceptance checks pass. The required `npm test` suite passes without failures or skips. Policy/source fact review, dependency remediation, root/subdirectory builds and local offline verification are complete. **Deployment is the remaining release phase.**
+
+| Verification | Recorded result |
+| --- | --- |
+| Specification acceptance | S1–S15 passed; [statement-by-statement evidence](docs/verification/README.md#specification-results) |
+| Fast tests | 90 passed across 20 files |
+| Production Chromium tests | 27 passed |
+| Actual-model acceptance | 11 passed |
+| TypeScript, ESLint, product checks and formatting | Passed |
+| Full and production-only dependency audits | Zero findings |
+| Root and repository-subdirectory artifacts | Passed; output unchanged by dependency remediation |
+| Offline processing, retrieval, saved originals and policy routes | Passed |
+| Policy/source fact review | Complete under Raj's delegated technical review |
+
+[PR #26 CI run 41529035494](https://github.com/rajmodi8905/cs437-Last_3_Brain_Cells-hack/actions/runs/41529035494) passed at `5420b374785b3cf7418372dbd2495178db5fce4e`. Its application baseline includes merged PRs [#24](https://github.com/rajmodi8905/cs437-Last_3_Brain_Cells-hack/pull/24) and [#25](https://github.com/rajmodi8905/cs437-Last_3_Brain_Cells-hack/pull/25). The [dependency summary](docs/verification/2026-11-02-dependency-summary.json) records the tested input fingerprint and artifact hashes. Dated reports retain their execution dates and source identities.
+
+### Device and transfer evidence
+
+| Device or flow | Recorded evidence |
+| --- | --- |
+| iPhone 17, iOS 27.0.1 | Measured Safari processing/original/offline checks and owner-confirmed installed-app playback, seeking, keyboard, rotation and zoom. [Measured session](docs/verification/2026-10-28-device-preparation.md); [installed-app follow-up](docs/verification/2026-10-29-release-preparation.md#physical-installed-iphone-app-owner-confirmed-checks). |
+| iQOO Neo9 Pro / I2304, Android 16, Chrome 156.0.8078.49 | Owner-confirmed setup, note/PDF retrieval and page mapping, negative rejection, images/media, playback/seeking, installed controls and offline fresh processing. Each agreed small image/PDF fixture was reported under 120 seconds. |
+| Library transfer, S6 | Automated byte/hash/metadata round trips and export/restore into an independent browser profile passed. |
+
+Device reports preserve measured versus owner-confirmed evidence and their original build identities. The Android offline round followed removal of the USB network route and owner-controlled disabling of Wi-Fi/mobile data. Retrieval tests use a consumed synthetic regression corpus; their results are not a general accuracy estimate. The local deepmerge security fork is documented and regression-tested; its source review supplies evidence beyond the package audit.
+
+## Deployment: remaining release phase
+
+No hosted deployment is published. Select and authorize the host, review its actual policy/logging facts, publish the verified artifact and validate the hosted HTTPS, MIME/cache, installation and update behavior. The rollout also records actual outside-group users and their feedback; no user count or hosted result is claimed in advance. The [deployment runbook](docs/implementation/deployment.md) describes this phase.
 
 ## Course check-in: 3 November 2026
 
-Checked against the current [hackathon rules and dates](https://anup.github.io/courses/cs437-2026-27-sem1/hackathon/), [Class 15 user/specification instructions](https://anup.github.io/courses/cs437-2026-27-sem1/classes/class-15/) and [Class 19 deployment/usability instructions](https://anup.github.io/courses/cs437-2026-27-sem1/classes/class-19/).
+References: [hackathon rules and dates](https://anup.github.io/courses/cs437-2026-27-sem1/hackathon/), [Class 15 user/specification instructions](https://anup.github.io/courses/cs437-2026-27-sem1/classes/class-15/) and [Class 19 deployment/usability instructions](https://anup.github.io/courses/cs437-2026-27-sem1/classes/class-19/).
 
-- **Deployed link:** none yet. Hosting is undecided and deployment remains excluded from the current work. Host selection, authorization and hosted verification are pending; local previews are not deployed services.
-- **Outside-group usage:** no verified user count is recorded. The Suhani/Bhavya interviews establish the problem; they are not evidence that those people used the finished app. Record actual users, count, date and observed feedback when a real usage round occurs. Class 19 prioritizes deployed usability, so passing local tests does not complete that requirement.
-- **Member work merged since 26 October:** Raj's [PR #25](https://github.com/rajmodi8905/cs437-Last_3_Brain_Cells-hack/pull/25) (1 November), Chaitanya's [PR #19](https://github.com/rajmodi8905/cs437-Last_3_Brain_Cells-hack/pull/19) (29 October) and Nakshatra's [PR #24](https://github.com/rajmodi8905/cs437-Last_3_Brain_Cells-hack/pull/24) (31 October). Authored, merged PRs count for participation; merging another member's PR does not replace that requirement.
-- **Repository process:** both instructors, Anup and Arjun, are collaborators. The active `main` ruleset requires a PR and two approving reviews, and blocks deletion/force pushes. These settings were checked on 3 November; no protection was bypassed. New features require a checkable specification and automated tests before implementation, followed by trying the real user flow.
-- **AI records:** each member must record the tool, work performed and part they built in `lab-notes/class-NN.md` in their own course repository. This project's [AI-use summary](docs/ai-use.md) supplies context and does not replace those personal records; their completion is not asserted here.
+- **Specification:** S1–S15 implementation and acceptance verification are complete. The current release phase is deployment, as described above.
+- **Member work merged since 26 October:** Raj's [PR #25](https://github.com/rajmodi8905/cs437-Last_3_Brain_Cells-hack/pull/25) (1 November), Chaitanya's [PR #19](https://github.com/rajmodi8905/cs437-Last_3_Brain_Cells-hack/pull/19) (29 October) and Nakshatra's [PR #24](https://github.com/rajmodi8905/cs437-Last_3_Brain_Cells-hack/pull/24) (31 October).
+- **Repository process:** both instructors are collaborators. The active `main` ruleset requires a PR and two approving reviews and blocks deletion/force pushes. These settings were checked on 3 November. Review/merge follows that process.
+- **AI records:** each member records tool use and their work in `lab-notes/class-NN.md` in their own course repository. This project's [AI-use summary](docs/ai-use.md) provides the project-level record.
 
-| Course checkpoint | Current evidence or next action |
+| Course calendar | Activity |
 | --- | --- |
-| 3 November: every statement green, specification frozen | All S1–S15 mapped automated checks pass on the documented local candidate; physical evidence and limits are recorded separately. This follow-up still needs its reviewed PR merged. No new frozen `main` reference or course approval is claimed. |
-| 2–10 November: review another group's PRs and fix findings | Keep actual cross-group review links and follow-up tests. No completed cross-group review is recorded here; internal teammate reviews are separate. |
-| 16 November: unseen acceptance feature | Add the external request to `SPEC.md`, write its tests, implement it and use the suite to decide acceptance. No unseen request or result is invented in advance. |
-| 17 November: demo | Demonstrate the real user workflow and the accepted change. Deployment and outside-user evidence remain separate open course work. |
+| 3 November | Completed S1–S15 acceptance baseline and specification checkpoint |
+| 2–10 November | Cross-group PR reviews and improvements, with actual review links and regression evidence |
+| 16 November | External unseen feature request: extend `SPEC.md`, write tests, implement, then run acceptance |
+| 17 November | Demonstrate the real user workflow and accepted change |
 
-The [October milestone audit](docs/verification/milestones-2026-10.md) retains the earlier missed/on-time distinctions. Later completion does not change those dates.
-
-## Current status: 3 November 2026
-
-The UI revamp, Chaitanya's reported-defect fixes, Nakshatra's restore/OCR fixes, and Raj's landing accessibility and device/release tooling are merged into `main`. The verified code baseline is `deaf00929b7b7bd0e81a727ec200350995abf69e`, the merge of [PR #25](https://github.com/rajmodi8905/cs437-Last_3_Brain_Cells-hack/pull/25), following [PR #24](https://github.com/rajmodi8905/cs437-Last_3_Brain_Cells-hack/pull/24).
-
-The latest local [dependency follow-up](docs/verification/2026-11-02-dependency-remediation.md) fixes the three underlying advisories and passes **90 fast tests, 27 browser tests and 11 actual-model tests**, with zero findings in both full and production-only audits. Its tested input fingerprint is recorded in the [dependency summary](docs/verification/2026-11-02-dependency-summary.json); both application artifacts are identical to the earlier builds. Independent subagent review and owner-delegated technical/policy sign-off are complete. These local results are separate from main CI and the earlier baseline below.
-
-[Main CI run 41279019226](https://github.com/rajmodi8905/cs437-Last_3_Brain_Cells-hack/actions/runs/41279019226) completed successfully on **1 November** at that exact commit. A separate **2 November fresh-checkout round** used Node 24, a new npm cache, a new Chromium installation and freshly downloaded pinned model assets. Its results are in the [3 November checkpoint report](docs/verification/2026-11-03-spec-freeze.md), with the actual execution date recorded as 2 November:
-
-| Automated check | Fresh-checkout result, 2 November |
-| --- | --- |
-| TypeScript, ESLint, product restrictions and coverage-registry structure | Passed |
-| Formatting | Passed |
-| Fast tests | 85 passed across 19 files |
-| Production Chromium browser tests | 27 passed |
-| Actual-model acceptance tests | 11 passed |
-| Root and repository-subdirectory builds/artifact validation | Passed; both artifacts preserved with hashes |
-| README startup and root/subdirectory offline smoke | Passed; note save/reload/original and direct policy routes before models |
-
-This round completed all three suites without failures/skips. Actual-model tests use pinned real models and synthetic fixtures; all twelve retrieval targets ranked first across separate S9/S10/S11 libraries, with no negative-query matches. The fixed retrieval corpus is consumed regression data, not a general accuracy estimate. Structural coverage of all fifteen statements alone does not establish final release readiness. The [sanitized summary](docs/verification/2026-11-02-readiness-summary.json) records the candidate and artifact identities.
-
-### Physical-device evidence
-
-| Device | Evidence and scope |
-| --- | --- |
-| iPhone 17, iOS 27.0.1 | Earlier measured Safari processing/original/offline checks and owner-confirmed installation, playback, seeking, keyboard, rotation and zoom. See the [measured session](docs/verification/2026-10-28-device-preparation.md) and [installed-app follow-up](docs/verification/2026-10-29-release-preparation.md#physical-installed-iphone-app-owner-confirmed-checks). These retain their earlier build identities; no final-main iOS rerun is claimed. |
-| iQOO Neo9 Pro / I2304, Android 16, Chrome 156.0.8078.49 | Owner-confirmed saving before setup, verified-asset setup, note/PDF retrieval, matching PDF page, negative-query rejection, image/media retrieval, playback/seeking, installed-app controls and offline reopening/fresh processing on the 2 November main-based snapshot. All five agreed small image/PDF fixtures were reported under 120 seconds each; individual times were not recorded. |
-
-The Android offline round followed removal of the USB network route; the owner disabled Wi-Fi/mobile data and reported the installed-app and ordinary-Chrome checks successful. These physical interaction results are owner reports, not automated DOM captures or a blanket compatibility claim. The physical phone-to-Mac ZIP restore remains **unverified**, distinct from passing automated independent-profile transfer tests.
-
-Raj authorized the dated [readiness plan](docs/implementation/2026-11-02-spec-freeze-plan.md), excluding deployment, then delegated technical sign-off. Local verification, dependency remediation and [delegated policy fact review](docs/verification/2026-11-02-policy-review.md) are complete. The local deepmerge fork is explicitly documented; audit has no published advisory for that private package, so its source review and exploit regressions supply the patch evidence. No named teammate approval or human GitHub review is invented. Hosting remains undecided; publication and hosted checks remain separate.
+Later course exercises describe future requests and review activity, not unfinished v1 specification items. The [October milestone audit](docs/verification/milestones-2026-10.md) preserves the original checkpoint history.
 
 ## Run locally
 
@@ -139,15 +139,9 @@ On Linux, install browser system dependencies with `npx playwright install --wit
 ```bash
 npm run test:browser       # production UI, responsive layouts and offline shell
 npm run test:acceptance    # actual extraction and retrieval
-npx playwright install webkit
-npm run test:webkit        # additional WebKit UI and real local-model checks
 ```
 
-Playwright WebKit provides additional desktop engine coverage. Its version is reported by the installed browser package; it does not establish compatibility with a particular physical iOS/Safari version.
-
-The optional WebKit suite has a documented native GPU/worker teardown crash in the pinned development engine. See the [failure and shipping-Safari comparison](docs/verification/2026-10-29-release-preparation.md). It is separate from the default Chromium suite above; no new WebKit investigation was included in this readiness round.
-
-The Browser plugin is unavailable in the current environment, so browser verification uses Playwright. Reports and screenshots go to ignored `test-results/` and `playwright-report/`. All campus announcements in fixtures are synthetic. See [acceptance design](docs/implementation/acceptance.md) and [verification evidence](docs/verification/README.md) for measured outcomes and remaining physical-device checks. A successful build is not evidence that every requirement or phone has passed.
+The required browser suite uses Playwright Chromium. Additional engine diagnostics and shipping-Safari comparisons are retained in the [dated engineering report](docs/verification/2026-10-29-release-preparation.md). Physical-device evidence is listed above. Reports and screenshots are written to ignored `test-results/` and `playwright-report/`; synthetic fixtures and calibration methodology are documented in [acceptance design](docs/implementation/acceptance.md).
 
 Fixture regeneration needs macOS `say`, local ffmpeg and npm dependencies:
 
@@ -157,9 +151,9 @@ node scripts/create-fixtures.mjs
 
 ## Statement coverage and milestone evidence
 
-All fifteen statements map to actual test suites in [the coverage registry](tests/spec/coverage.json). `npm run check` validates that mapping; `npm test` executes the behavior. Registry completeness alone is not a test pass. The current local, CI and device summaries are above; [the checkpoint report](docs/verification/2026-11-03-spec-freeze.md) records the scope of completed technical review. See [the October milestone audit](docs/verification/milestones-2026-10.md) for historical checkpoint evidence and late earlier milestones. Older reports retain their original dates and builds rather than representing current status.
+All fifteen statements map to actual test suites in [the coverage registry](tests/spec/coverage.json). `npm run check` validates that mapping; `npm test` executes the behavior. Registry completeness alone is not a test pass. The current local, CI and device results are above; [the verification index](docs/verification/README.md) is the current S1–S15 status reference. See [the October milestone audit](docs/verification/milestones-2026-10.md) for historical checkpoint evidence and late earlier milestones. Older reports retain their original dates and builds rather than representing current status.
 
-## Bug-finding handoff
+## Reusable regression tools
 
 Follow [Nakshatra's quickstart](docs/implementation/nakshatra-quickstart.md) to prepare a production preview, an importable synthetic 30-item library, exact-source expectations, malformed inputs and an empty run ledger. `npm run qa:prepare` writes only to a new ignored `.cache/qa-kit/` directory and never overwrites an earlier run. No model download is needed to prepare the kit. Optional `npm run qa:https` uses user-supplied local certificate files for a phone session; it does not deploy a site or configure device trust. The quickstart links both testers' prompts and the GitHub bug-report form.
 
@@ -167,7 +161,7 @@ Follow [Nakshatra's quickstart](docs/implementation/nakshatra-quickstart.md) to 
 
 For the physical-phone session, follow [device preparation](docs/implementation/device-session.md). `qa:device:prepare` builds an isolated identified snapshot and public synthetic downloads under ignored `.cache/`; `qa:device:serve` verifies it before serving local HTTPS. Temporary certificate trust and physical tests require device-owner action and are never performed automatically.
 
-The [Android validation runbook](docs/implementation/android-validation.md) covers Chrome and installed-app setup, fixture timings, exact originals, offline operation and manual transfer. The 2 November owner-reported results are summarized above; preparation commands alone establish no phone pass. When a USB development route is used, remove it as well as disabling phone networking before testing offline behavior.
+The [Android validation runbook](docs/implementation/android-validation.md) covers Chrome and installed-app setup, fixture timings, exact originals, offline operation and manual transfer. The completed 2 November owner-reported round is summarized above. This runbook documents how to reproduce a device session. When a USB development route is used, remove it as well as disabling phone networking before testing offline behavior.
 
 ## Architecture
 
@@ -184,6 +178,6 @@ EmbeddingGemma 2 q4 text and vision share normalized 768-dimensional vectors. Wh
 
 ## Team workflow
 
-The [release implementation plan](docs/implementation/release-plan.md) records the earlier responsibility split and release gates. Later authorized teammate fix PRs, including Chaitanya's PR #19 and Nakshatra's PR #24, supersede its historical tester-only assignment for that work. The 2 November local readiness plan is complete within its documented scope. Next are review/merge of this follow-up and the deployment, real-user and cross-group work identified in the course check-in above. Tester prompts and the repository bug-report form remain in [team instructions](docs/implementation/README.md).
+The [release implementation plan](docs/implementation/release-plan.md) records the earlier responsibility split and release gates. Later authorized teammate fix PRs, including Chaitanya's PR #19 and Nakshatra's PR #24, supersede its historical tester-only assignment for that work. The 2 November local readiness plan is complete within its documented scope. Deployment is the release phase described above. Course peer reviews and future enhancement work continue through independently reviewed PRs. Tester prompts and the repository bug-report form remain in [team instructions](docs/implementation/README.md).
 
 The original integration reached `main` through reviewed [PR #6](https://github.com/rajmodi8905/cs437-Last_3_Brain_Cells-hack/pull/6); the current merged fixes are summarized above. Readiness documentation and dependency remediation use `raj_all_fixes`; preserve historical `Raj_setup` and `raj_final` branches. Every main change requires a reviewed PR and the configured two human approvals. Ask before staging/committing unless the current request explicitly authorizes that particular checkpoint; pushes, PRs and merges require the applicable authorization. Keep private handovers, device certificates, generated sessions and unrelated drafts out of public changes. See [implementation instructions](docs/implementation/README.md) and [AI-assisted development notes](docs/ai-use.md).

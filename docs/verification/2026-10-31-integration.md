@@ -1,5 +1,7 @@
 # Release integration checkpoint, 31 October 2026
 
+> Historical execution record. [Current S1–S15 verification](README.md) is complete. Earlier counts, diagnostic failures and checks not performed in this dated round are preserved as evidence, not a current acceptance backlog.
+
 Raj authorized integrating the outstanding landing fixes and device/release preparation, publishing the review candidate and preparing Android validation. The working branch is `raj_all_fixes`, updated normally from reviewed main `209b8028e72c00530f60093f56510cea71a0d6d1` (Chaitanya's PR #19). The original local changes and draft were preserved before updating; no history was rewritten.
 
 Nakshatra's PR #24 was still open at head `dc782e799be9118048858669b36a6ebdcd2ae926`, with changes requested, during this checkpoint. Its fixes are not included or represented as tested here. After it merges, repeat its failure reproductions and affected storage/extraction/full acceptance checks on the combined main. No teammate branch was modified.

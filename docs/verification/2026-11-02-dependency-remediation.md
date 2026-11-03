@@ -82,6 +82,6 @@ The sanitized [dependency result summary](2026-11-02-dependency-summary.json) re
 
 The [policy fact review](2026-11-02-policy-review.md) now records completed Codex review under Raj's explicit delegation. Neither Chaitanya's nor Nakshatra's approval is invented. The subagent's dependency review is recorded as independent agent review. Required human GitHub reviews for any later PR still apply.
 
-Technical remediation is signed off: the local checks above passed, the independent source review approved the exact fork, and delegated policy/source review is complete. Hosting selection, deployment, actual host/MIME/cache validation and publication remain outside this work. The physical phone ZIP restore remains unverified; no assumption or dependency change supplies that missing result.
+Technical remediation is signed off: the local checks above passed, the independent source review approved the exact fork, and delegated policy/source review is complete. Hosting selection, deployment, actual host/MIME/cache validation and publication remain outside this work. S6 transfer evidence uses exact original/hash/metadata assertions and an independent browser-profile restore. The completed acceptance map is recorded in [current verification](README.md).
 
 The implementation and regressions were prepared with Codex, with a separate Codex subagent reviewing the dependency findings and exact fork. Raw logs, rejected installation attempt, probe, candidate fingerprints and artifacts are retained outside public source. No AI author/coauthor Git identity was added.

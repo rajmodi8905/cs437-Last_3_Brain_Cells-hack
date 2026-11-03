@@ -1,5 +1,7 @@
 # Nakshatra: start the bug-finding round
 
+> Reusable regression instructions. [Current S1–S15 verification](../verification/README.md) is complete; blank ledgers and conditional failure guidance below apply to a new run, not the release status.
+
 This is the executable handoff for the [release plan](release-plan.md). It prepares test materials and a production app, not a new implementation assignment. Use [your complete AI prompt](bug-hunt-nakshatra.md). Raj implements fixes; you find/report defects and retest fixes. Chaitanya can reuse this setup with [his prompt](bug-hunt-chaitanya.md).
 
 ## 1. Start from the reviewed main version

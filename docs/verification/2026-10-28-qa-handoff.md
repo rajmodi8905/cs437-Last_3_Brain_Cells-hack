@@ -1,5 +1,7 @@
 # Nakshatra bug-finding prerequisites: verification
 
+> Historical execution record. [Current S1–S15 verification](README.md) is complete. Earlier counts, diagnostic failures and checks not performed in this dated round are preserved as evidence, not a current acceptance backlog.
+
 Recorded 28 October 2026. This verifies the testing handoff, not Nakshatra's future findings or phone compatibility.
 
 Starting application baseline: reviewed main `b58ee3508e7871602606cbc414d3a6c08c569da7`. The handoff adds plans, prompts, issue form, local synthetic-kit tooling, optional local HTTPS preview and tests. No application code under `src/`, model policy, original fixtures, frozen queries/thresholds or dependency versions changed.

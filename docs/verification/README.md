@@ -1,86 +1,58 @@
-# Verification evidence
+# Verification results
 
-Latest local follow-up: [2 November dependency remediation and delegated technical sign-off](2026-11-02-dependency-remediation.md), with [sanitized results](2026-11-02-dependency-summary.json). Full/production audits report zero; 90 fast, 27 browser and 11 actual-model tests pass. Both artifact hashes match the earlier application builds. These results identify the tested candidate by its input fingerprint; the publishing PR supplies its Git commit identity. No new main CI is claimed. Hosting and deployment remain separate.
+**Current status, 3 November 2026: S1–S15 implementation and acceptance verification are complete. Deployment is the remaining release phase.**
 
-Current checkpoint: [readiness evidence for the 3 November freeze](2026-11-03-spec-freeze.md), executed on **2 November** against reviewed main `deaf00929b7b7bd0e81a727ec200350995abf69e`. It includes both PRs #24/#25, the fresh-checkout round, S1–S15 evidence and physical owner reports. The [policy fact review and team checklist](2026-11-02-policy-review.md) keep actual human sign-offs separate. Hosting remains undecided and no deployment is claimed. Earlier reports below retain their original dates, results and build identities.
+The required suites pass with **90 fast tests, 27 production Chromium tests and 11 actual-model tests**, with no failures or skips. [CI run 41529035494](https://github.com/rajmodi8905/cs437-Last_3_Brain_Cells-hack/actions/runs/41529035494) succeeded at `5420b374785b3cf7418372dbd2495178db5fce4e`. The [dependency report](2026-11-02-dependency-remediation.md) and [machine-readable summary](2026-11-02-dependency-summary.json) record the local validation and input fingerprints. Dated source records retain their actual candidate identities.
 
-Earlier integration and device work: [31 October integration](2026-10-31-integration.md), [29 October Safari, installed-iPhone and iOS 26.5 continuation](2026-10-29-release-preparation.md#29-october-continuation-with-the-iphone-available), [automated release preparation](2026-10-29-release-preparation.md) and [28 October measured iPhone session](2026-10-28-device-preparation.md). The continuation records the development-WebKit crash, shipping-Safari and simulator inference, separating owner-confirmed physical interactions from direct diagnostics. The implementation subsequently merged through PRs #24/#25; no new WebKit investigation is included in this checkpoint.
+## Specification results
 
-Update, 26 October: [PR #6](https://github.com/rajmodi8905/cs437-Last_3_Brain_Cells-hack/pull/6) is now reviewed and merged, and main CI passed. See the [October checkpoint audit](milestones-2026-10.md) for current per-statement coverage, fresh-checkout results and remaining gates. The pre-PR measurements below are retained as their original evidence.
-
-The sections below retain the **historical pre-PR baseline** on `raj_final`, based on `11cb2c4`. Their counts and pending-device lists describe that earlier round; use the current checkpoint above for latest status. Raw summaries are not overwritten or relabeled as current results. No deployment is claimed.
-
-## Environment and public assets
-
-Available machine: Apple M4, 16 GB, macOS 27.0.1 (build 26A434). Automated browser: Playwright Chromium 156. Browser tests are resized desktop Chromium, not physical-phone tests. The final pre-PR checks, build and complete test suite passed on Node 24.22.1 after the service/view refactor. Earlier Node 26 checks are historical evidence; Node 24 remains the required development runtime.
-
-The versioned manifest currently contains 50 pinned assets totaling about 445.2 MB, including license notices. Model revisions, byte lengths and SHA-256 hashes are checked into `scripts/model-assets.json`; runtime hashes derive from the lockfile. Downloaded binaries are ignored. No embedding audio encoder is loaded.
-
-## Implemented behavior
-
-The merged repository/storage foundation is reused. Integration adds source-container checks, index publication invariants, guarded queue recovery, actual extraction and local inference, original-source retrieval, a responsive PWA, policy pages and manual transfer controls. No account service, generated-answer model, paid API, analytics or institutional integration was added.
-
-The same q4 weights run on WebGPU and on WASM with a standard-operator lowering of quantized Gather. Independent native and browser numerical equivalence tests are documented in [retrieval notes](retrieval.md). The actual WebGPU smoke report is [webgpu-probe.json](webgpu-probe.json).
-
-## Retrieval evidence and its limit
-
-The first frozen 30-item evaluation processed all originals successfully, returned eleven targets at rank one, missed the adviser-appointment note (R4), and rejected all three negatives. Preserve this result: [first evaluation](retrieval-first-evaluation.json), [first freeze](retrieval-first-freeze.json).
-
-Question-only and multiple-query trials were explored using the separate calibration set. They did not resolve the observed miss and are excluded from the final implementation. The root cause was duplicate input: the note’s derived first-line display title was embedded a second time as document content. Treating that redundant title as `none` aligns note processing with calibration. The consumed R4 regression then retrieved the expected original above the unchanged threshold using the original query prefix.
-
-All original queries, expected sources and negatives remain unchanged. Reruns are regression tests of a consumed corpus. They must not be described as fresh held-out accuracy. This small synthetic corpus does not establish general student-query accuracy. The current calibration and freeze are linked from [retrieval notes](retrieval.md).
-
-## Automated requirement map
-
-| SPEC | Executable evidence | Remaining limits |
+| Statement | Result | Behavioral evidence |
 | --- | --- | --- |
-| S1 | Storage transaction rollback, original retention; browser save/reload; all supported corpus kinds | Physical browser crash/eviction behavior is not a durability guarantee |
-| S2 | Ordering/filter/rename/duplicate-identity storage tests; real UI rename and long titles | Manual phone interaction remains |
-| S3 | Stale claim/deletion/cancel-retry tests and UI deletion | Clearing earlier exported backups is outside deletion scope |
-| S4 | Inert HTML/parser and omitted-credential tests; browser HTML fallback and no imported-resource requests | Public sites can block capture; manual fallback remains required |
-| S5 | Exact-original browser checks, PDF page and audio seeking; missing-source test; corpus location assertions | Physical media controls and phone PDF interaction remain |
-| S6 | Hash/metadata validation, atomic restore, duplicate detection and archive round-trip tests; browser export | Additional manual cross-device transfer remains |
-| S7 | Asset integrity/resume/missing-asset unit tests; actual verified cache and offline repair state | Physical-phone download interruption remains |
-| S8 | Actual JPEG/WebP OCR, embedded/scanned PDF and page assertions; source-header checks | Unusual/hybrid PDFs may need further real-world evaluation |
-| S9 | Frozen synthetic corpus regression and fixed negatives with actual embeddings | First evaluation missed R4; general accuracy is not established |
-| S10 | Actual text-free image and silent video scene retrieval | Coverage is only sampled frames; physical performance remains |
-| S11 | Actual MP3/M4A/WAV decoding and Whisper, spoken video, timestamps, silence gate | English baseline; speech recognition can fail |
-| S12 | Generation/CAS, interruption recovery, retry, worker failure/fallback tests | Physical browser suspension and memory pressure remain |
-| S13 | Production PWA offline reload/originals, widths 390/768/1440, keyboard, reduced motion | Installed iPhone/Android PWA checks remain |
-| S14 | Actual processing/search with network disabled after setup, unexpected-external-request assertions, cache-only inference | This is scoped test evidence, not a security certification |
-| S15 | Direct/offline policy routes, first-use access, product scan and automated WCAG A/AA scans | Team policy review and deployment-specific hosting facts remain |
+| S1 — Durable local save | Passed | [All-kind original retention](../../tests/spec/storage-contracts.test.ts), [transaction/reopen behavior](../../tests/storage/integration.test.ts), [browser save/reload](../../tests/e2e/library.spec.ts) |
+| S2 — Browse/filter/rename | Passed | [Ordering, filters and identity](../../tests/spec/storage-contracts.test.ts), [rename and duplicate-title UI](../../tests/e2e/library.spec.ts) |
+| S3 — Delete without resurrection | Passed | [Deletion and stale claims](../../tests/spec/storage-contracts.test.ts), [generation guards](../../tests/storage/integration.test.ts) |
+| S4 — Safe capture/fallback | Passed | [Inert extraction](../../tests/engine/capture.test.ts), [capture, limits and fallback UI](../../tests/e2e/library.spec.ts), [PDF snapshot regression](../../tests/e2e/chaitanya-fixes.spec.ts) |
+| S5 — Exact source/location | Passed | [Source identity](../../tests/e2e/library.spec.ts), [offline PDF page/media opening](../../tests/acceptance/offline.spec.ts), [retrieval provenance](../../tests/acceptance/retrieval.spec.ts) |
+| S6 — Manual transfer | Passed | [Original/hash/metadata round trip](../../tests/spec/storage-contracts.test.ts), [archive validation](../../tests/storage/repository.test.ts), [independent-profile export/restore](../../tests/e2e/library.spec.ts) |
+| S7 — Verified offline assets | Passed | [Integrity/progress/cache repair](../../tests/engine/assets.test.ts), [actual offline processing and missing-asset repair](../../tests/acceptance/offline.spec.ts) |
+| S8 — Local OCR/PDF | Passed | [Actual OCR, text/scanned PDF and page mapping](../../tests/acceptance/extraction.spec.ts), [retrieval](../../tests/acceptance/retrieval.spec.ts), recorded physical reference-phone checks |
+| S9 — Semantic retrieval/rejection | Passed | [Actual corpus and negatives](../../tests/acceptance/retrieval.spec.ts), [note regression](../../tests/acceptance/note-regression.spec.ts), [ranking invariants](../../tests/engine/ranking.test.ts) |
+| S10 — Visual image/video retrieval | Passed | [Actual text-free image and sampled-scene retrieval](../../tests/acceptance/retrieval.spec.ts) |
+| S11 — Speech/timestamps | Passed | [Decoding and transcription](../../tests/acceptance/extraction.spec.ts), [source/interval retrieval](../../tests/acceptance/retrieval.spec.ts) |
+| S12 — Recovery/retry | Passed | [Interrupted indexing and retry](../../tests/acceptance/recovery.spec.ts), [worker handling](../../tests/engine/model-client.test.ts), [generation recovery](../../tests/storage/integration.test.ts) |
+| S13 — Responsive/offline PWA | Passed | [Responsive/offline UI](../../tests/e2e/library.spec.ts), [focus and reduced motion](../../tests/e2e/accessibility.spec.ts), [update preservation](../../tests/e2e/release-update.spec.ts), recorded installed-phone controls |
+| S14 — Local core processing | Passed | [Actual all-modality offline paths and network guard](../../tests/acceptance/offline.spec.ts), [setup/request separation](../../tests/acceptance/helpers.ts) |
+| S15 — Accessible truthful policies | Passed | [Direct/pre-setup/offline policy routes](../../tests/e2e/library.spec.ts), [accessibility](../../tests/e2e/axe.spec.ts), [completed source fact review](2026-11-02-policy-review.md) |
 
-The map identifies test coverage; it is not a blanket claim that every scenario or device has passed. See the command results below and attached raw reports.
+The [coverage registry](../../tests/spec/coverage.json) links statements to suites. Its structure check is separate from the behavioral passes above. No acceptance statements or test assertions were removed to produce this status.
 
-## Current command results
+## Completed validation
 
-The final pre-PR `npm run check`, `npm run format:check`, `npm run build` and complete `npm test` completed successfully on Node 24.22.1. Results:
+- TypeScript, ESLint, product checks, formatting and full/production-only audit: passed; audit reports zero findings.
+- Clean dependency installation and verified pinned model assets: passed. The dependency follow-up reused and reverified public model bytes from the earlier fresh download.
+- Root and repository-subdirectory production builds/artifact inventories: passed; both outputs match the pre-remediation builds byte for byte.
+- Desktop 1440 px and phone-sized 390 px startup, saved-original reopening and local offline policy/original flows: passed.
+- Each S9/S10/S11 run processed 30 originals without processing failures. All twelve targets ranked first across the three runs and each set's three negatives returned zero matches.
+- iPhone measured/owner-confirmed checks and iQOO owner-confirmed setup, retrieval, media, installed controls and offline processing are recorded with their original device/build identities. The Android owner observed each agreed small image/PDF fixture under 120 seconds.
+- Policy/source factual review and independent dependency source review: complete under the recorded reviewer identities.
 
-| Check | Actual outcome |
-| --- | --- |
-| TypeScript, ESLint and product-copy restrictions | Passed |
-| Production build | Passed; normal output excludes the acceptance harness |
-| Vitest fast suite | 44 tests passed across 13 files |
-| Production browser suite | 7 passed, zero failures/skips; repeated after the service/view refactor |
-| Actual-model acceptance suite | 9 passed, zero failures/skips, about 13.7 minutes |
-| Automated WCAG A/AA scans | Zero violations across five routes at 390 and 1440 px |
-| Formatting | `npm run format:check` passed |
-| Dependency audit | Zero reported vulnerabilities in the [pre-PR audit](dependency-audit.json) |
-| Node 24 subdirectory build and browser smoke | Save, exact-original opening, offline reopen and direct offline policy route passed under `/campus-recall/` |
+## Validation methods
 
-All 23 pinned external setup URLs also returned HTTP 200 in both the [HTTP health check](network-endpoints.json) and the [actual browser CORS check](browser-endpoints.json). These checks sent no private content or queries. See [architecture and API inventory](../architecture.md) for every network boundary and the local interfaces.
+Physical evidence distinguishes direct measurements from owner confirmations. Automated S6 transfer evidence uses original/hash/metadata assertions and an independent browser profile. The synthetic retrieval corpus is consumed regression data, not a general accuracy estimate. Browser storage remains best-effort, and supported input limits remain those in SPEC. These are evidence methods and product boundaries, not open acceptance tasks.
 
-Raw Playwright summaries: [acceptance](acceptance-run-summary.json), [browser](browser-run-summary.json). Additional reports: [accessibility](axe.json), [subdirectory smoke](subdirectory-smoke.json), [calibration](calibration.json), and separate fresh 30-item regressions for [S9](retrieval-S9.json), [S10](retrieval-S10.json) and [S11](retrieval-S11.json). Each corpus run processed all 30 originals, retrieved its expected targets at rank one and returned no matches for the three unrelated queries. These consumed-corpus reruns do not erase the initial failure described above.
+The local deepmerge security fork has explicit provenance, MIT license and exploit regressions. Package audit alone does not assess that private source. Additional engine diagnostics and earlier unsuccessful experiments are preserved in their dated records; the required acceptance command is `npm test`.
 
-The UI is now split behind injected service contracts with a headless controller, separate screens/rows/dialogs and feature styles. Import-boundary tests and a contract-only view test cover that separation; they do not substitute for the real-model tests above. The compiled CSS is unchanged by this refactor. The interface detector previously returned no findings. Screenshots were inspected at desktop and phone viewport sizes; [UI review](ui-review.md) records the interaction and accessibility changes. The pre-PR run made no remote CI claim. Main CI subsequently passed, as recorded in the dated checkpoint audit.
+## Deployment phase
 
-## Manual release gates
+Select and authorize the host, review its actual logging/policy facts, publish the verified artifact, validate behavior at the hosted origin and record rollout/user feedback. No hosted URL, host-specific result or outside-group user count is asserted before that phase. See [deployment preparation](../implementation/deployment.md).
 
-- iPhone 17: record exact iOS/Safari versions; install, import, keyboard-open layout, zoom, source playback, setup interruption, offline reopen and full model reload.
-- iQOO Neo9 Pro, 8 GB: record Android/Chrome versions and repeat those checks, including processing time and memory failures.
-- Compatibility: Moto G85, HP Pavilion with actual OS, and the gaming laptop where available.
-- Safari on the available Mac: actual model/runtime and PWA behavior, separate from Chromium.
-- Team review of the revised Privacy Policy and Terms before deployment; designate the actual host and its request logging policy.
-- Required PR reviews and authorized merge. This task does not authorize bypassing protection or publishing a deployment.
+## Historical evidence
 
-No physical-phone test, deployment or later inter-group course peer review is claimed. PR #6’s two approvals and merge are separately verified in the dated checkpoint audit.
+The following records document how the verified baseline was reached. Their older counts, failures, unexecuted experiments and then-open tasks are historical snapshots, not the current acceptance backlog:
+
+- [Initial fresh-checkout checkpoint](2026-11-03-spec-freeze.md), [85-test baseline summary](2026-11-02-readiness-summary.json) and [dependency follow-up](2026-11-02-dependency-remediation.md).
+- [Pre-PR application baseline](history/pre-pr-baseline-2026-10.md), [foundation handoff](history/chaitanya-foundation-2026-10-22.md) and [October checkpoint audit](milestones-2026-10.md).
+- [28 October measured iPhone session](2026-10-28-device-preparation.md), [29 October Safari/device diagnostics](2026-10-29-release-preparation.md) and [31 October integration](2026-10-31-integration.md).
+- [Retrieval method and first-evaluation history](retrieval.md), [UI review](ui-review.md), [QA handoff](2026-10-28-qa-handoff.md) and [Chaitanya handoff](2026-10-28-chaitanya-handoff.md).
+
+Raw dated outputs are preserved. The current statement results are the table at the top of this page.

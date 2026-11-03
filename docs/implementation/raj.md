@@ -1,6 +1,6 @@
 # Raj: core UI, local intelligence, integration, and verification
 
-**Current release assignment:** follow [the completion and release plan](release-plan.md) for all further implementation, fixes, UI revamp, integration and release validation on `raj_final`. Nakshatra and Chaitanya own exploratory bug finding and issue reporting. The original implementation details below remain product context; they do not assign Raj a separate bug-hunting package.
+**Historical package handoff — completed.** [Current S1–S15 verification](../verification/README.md) is complete. The instructions below preserve the original package scope; new work follows current task-specific instructions. [Release status](release-plan.md) identifies deployment as the release phase.
 
 23 October integration override: Raj requested `raj_final` from merged `main`. Preserve `Raj_setup`. The implementation and checks now exist; see [verification](../verification/README.md). The requirements below remain the handoff baseline.
 

@@ -1,12 +1,12 @@
 # Acceptance design and evidence
 
-Status: acceptance design, with executable tests now in `tests/`. See [verification evidence](../verification/README.md) for current measured outcomes and remaining checks. The first held-out evaluation missed R4; it is preserved in the report. Subsequent runs of that corpus are regression evidence, not independent held-out evidence. Nakshatra supplies test tooling and storage/repository cases; Raj authors all UI/engine acceptance scenarios before their feature implementations. Chaitanya supplies content-review checklists. Raj owns the actual-model corpus and final evidence.
+**Current acceptance status:** S1–S15 passed. See [verification results](../verification/README.md) for the completed required suites and recorded device evidence. This document defines reproducible acceptance behavior for maintaining that baseline. The original R4 miss is retained as evaluation history; reruns of the consumed corpus are regression evidence, not independent held-out accuracy.
 
 Read [SPEC](../../SPEC.md), [the plan](../../IMPLEMENTATION_PLAN.md), and [shared contracts](contracts.md). Every S1–S15 statement needs an automated test. Tests are independent: fresh library/profile/fixtures, no dependency on another test's execution order. Shared setup may preload verified public models; never share a previous test's private library as a shortcut.
 
-## Commands to deliver
+## Acceptance commands
 
-| Command | Required behavior once the scaffold exists |
+| Command | Required behavior |
 | --- | --- |
 | `npm run dev` | Start the documented development app |
 | `npm test` | Run unit, browser, and actual-model acceptance suites; nonzero exit for failures or missing required assets |
@@ -16,7 +16,7 @@ Read [SPEC](../../SPEC.md), [the plan](../../IMPLEMENTATION_PLAN.md), and [share
 
 README separately documents Node 24, `npm ci`, browser installation, and explicit model preparation/setup. There is no silent paid API fallback. Test setup must download the same pinned assets as the application, record their hashes, and make missing/corrupt assets explicit. Do not silently skip, mark pending cases as passed, or use a fake embedding adapter in actual-model acceptance.
 
-Foundation tests can legitimately fail before downstream features exist. Record that state as incomplete, not green. Fast package checks may pass while the full suite remains red; CI and PR reports must distinguish them.
+During implementation, foundation-only checks were recorded separately from full acceptance. The completed baseline now passes both. Future regressions retain distinct suite outcomes so a package-only pass cannot conceal an acceptance failure.
 
 ## 30-item retrieval library
 

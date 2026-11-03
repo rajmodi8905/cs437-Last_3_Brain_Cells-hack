@@ -1,5 +1,7 @@
 # Readiness evidence for the 3 November specification freeze
 
+> Historical execution record. [Current S1–S15 verification](README.md) is complete. Earlier counts, diagnostic failures and checks not performed in this dated round are preserved as evidence, not a current acceptance backlog.
+
 **Execution date:** 2 November 2026, Asia/Kolkata. The filename identifies the planned checkpoint, not a claim that these checks ran on 3 November.
 
 **Status:** This report preserves the initial completed local round. The later [dependency follow-up](2026-11-02-dependency-remediation.md) resolves the findings and completes technical sign-off under Raj's explicit delegation. The original 85-test baseline and initial audit below remain historical evidence. No deployment or human GitHub PR approval is claimed.

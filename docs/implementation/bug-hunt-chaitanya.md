@@ -1,5 +1,7 @@
 # Prompt for Chaitanya's AI
 
+> Reusable regression instructions. [Current S1–S15 verification](../verification/README.md) is complete; blank ledgers and conditional failure guidance below apply to a new run, not the release status.
+
 After the release-plan/issue-form PR is merged, give Chaitanya this whole prompt. It assigns investigation and reporting, not implementation. The teammate sending it supplies authorization for verified issue publication under their own account.
 
 ```text
