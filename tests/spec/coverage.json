@@ -30,6 +30,16 @@
           "suite": "browser",
           "file": "tests/e2e/library.spec.ts",
           "title": "a partially saved batch reports remaining files instead of losing its error"
+        },
+        {
+          "suite": "browser",
+          "file": "tests/e2e/storage-recovery.spec.ts",
+          "title": "[S1] a file saved in one tab appears in another open tab and survives closing both"
+        },
+        {
+          "suite": "browser",
+          "file": "tests/e2e/storage-recovery.spec.ts",
+          "title": "[S1] a storage failure during save leaves no item, original or job in any tab"
         }
       ],
       "remaining": []
@@ -89,6 +99,11 @@
           "suite": "browser",
           "file": "tests/e2e/library.spec.ts",
           "title": "save, reopen exact original, rename, backup and delete without models"
+        },
+        {
+          "suite": "browser",
+          "file": "tests/e2e/storage-recovery.spec.ts",
+          "title": "[S3] deleting in one tab while another tab holds a processing claim rejects the late publication"
         }
       ],
       "remaining": []
@@ -225,6 +240,31 @@
           "suite": "browser",
           "file": "tests/e2e/library.spec.ts",
           "title": "[S6] exported originals restore into an independent browser profile and stay queued"
+        },
+        {
+          "suite": "browser",
+          "file": "tests/e2e/storage-recovery.spec.ts",
+          "title": "[S6] two tabs in one profile restoring the same archive create each item once with exact bytes and metadata"
+        },
+        {
+          "suite": "browser",
+          "file": "tests/e2e/storage-recovery.spec.ts",
+          "title": "[S6] imports started at the same instant in two tabs still restore each archive entry once"
+        },
+        {
+          "suite": "browser",
+          "file": "tests/e2e/storage-recovery.spec.ts",
+          "title": "[S6] invalid archives restored through Settings change nothing in an existing library"
+        },
+        {
+          "suite": "browser",
+          "file": "tests/e2e/storage-recovery.spec.ts",
+          "title": "[S6] a storage failure part-way through a restore writes nothing and keeps existing items"
+        },
+        {
+          "suite": "browser",
+          "file": "tests/e2e/storage-recovery.spec.ts",
+          "title": "[S6] closing the tab during a large restore leaves either the whole archive or none of it"
         }
       ],
       "remaining": []
@@ -429,6 +469,16 @@
           "suite": "acceptance",
           "file": "tests/acceptance/recovery.spec.ts",
           "title": "[S12] interrupt real indexing, retain the source and retry one current generation offline"
+        },
+        {
+          "suite": "browser",
+          "file": "tests/e2e/storage-recovery.spec.ts",
+          "title": "[S12] reopening during processing recovers the claim under the processing lock and rejects the stale run"
+        },
+        {
+          "suite": "browser",
+          "file": "tests/e2e/storage-recovery.spec.ts",
+          "title": "[S12] a recoverable failure survives reopening and retry publishes one new generation"
         }
       ],
       "remaining": []
