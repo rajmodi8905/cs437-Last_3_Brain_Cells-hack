@@ -16,6 +16,7 @@
     "prebuild": "node scripts/prepare-assets.mjs",
     "test:browser": "playwright test tests/e2e",
     "test:acceptance": "playwright test tests/acceptance",
+    "spec:mapping": "node scripts/spec-mapping.mjs",
     "preview": "vite preview --host 127.0.0.1",
     "qa:prepare": "node scripts/prepare-qa-kit.mjs",
     "qa:https": "node scripts/qa-https.mjs",

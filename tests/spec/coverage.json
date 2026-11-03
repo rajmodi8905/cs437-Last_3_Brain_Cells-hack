@@ -1,73 +1,286 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "minimumGreenFor27October": 8,
   "statements": [
     {
       "id": "S1",
-      "files": [
-        "tests/spec/storage-contracts.test.ts",
-        "tests/storage/integration.test.ts",
-        "tests/e2e/library.spec.ts"
-      ],
       "scope": "Durable saves for all six kinds, transaction failure and real browser reopen",
+      "tests": [
+        {
+          "suite": "fast",
+          "file": "tests/spec/storage-contracts.test.ts",
+          "title": "[S1] all six supported item kinds retain exact originals and recent records across reopening"
+        },
+        {
+          "suite": "fast",
+          "file": "tests/storage/integration.test.ts",
+          "title": "rolls back originals and jobs when a save transaction fails"
+        },
+        {
+          "suite": "fast",
+          "file": "tests/storage/repository.test.ts",
+          "title": "DexieLibraryRepository > commits a note and its queued job before save resolves"
+        },
+        {
+          "suite": "browser",
+          "file": "tests/e2e/library.spec.ts",
+          "title": "save, reopen exact original, rename, backup and delete without models"
+        },
+        {
+          "suite": "browser",
+          "file": "tests/e2e/library.spec.ts",
+          "title": "a partially saved batch reports remaining files instead of losing its error"
+        }
+      ],
       "remaining": []
     },
     {
       "id": "S2",
-      "files": ["tests/spec/storage-contracts.test.ts", "tests/e2e/library.spec.ts"],
       "scope": "Combined filters, order, rename and duplicate-title source identity",
+      "tests": [
+        {
+          "suite": "fast",
+          "file": "tests/spec/storage-contracts.test.ts",
+          "title": "[S2] combined kind/status filters, stable ordering and rename preserve source identity"
+        },
+        {
+          "suite": "fast",
+          "file": "tests/storage/repository.test.ts",
+          "title": "DexieLibraryRepository > keeps same-title items separate and preserves bytes across rename"
+        },
+        {
+          "suite": "browser",
+          "file": "tests/e2e/library.spec.ts",
+          "title": "save, reopen exact original, rename, backup and delete without models"
+        },
+        {
+          "suite": "browser",
+          "file": "tests/e2e/library.spec.ts",
+          "title": "duplicate titles open exact originals and a missing source never substitutes another"
+        }
+      ],
       "remaining": []
     },
     {
       "id": "S3",
-      "files": [
-        "tests/spec/storage-contracts.test.ts",
-        "tests/storage/integration.test.ts",
-        "tests/e2e/library.spec.ts"
-      ],
       "scope": "Queued/processing/ready deletion, related records and stale publication",
+      "tests": [
+        {
+          "suite": "fast",
+          "file": "tests/spec/storage-contracts.test.ts",
+          "title": "[S3] deleting a processing item removes every related record and rejects late publication"
+        },
+        {
+          "suite": "fast",
+          "file": "tests/spec/storage-contracts.test.ts",
+          "title": "[S3] deleting a queued item removes every related record and rejects late publication"
+        },
+        {
+          "suite": "fast",
+          "file": "tests/spec/storage-contracts.test.ts",
+          "title": "[S3] deleting a ready item removes every related record and rejects late publication"
+        },
+        {
+          "suite": "fast",
+          "file": "tests/storage/repository.test.ts",
+          "title": "DexieLibraryRepository > rejects stale publication and removes all records on delete"
+        },
+        {
+          "suite": "browser",
+          "file": "tests/e2e/library.spec.ts",
+          "title": "save, reopen exact original, rename, backup and delete without models"
+        }
+      ],
       "remaining": []
     },
     {
       "id": "S4",
-      "files": [
-        "tests/engine/capture.test.ts",
-        "tests/e2e/library.spec.ts",
-        "tests/e2e/chaitanya-fixes.spec.ts"
-      ],
       "scope": "Real HTTP capture, omitted credentials, inert HTML, truncation and fallback",
+      "tests": [
+        {
+          "suite": "fast",
+          "file": "tests/engine/capture.test.ts",
+          "title": "extracts inert page text and excludes executable/navigation content"
+        },
+        {
+          "suite": "fast",
+          "file": "tests/engine/capture.test.ts",
+          "title": "requires ordinary public URL protocols and no embedded credentials"
+        },
+        {
+          "suite": "fast",
+          "file": "tests/engine/capture.test.ts",
+          "title": "omits credentials and maps blocked fetches to a usable fallback"
+        },
+        {
+          "suite": "fast",
+          "file": "tests/engine/capture.test.ts",
+          "title": "reports bounded snapshot truncation without counting UTF-16 halves as characters"
+        },
+        {
+          "suite": "browser",
+          "file": "tests/e2e/library.spec.ts",
+          "title": "responsive screens, policy direct routes, safe HTML fallback and offline shell"
+        },
+        {
+          "suite": "browser",
+          "file": "tests/e2e/library.spec.ts",
+          "title": "direct webpage capture omits credentials, reports truncation and offers blocked-fetch fallback"
+        },
+        {
+          "suite": "browser",
+          "file": "tests/e2e/chaitanya-kit.spec.ts",
+          "title": "Chaitanya fixtures exercise capture, truncation, blocked fallback and inert HTML through the real UI"
+        },
+        {
+          "suite": "browser",
+          "file": "tests/e2e/chaitanya-fixes.spec.ts",
+          "title": "#14 a PDF snapshot fills the webpage text and keeps its URL"
+        }
+      ],
       "remaining": []
     },
     {
       "id": "S5",
-      "files": [
-        "tests/e2e/library.spec.ts",
-        "tests/acceptance/offline.spec.ts",
-        "tests/acceptance/retrieval.spec.ts"
-      ],
       "scope": "Exact original IDs, missing originals, PDF page and media seeking",
+      "tests": [
+        {
+          "suite": "browser",
+          "file": "tests/e2e/library.spec.ts",
+          "title": "duplicate titles open exact originals and a missing source never substitutes another"
+        },
+        {
+          "suite": "acceptance",
+          "file": "tests/acceptance/offline.spec.ts",
+          "title": "production processing, semantic search and source viewing remain local offline"
+        },
+        {
+          "suite": "acceptance",
+          "file": "tests/acceptance/retrieval.spec.ts",
+          "title": "S9: fresh 30-item corpus retrieves its required originals"
+        },
+        {
+          "suite": "acceptance",
+          "file": "tests/acceptance/retrieval.spec.ts",
+          "title": "S10: fresh 30-item corpus retrieves its required originals"
+        },
+        {
+          "suite": "acceptance",
+          "file": "tests/acceptance/retrieval.spec.ts",
+          "title": "S11: fresh 30-item corpus retrieves its required originals"
+        }
+      ],
       "remaining": []
     },
     {
       "id": "S6",
-      "files": [
-        "tests/spec/storage-contracts.test.ts",
-        "tests/storage/repository.test.ts",
-        "tests/e2e/library.spec.ts"
-      ],
       "scope": "Mixed original hashes/metadata and independent browser-profile transfer",
+      "tests": [
+        {
+          "suite": "fast",
+          "file": "tests/spec/storage-contracts.test.ts",
+          "title": "[S6] mixed-library archive round trip preserves exact bytes and metadata with fresh queued IDs"
+        },
+        {
+          "suite": "fast",
+          "file": "tests/storage/repository.test.ts",
+          "title": "DexieLibraryRepository > exports and restores originals as queued fresh items, skipping hashed duplicates"
+        },
+        {
+          "suite": "fast",
+          "file": "tests/storage/repository.test.ts",
+          "title": "DexieLibraryRepository > restores every entry when two exported items share the same bytes"
+        },
+        {
+          "suite": "fast",
+          "file": "tests/storage/repository.test.ts",
+          "title": "DexieLibraryRepository > rejects invalid archive metadata before committing any writes"
+        },
+        {
+          "suite": "fast",
+          "file": "tests/storage/repository.test.ts",
+          "title": "DexieLibraryRepository > rejects an oversized archive note before committing any writes"
+        },
+        {
+          "suite": "fast",
+          "file": "tests/storage/repository.test.ts",
+          "title": "DexieLibraryRepository > treats a renamed same-content item as a duplicate of its archive entry"
+        },
+        {
+          "suite": "fast",
+          "file": "tests/storage/repository.test.ts",
+          "title": "DexieLibraryRepository > serializes concurrent imports so only one creates the item"
+        },
+        {
+          "suite": "fast",
+          "file": "tests/storage/integration.test.ts",
+          "title": "rejects archive entries outside the original-file namespace"
+        },
+        {
+          "suite": "fast",
+          "file": "tests/storage/integration.test.ts",
+          "title": "reports malformed JSON manifests consistently without writes"
+        },
+        {
+          "suite": "browser",
+          "file": "tests/e2e/library.spec.ts",
+          "title": "[S6] exported originals restore into an independent browser profile and stay queued"
+        }
+      ],
       "remaining": []
     },
     {
       "id": "S7",
-      "files": ["tests/engine/assets.test.ts", "tests/acceptance/offline.spec.ts"],
       "scope": "Asset integrity/progress, real offline reload and missing-model repair",
+      "tests": [
+        {
+          "suite": "fast",
+          "file": "tests/engine/assets.test.ts",
+          "title": "reports actual bytes, verifies integrity and only then marks offline ready"
+        },
+        {
+          "suite": "fast",
+          "file": "tests/engine/assets.test.ts",
+          "title": "rejects corrupt bytes, never marks ready, and reuses complete verified assets"
+        },
+        {
+          "suite": "fast",
+          "file": "tests/engine/assets.test.ts",
+          "title": "withdraws readiness when a cached asset was replaced after setup (#11)"
+        },
+        {
+          "suite": "fast",
+          "file": "tests/engine/assets.test.ts",
+          "title": "repairs a damaged cached asset in one verification run (#11)"
+        },
+        {
+          "suite": "acceptance",
+          "file": "tests/acceptance/offline.spec.ts",
+          "title": "production processing, semantic search and source viewing remain local offline"
+        }
+      ],
       "remaining": []
     },
     {
       "id": "S8",
-      "files": ["tests/acceptance/extraction.spec.ts", "tests/acceptance/retrieval.spec.ts"],
       "scope": "Actual OCR/PDF/embeddings and page provenance",
+      "tests": [
+        {
+          "suite": "fast",
+          "file": "tests/storage/integration.test.ts",
+          "title": "rejects a claimed image whose basic container signature is invalid before writing"
+        },
+        {
+          "suite": "acceptance",
+          "file": "tests/acceptance/extraction.spec.ts",
+          "title": "actual OCR, page extraction, ffmpeg decoding and timestamped English transcription"
+        },
+        {
+          "suite": "acceptance",
+          "file": "tests/acceptance/retrieval.spec.ts",
+          "title": "S9: fresh 30-item corpus retrieves its required originals"
+        }
+      ],
       "manualEvidence": [
         "Earlier measured iPhone processing: docs/verification/2026-10-28-device-preparation.md",
         "2 November iQOO owner-observed processing bounds: docs/verification/2026-11-03-spec-freeze.md"
@@ -79,45 +292,212 @@
     },
     {
       "id": "S9",
-      "files": [
-        "tests/engine/ranking.test.ts",
-        "tests/acceptance/retrieval.spec.ts",
-        "tests/acceptance/note-regression.spec.ts"
-      ],
       "scope": "Frozen actual-model S9 corpus, negatives, arithmetic and deduplication",
+      "tests": [
+        {
+          "suite": "fast",
+          "file": "tests/engine/ranking.test.ts",
+          "title": "retrieval arithmetic and policy > normalizes and rejects invalid vectors"
+        },
+        {
+          "suite": "fast",
+          "file": "tests/engine/ranking.test.ts",
+          "title": "retrieval arithmetic and policy > groups originals, retains the strongest location, and caps five"
+        },
+        {
+          "suite": "fast",
+          "file": "tests/engine/ranking.test.ts",
+          "title": "retrieval arithmetic and policy > rejects weak matches even when lexical text overlaps"
+        },
+        {
+          "suite": "fast",
+          "file": "tests/engine/ranking.test.ts",
+          "title": "retrieval arithmetic and policy > never mixes modalities into one threshold"
+        },
+        {
+          "suite": "fast",
+          "file": "tests/engine/ranking.test.ts",
+          "title": "chunks actual token IDs with bounded overlap and no loss"
+        },
+        {
+          "suite": "fast",
+          "file": "tests/engine/ranking.test.ts",
+          "title": "uses exact tokens for the bounded lexical boost, deterministic segment ties and source excerpts"
+        },
+        {
+          "suite": "acceptance",
+          "file": "tests/acceptance/retrieval.spec.ts",
+          "title": "S9: fresh 30-item corpus retrieves its required originals"
+        },
+        {
+          "suite": "acceptance",
+          "file": "tests/acceptance/note-regression.spec.ts",
+          "title": "consumed R4 regression: conversational note retrieval with a derived display title"
+        }
+      ],
       "remaining": []
     },
     {
       "id": "S10",
-      "files": ["tests/acceptance/retrieval.spec.ts"],
       "scope": "Fresh S10 library, real text-free image and sampled silent-video retrieval",
+      "tests": [
+        {
+          "suite": "acceptance",
+          "file": "tests/acceptance/retrieval.spec.ts",
+          "title": "S10: fresh 30-item corpus retrieves its required originals"
+        }
+      ],
       "remaining": []
     },
     {
       "id": "S11",
-      "files": ["tests/acceptance/extraction.spec.ts", "tests/acceptance/retrieval.spec.ts"],
       "scope": "Actual English transcription, silence handling and S11 source intervals",
+      "tests": [
+        {
+          "suite": "fast",
+          "file": "tests/engine/audio.test.ts",
+          "title": "rejects empty and near-silent samples without suppressing an audible interval"
+        },
+        {
+          "suite": "fast",
+          "file": "tests/engine/audio.test.ts",
+          "title": "retains original time offsets when trimming near-silent recording edges"
+        },
+        {
+          "suite": "acceptance",
+          "file": "tests/acceptance/extraction.spec.ts",
+          "title": "actual OCR, page extraction, ffmpeg decoding and timestamped English transcription"
+        },
+        {
+          "suite": "acceptance",
+          "file": "tests/acceptance/retrieval.spec.ts",
+          "title": "S11: fresh 30-item corpus retrieves its required originals"
+        }
+      ],
       "remaining": []
     },
     {
       "id": "S12",
-      "files": [
-        "tests/storage/integration.test.ts",
-        "tests/engine/model-client.test.ts",
-        "tests/acceptance/recovery.spec.ts"
-      ],
       "scope": "Actual interrupted indexing/retry plus stale claims and worker failure",
+      "tests": [
+        {
+          "suite": "fast",
+          "file": "tests/storage/integration.test.ts",
+          "title": "recovers interrupted processing but rejects its previous claim"
+        },
+        {
+          "suite": "fast",
+          "file": "tests/storage/integration.test.ts",
+          "title": "cancel followed by retry cannot publish a stale generation"
+        },
+        {
+          "suite": "fast",
+          "file": "tests/storage/integration.test.ts",
+          "title": "rejects mixed index generations and empty extracted text before publishing"
+        },
+        {
+          "suite": "fast",
+          "file": "tests/storage/repository.test.ts",
+          "title": "DexieLibraryRepository > allows only one concurrent claim for a queued job"
+        },
+        {
+          "suite": "fast",
+          "file": "tests/engine/model-client.test.ts",
+          "title": "replays pure pending requests once in a fresh WASM worker and preserves IDs"
+        },
+        {
+          "suite": "fast",
+          "file": "tests/engine/model-client.test.ts",
+          "title": "rejects requests after worker failure and permits a subsequent fresh worker"
+        },
+        {
+          "suite": "fast",
+          "file": "tests/engine/model-client.test.ts",
+          "title": "releases an idle GPU model before terminating its worker and shares concurrent disposal"
+        },
+        {
+          "suite": "fast",
+          "file": "tests/engine/model-client.test.ts",
+          "title": "bounds cleanup when the worker does not respond and permits a fresh worker afterward"
+        },
+        {
+          "suite": "fast",
+          "file": "tests/engine/model-client.test.ts",
+          "title": "rejects interrupted requests and new calls during cleanup without replaying disposal on GPU error"
+        },
+        {
+          "suite": "acceptance",
+          "file": "tests/acceptance/recovery.spec.ts",
+          "title": "[S12] interrupt real indexing, retain the source and retry one current generation offline"
+        }
+      ],
       "remaining": []
     },
     {
       "id": "S13",
-      "files": [
-        "tests/e2e/accessibility.spec.ts",
-        "tests/e2e/library.spec.ts",
-        "tests/acceptance/offline.spec.ts",
-        "tests/e2e/chaitanya-fixes.spec.ts"
-      ],
       "scope": "Production responsive/offline browser behavior",
+      "tests": [
+        {
+          "suite": "browser",
+          "file": "tests/e2e/accessibility.spec.ts",
+          "title": "first-use policy access, keyboard dialogs, long titles and reduced motion"
+        },
+        {
+          "suite": "browser",
+          "file": "tests/e2e/library.spec.ts",
+          "title": "responsive screens, policy direct routes, safe HTML fallback and offline shell"
+        },
+        {
+          "suite": "browser",
+          "file": "tests/e2e/chaitanya-kit.spec.ts",
+          "title": "UI stress library remains readable on a phone viewport and policy routes reopen offline"
+        },
+        {
+          "suite": "browser",
+          "file": "tests/e2e/landing.spec.ts",
+          "title": "landing page has no horizontal overflow or automated WCAG A/AA violations"
+        },
+        {
+          "suite": "browser",
+          "file": "tests/e2e/chaitanya-fixes.spec.ts",
+          "title": "#10 a saved PDF opens in the viewer before offline setup, online and offline"
+        },
+        {
+          "suite": "browser",
+          "file": "tests/e2e/chaitanya-fixes.spec.ts",
+          "title": "#12 the full-screen phone viewer holds focus and returns it on close"
+        },
+        {
+          "suite": "browser",
+          "file": "tests/e2e/chaitanya-fixes.spec.ts",
+          "title": "#12 closing the desktop viewer returns focus to its row"
+        },
+        {
+          "suite": "browser",
+          "file": "tests/e2e/chaitanya-fixes.spec.ts",
+          "title": "#13 closing Rename or Delete returns focus to the item Actions button"
+        },
+        {
+          "suite": "browser",
+          "file": "tests/e2e/chaitanya-fixes.spec.ts",
+          "title": "#15 Settings stays reachable from the sidebar in phone landscape"
+        },
+        {
+          "suite": "browser",
+          "file": "tests/e2e/chaitanya-fixes.spec.ts",
+          "title": "#16 current page and active filter are exposed to assistive technology"
+        },
+        {
+          "suite": "browser",
+          "file": "tests/e2e/release-update.spec.ts",
+          "title": "a real service-worker update waits for the user and preserves the saved original offline"
+        },
+        {
+          "suite": "acceptance",
+          "file": "tests/acceptance/offline.spec.ts",
+          "title": "production processing, semantic search and source viewing remain local offline"
+        }
+      ],
       "manualEvidence": [
         "Installed iPhone owner checks: docs/verification/2026-10-29-release-preparation.md",
         "2 November installed iQOO keyboard, Files picker, rotation, zoom, media and offline owner checks: docs/verification/2026-11-03-spec-freeze.md"
@@ -129,18 +509,56 @@
     },
     {
       "id": "S14",
-      "files": ["tests/acceptance/offline.spec.ts", "tests/acceptance/helpers.ts"],
       "scope": "Actual all-modality offline core and unexpected-external-request rejection",
+      "tests": [
+        {
+          "suite": "acceptance",
+          "file": "tests/acceptance/offline.spec.ts",
+          "title": "production processing, semantic search and source viewing remain local offline"
+        }
+      ],
       "remaining": []
     },
     {
       "id": "S15",
-      "files": [
-        "tests/e2e/accessibility.spec.ts",
-        "tests/e2e/axe.spec.ts",
-        "tests/e2e/library.spec.ts"
-      ],
       "scope": "Direct/offline policy routes, first-use links and automated accessibility",
+      "tests": [
+        {
+          "suite": "browser",
+          "file": "tests/e2e/accessibility.spec.ts",
+          "title": "first-use policy access, keyboard dialogs, long titles and reduced motion"
+        },
+        {
+          "suite": "browser",
+          "file": "tests/e2e/axe.spec.ts",
+          "title": "critical library routes have no automated WCAG A/AA violations"
+        },
+        {
+          "suite": "browser",
+          "file": "tests/e2e/library.spec.ts",
+          "title": "responsive screens, policy direct routes, safe HTML fallback and offline shell"
+        },
+        {
+          "suite": "browser",
+          "file": "tests/e2e/landing.spec.ts",
+          "title": "a first visit from the landing page opens privacy without onboarding"
+        },
+        {
+          "suite": "browser",
+          "file": "tests/e2e/landing.spec.ts",
+          "title": "a first visit from the landing page opens terms without onboarding"
+        },
+        {
+          "suite": "browser",
+          "file": "tests/e2e/chaitanya-kit.spec.ts",
+          "title": "UI stress library remains readable on a phone viewport and policy routes reopen offline"
+        },
+        {
+          "suite": "browser",
+          "file": "tests/e2e/chaitanya-fixes.spec.ts",
+          "title": "#17 Settings separates the asset size and inference sentences"
+        }
+      ],
       "manualEvidence": [
         "Raj explicitly delegated technical policy sign-off to Codex on 2 November; factual source review completed without claiming named teammate approvals: docs/verification/2026-11-02-policy-review.md"
       ],
