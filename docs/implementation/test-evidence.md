@@ -63,4 +63,4 @@ npm test                 # fast, browser and acceptance, each into test-evidence
 npm run spec:summary     # S1-S15 table; exits non-zero unless the gate passes
 ```
 
-Commit before relying on a local summary: evidence recorded with uncommitted changes is reported as stale. On Windows, use a temporary directory with a long path (`TMP`/`TEMP`) for the device-session tooling tests; `tests/tooling/dependencies.test.ts` currently has a known Windows-only path-separator failure that does not occur on Linux CI.
+Commit before relying on a local summary: evidence recorded with uncommitted changes is reported as stale. On Windows the fast suite runs with the default `TMP`/`TEMP`, including when the repository is on a different drive; the `FileList` enumeration check in `tests/tooling/dependencies.test.ts` runs only off Windows, because `filelist` cannot match any pattern there under the pinned `minimatch` 11.
