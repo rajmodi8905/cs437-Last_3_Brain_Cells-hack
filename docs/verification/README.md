@@ -24,7 +24,7 @@ The required suites pass with **90 fast tests, 27 production Chromium tests and 
 | S14 — Local core processing | Passed | [Actual all-modality offline paths and network guard](../../tests/acceptance/offline.spec.ts), [setup/request separation](../../tests/acceptance/helpers.ts) |
 | S15 — Accessible truthful policies | Passed | [Direct/pre-setup/offline policy routes](../../tests/e2e/library.spec.ts), [accessibility](../../tests/e2e/axe.spec.ts), [completed source fact review](2026-11-02-policy-review.md) |
 
-The [coverage registry](../../tests/spec/coverage.json) links statements to suites. Its structure check is separate from the behavioral passes above. No acceptance statements or test assertions were removed to produce this status.
+The [coverage registry](../../tests/spec/coverage.json) links each statement to exact test identities. Its structure check is separate from the behavioral passes above; CI now derives per-statement outcomes from executed results, as described in [test evidence and the S1–S15 gate](../implementation/test-evidence.md). No acceptance statements or test assertions were removed to produce this status.
 
 ## Completed validation
 

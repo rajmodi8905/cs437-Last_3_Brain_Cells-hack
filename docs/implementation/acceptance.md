@@ -9,7 +9,7 @@ Read [SPEC](../../SPEC.md), [the plan](../../IMPLEMENTATION_PLAN.md), and [share
 | Command | Required behavior |
 | --- | --- |
 | `npm run dev` | Start the documented development app |
-| `npm test` | Run unit, browser, and actual-model acceptance suites; nonzero exit for failures or missing required assets |
+| `npm test` | Run unit, browser, and actual-model acceptance suites into separate `test-evidence/<suite>/` directories; nonzero exit for failures or missing required assets |
 | `npm run test:fast` | Run isolated unit/component checks during development |
 | `npm run build` | Build the production static PWA |
 | `npm run check` | Typecheck and lint without rewriting files |
