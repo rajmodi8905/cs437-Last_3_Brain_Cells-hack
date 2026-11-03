@@ -1,5 +1,7 @@
 # October milestone audit and completion evidence
 
+> Historical execution record. [Current S1–S15 verification](README.md) is complete. Earlier counts, diagnostic failures and checks not performed in this dated round are preserved as evidence, not a current acceptance backlog.
+
 Recorded on **26 October 2026**, using Asia/Kolkata time. This report separates earlier deadline history, current executable tests and the reviewed/merged 27 October checkpoint. It does not change the dates of earlier work.
 
 ## Course requirements and earlier deadlines

@@ -1,14 +1,12 @@
 # Team implementation handoffs
 
-**Current assignments, 28 October 2026:** use [the completion and release plan](release-plan.md). Raj implements all further changes. Nakshatra and Chaitanya find/report bugs and retest fixes; they do not implement their old packages again. Copy-ready AI prompts: [Nakshatra](bug-hunt-nakshatra.md), [Chaitanya](bug-hunt-chaitanya.md). File reports with [the GitHub issue form](../../.github/ISSUE_TEMPLATE/bug-report.yml), available in New issue after it is merged into the default branch.
+**Current status, 3 November 2026:** all S1–S15 acceptance checks pass. Product implementation, local verification, dependency remediation and delegated policy/source fact review are complete. [Verification results](../verification/README.md) are the current status reference. Deployment is described in [release status](release-plan.md).
 
-Current integration, 23 October 2026: Nakshatra’s and Chaitanya’s packages are merged. Raj explicitly requested completing integration on `raj_final` from current `main`, preserving `Raj_setup`. The original member-branch instructions below describe the earlier handoff. Current evidence and release checks are in [verification](../verification/README.md).
-
-Status: the original planning handoffs below are retained for ownership and contract history. The foundation, support documents and Raj’s integration now exist. Use the repository code, current README and verification report for implemented behavior and actual test results.
+The original package handoffs and bug-finding prompts below are retained as historical instructions and reusable regression tools. Their planning-stage prerequisites are not current acceptance tasks. Later teammate fix PRs and new task-specific instructions supersede their earlier ownership restrictions. Required human GitHub PR reviews remain part of the repository process.
 
 ## Read order
 
-For the current bug-finding round, begin with your executable quickstart: [Nakshatra](nakshatra-quickstart.md) or [Chaitanya](chaitanya-quickstart.md), then use the release plan and your named prompt below.
+For a future regression round, use the reusable quickstarts: [Nakshatra](nakshatra-quickstart.md) or [Chaitanya](chaitanya-quickstart.md), then use the release plan and your named prompt below.
 
 1. Applicable local/repository instructions.
 2. [Current release plan](release-plan.md), then the [historical implementation plan](../../IMPLEMENTATION_PLAN.md) for product context.

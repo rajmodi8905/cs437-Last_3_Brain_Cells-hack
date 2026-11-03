@@ -1,5 +1,7 @@
 # Android release validation
 
+> Reusable Android regression runbook. The iQOO reference round was completed on 2 November; [current verification](../verification/README.md) records its evidence and the completed acceptance baseline.
+
 Prepared 31 October 2026. The planned reference device is the iQOO Neo9 Pro / 8 GB; record the actual phone, Android build and Chrome version before testing. This is a runbook, not a device pass. Existing iPhone measurements and owner-confirmed checks remain in the [iOS evidence](../verification/2026-10-29-release-preparation.md#physical-installed-iphone-app-owner-confirmed-checks).
 
 ## Candidate and connection

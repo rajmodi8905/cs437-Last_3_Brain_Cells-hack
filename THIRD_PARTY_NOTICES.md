@@ -18,6 +18,7 @@ Campus Recall uses local open-source components and publicly downloaded models. 
 | ffmpeg.wasm wrapper | Media worker bridge | MIT, https://github.com/ffmpegwasm/ffmpeg.wasm |
 | ffmpeg.wasm core | Media decoding | GPL-2.0-or-later build, https://github.com/ffmpegwasm/ffmpeg.wasm/tree/main/packages/core and https://github.com/ffmpegwasm/ffmpeg.wasm/tree/main/build |
 | Vite / vite-plugin-pwa / Workbox | Build and offline shell | MIT and Apache-2.0, see locked package license files |
+| deepmerge local security fork | Build-only resolver dependency | MIT; [upstream provenance and local patch](vendor/deepmerge/README.md), [preserved license](vendor/deepmerge/LICENSE) |
 
 The ffmpeg core is a separately loaded worker runtime. Its build scripts and corresponding source references are available through the upstream project above. Runtime distribution includes the upstream package license files in `runtime/licenses/`; application builds copy them from installed packages. No license compatibility or security certification is claimed.
 

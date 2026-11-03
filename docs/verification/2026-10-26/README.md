@@ -1,5 +1,7 @@
 # 26 October checkpoint verification
 
+> Historical checkpoint record. [Current S1–S15 verification](../README.md) is complete; the dated results and then-open items below describe the original round.
+
 This run used a new remote clone of reviewed main `6a96bc0dce76a8297253b3cfced5dc2a74d8bc2d` with the follow-up setup/test patch applied. Application code under `src/` did not change. The clone started without project dependencies, downloaded models or generated runtime files. The machine's npm cache and installed Playwright browser were available. It was not a fresh operating system or an independent human trial.
 
 Environment: macOS on Apple M4, Node 24.22.1, Playwright 1.64.1 Chromium, actual pinned models using WASM. These results do not establish iPhone/Android/Safari compatibility.

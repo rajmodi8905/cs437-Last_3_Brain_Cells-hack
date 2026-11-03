@@ -1,0 +1,16 @@
+{
+  "name": "@campus-recall/deepmerge",
+  "version": "4.3.1-campus.1",
+  "private": true,
+  "description": "Build-only local security fork of deepmerge 4.3.1",
+  "main": "index.cjs",
+  "license": "MIT",
+  "engines": {
+    "node": ">=24 <25"
+  },
+  "files": [
+    "index.cjs",
+    "LICENSE",
+    "README.md"
+  ]
+}

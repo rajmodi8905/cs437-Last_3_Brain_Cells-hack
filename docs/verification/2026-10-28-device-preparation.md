@@ -1,5 +1,7 @@
 # 28 October: local device preparation
 
+> Historical execution record. [Current S1–S15 verification](README.md) is complete. Earlier counts, diagnostic failures and checks not performed in this dated round are preserved as evidence, not a current acceptance backlog.
+
 Branch: `raj_oct28_device_setup`, created from current main `59756cc9aac759776dbb578b1f85d2822ad56d65`. This is preparation and implementation validation. Nakshatra and Chaitanya retain exploratory bug discovery/reporting/retesting.
 
 ## Current baseline

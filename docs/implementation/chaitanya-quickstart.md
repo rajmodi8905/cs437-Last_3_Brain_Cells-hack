@@ -1,5 +1,7 @@
 # Chaitanya: start UI, webpage and PWA bug finding
 
+> Reusable regression instructions. [Current S1–S15 verification](../verification/README.md) is complete; blank ledgers and conditional failure guidance below apply to a new run, not the release status.
+
 You find/report defects and retest fixes. Raj implements all changes, including UI, policies and PWA fixes. Use [your complete AI prompt](bug-hunt-chaitanya.md), [the release plan](release-plan.md) and the repository [Bug report form](../../.github/ISSUE_TEMPLATE/bug-report.yml). Do not repeat your historical content implementation package.
 
 This handoff extends [PR #8's shared kit](https://github.com/rajmodi8905/cs437-Last_3_Brain_Cells-hack/pull/8). For the official current-main round, wait for both handoffs to merge. You do not need to wait for Nakshatra's findings. Candidate testing before merge must identify the exact branch/SHA and must not pretend to be main.

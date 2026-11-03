@@ -1,5 +1,7 @@
 # Chaitanya testing handoff: verification
 
+> Historical execution record. [Current S1–S15 verification](README.md) is complete. Earlier counts, diagnostic failures and checks not performed in this dated round are preserved as evidence, not a current acceptance backlog.
+
 Recorded 28 October 2026. This extends the shared QA prerequisites in [PR #8](https://github.com/rajmodi8905/cs437-Last_3_Brain_Cells-hack/pull/8), head `c14923be6267d8a610b289876b75d714cac5427e`. The separate branch `raj_chaitanya_handoff` leaves that pending head unchanged. Merge the shared dependency before this handoff. The PR targets main; reviewers can inspect the Chaitanya-only delta against that exact dependency head. After PR #8 merges, confirm the main comparison contains only the intended follow-up; incorporate updated main normally if its merge method requires it.
 
 ## Delivered prerequisites

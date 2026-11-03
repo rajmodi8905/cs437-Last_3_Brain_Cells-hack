@@ -16,7 +16,7 @@ Review approach: Emil Kowalski Design Engineering and Mobile Native, plus the in
 
 Automated screenshots cover Library, Add, Settings, Privacy and Terms at 390, 768 and 1440 px. The [desktop Library](screenshots/library-desktop.png) and [phone-width Add](screenshots/add-phone.png) screenshots were visually inspected after the final browser run. The production test also checks no document-level horizontal overflow and direct/offline policy loading. All seven production-browser cases pass, including exact originals, keyboard, reduced motion, long titles and safe capture. Axe reported zero WCAG A/AA violations across the five routes at 390 and 1440 px. The interface detector returned an empty findings list; this does not replace visual inspection or manual accessibility testing.
 
-Physical phone touch, keyboard-open, safe-area, installed-PWA and pinch-zoom checks are pending. Resized Chromium screenshots do not establish iPhone or Android correctness. Policy text was updated to match implementation; team content review is still required before public deployment.
+Completed physical interaction evidence, including installed controls and policy/source review, is recorded in [current verification](README.md). The desktop comparisons below retain their original date and viewport scope.
 
 ## 29 October 2026 redesign: Swiss with neo-brutalist accents
 

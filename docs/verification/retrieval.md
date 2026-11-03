@@ -42,4 +42,4 @@ The core's ffprobe wrapper can return a nonzero sentinel even when it successful
 
 ## Limits of this evidence
 
-The held-out 30-item evaluation and final production network/offline checks have their own report. Calibration and smoke tests do not establish all S1–S15 statements. Physical iPhone, Android, Safari and installed-PWA checks remain separate requirements. No claim is made that every ordinary phone meets the 120-second processing target.
+The original 30-item evaluation, regression runs and production network/offline checks retain their own reports. [Current verification](README.md) records the completed S1–S15 acceptance baseline and measured/owner-confirmed device evidence. Calibration, smoke results and fixed-corpus regression each retain their distinct scope; reference-phone observations are not a speed guarantee for every phone.
