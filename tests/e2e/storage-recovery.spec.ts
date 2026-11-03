@@ -4,6 +4,7 @@
 // time deterministically. Every check reads IndexedDB directly instead of trusting the repository.
 import { test, expect, type BrowserContext, type Page } from '@playwright/test';
 import { createHash, randomUUID } from 'node:crypto';
+import { readFile } from 'node:fs/promises';
 import { strFromU8, strToU8, unzipSync, zipSync } from 'fflate';
 
 const HARNESS = 'http://127.0.0.1:4173/tests/harness.html';
@@ -639,4 +640,76 @@ test('[S12] a recoverable failure survives reopening and retry publishes one new
   ]);
   expect(ready.segments.map((s) => s.id)).toEqual([fresh.id]);
   expect(ready.jobs).toEqual([]);
+});
+
+test('[S1] a file saved in one tab appears in another open tab and survives closing both', async ({
+  browser,
+}) => {
+  const bytes = await readFile('tests/fixtures/sample-01.jpg');
+  const profile = await browser.newContext();
+  try {
+    const [adder, viewer] = [await profile.newPage(), await profile.newPage()];
+    await enterApp(adder);
+    await viewer.goto('/#/library');
+    await expect(viewer.getByText('No saved items yet.')).toBeVisible();
+    await adder.goto('/#/add');
+    await adder
+      .getByLabel('Choose files to save')
+      .setInputFiles({ name: 'banner.jpg', mimeType: 'image/jpeg', buffer: bytes });
+    await adder.getByRole('textbox', { name: 'Title' }).fill('Cross-tab banner');
+    await adder.getByRole('button', { name: 'Save locally' }).click();
+    await expect(adder.getByRole('status')).toContainText('Saved locally');
+    await expect(viewer.getByText('Cross-tab banner', { exact: true })).toBeVisible();
+    for (const page of [adder, viewer]) await page.close();
+    const reopened = await profile.newPage();
+    await reopened.goto('/#/library');
+    await expect(reopened.getByText('Cross-tab banner', { exact: true })).toBeVisible();
+    const state = await snapshot(reopened, APP_DB);
+    expectConsistent(state);
+    expect(state.items).toHaveLength(1);
+    expect(state.items[0]).toMatchObject({
+      kind: 'image',
+      title: 'Cross-tab banner',
+      originalName: 'banner.jpg',
+      mimeType: 'image/jpeg',
+      byteLength: bytes.length,
+      contentSha256: createHash('sha256').update(bytes).digest('hex'),
+      status: 'queued',
+    });
+    expect(state.jobs.map((job) => job.itemId)).toEqual([state.items[0].id]);
+  } finally {
+    await profile.close();
+  }
+});
+
+test('[S1] a storage failure during save leaves no item, original or job in any tab', async ({
+  context,
+}) => {
+  const database = `save-failure-${crypto.randomUUID()}`;
+  const [saver, other] = [await harnessTab(context, database), await harnessTab(context, database)];
+  await saver.evaluate(() =>
+    (window as any).repository.save({ kind: 'note', text: 'Existing synthetic note.' }),
+  );
+  const before = await snapshot(other, database);
+  // Test-only fault injection: the job write, the last step of the save transaction, throws.
+  const outcome = await saver.evaluate(async () => {
+    const repository = (window as any).repository;
+    const fail = () => {
+      throw Error('Simulated storage write failure');
+    };
+    repository.database.jobs.hook('creating', fail);
+    try {
+      await repository.save({ kind: 'note', text: 'Must not be confirmed.' });
+      return 'saved';
+    } catch (cause: any) {
+      return cause?.detail?.code ?? String(cause);
+    } finally {
+      repository.database.jobs.hook('creating').unsubscribe(fail);
+    }
+  });
+  expect(outcome).toBe('STORAGE_FAILED');
+  expect(await snapshot(other, database)).toEqual(before);
+  for (const page of [saver, other]) await page.close();
+  const reopened = await harnessTab(context, database);
+  expect(await snapshot(reopened, database)).toEqual(before);
 });
