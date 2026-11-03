@@ -7,7 +7,8 @@
       "files": [
         "tests/spec/storage-contracts.test.ts",
         "tests/storage/integration.test.ts",
-        "tests/e2e/library.spec.ts"
+        "tests/e2e/library.spec.ts",
+        "tests/e2e/storage-recovery.spec.ts"
       ],
       "scope": "Durable saves for all six kinds, transaction failure and real browser reopen",
       "remaining": []
@@ -23,7 +24,8 @@
       "files": [
         "tests/spec/storage-contracts.test.ts",
         "tests/storage/integration.test.ts",
-        "tests/e2e/library.spec.ts"
+        "tests/e2e/library.spec.ts",
+        "tests/e2e/storage-recovery.spec.ts"
       ],
       "scope": "Queued/processing/ready deletion, related records and stale publication",
       "remaining": []
@@ -53,7 +55,8 @@
       "files": [
         "tests/spec/storage-contracts.test.ts",
         "tests/storage/repository.test.ts",
-        "tests/e2e/library.spec.ts"
+        "tests/e2e/library.spec.ts",
+        "tests/e2e/storage-recovery.spec.ts"
       ],
       "scope": "Mixed original hashes/metadata and independent browser-profile transfer",
       "remaining": []
@@ -104,7 +107,8 @@
       "files": [
         "tests/storage/integration.test.ts",
         "tests/engine/model-client.test.ts",
-        "tests/acceptance/recovery.spec.ts"
+        "tests/acceptance/recovery.spec.ts",
+        "tests/e2e/storage-recovery.spec.ts"
       ],
       "scope": "Actual interrupted indexing/retry plus stale claims and worker failure",
       "remaining": []
