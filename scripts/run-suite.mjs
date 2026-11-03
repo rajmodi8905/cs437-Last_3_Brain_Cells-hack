@@ -2,8 +2,8 @@
 // Earlier evidence for the same suite is moved to history/, never overwritten.
 import { execFileSync, spawn } from 'node:child_process';
 import { existsSync, statSync } from 'node:fs';
-import { cp, mkdir, readFile, rename, writeFile } from 'node:fs/promises';
-import { join, resolve } from 'node:path';
+import { copyFile, mkdir, readFile, readdir, rename, writeFile } from 'node:fs/promises';
+import { dirname, join, relative, resolve } from 'node:path';
 
 const COMMANDS = {
   fast: (dir) => [
@@ -78,13 +78,13 @@ const [exitCode, signal] = await new Promise((done) => {
 // Some tests write reports straight to test-results/ (axe findings, route screenshots,
 // retrieval and calibration reports). Keep this run's copies with its evidence.
 if (existsSync('test-results'))
-  await cp('test-results', join(dir, 'test-results'), {
-    recursive: true,
-    filter: (path) => {
-      const stats = statSync(path);
-      return stats.isDirectory() || stats.mtimeMs >= started - 2000;
-    },
-  });
+  for (const entry of await readdir('test-results', { recursive: true, withFileTypes: true })) {
+    const source = join(entry.parentPath, entry.name);
+    if (!entry.isFile() || statSync(source).mtimeMs < started - 2000) continue;
+    const target = join(dir, 'test-results', relative('test-results', source));
+    await mkdir(dirname(target), { recursive: true });
+    await copyFile(source, target);
+  }
 await save({
   exitCode,
   signal,
