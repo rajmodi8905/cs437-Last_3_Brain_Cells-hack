@@ -3,9 +3,43 @@
 // exposes the same repository for claim, publication and fault-injection steps that the UI cannot
 // time deterministically. Every check reads IndexedDB directly instead of trusting the repository.
 import { test, expect, type BrowserContext, type Page } from '@playwright/test';
+import { createHash, randomUUID } from 'node:crypto';
+import { strFromU8, strToU8, unzipSync, zipSync } from 'fflate';
 
 const HARNESS = 'http://127.0.0.1:4173/tests/harness.html';
 const APP_DB = 'campus-recall';
+
+type ArchiveFiles = Record<string, Uint8Array>;
+/** Re-zips an exported archive after editing its files and manifest in place. */
+function rebuild(bytes: Buffer, edit: (files: ArchiveFiles, manifest: any) => void): Buffer {
+  const files = unzipSync(new Uint8Array(bytes));
+  const manifest = JSON.parse(strFromU8(files['manifest.json']!));
+  edit(files, manifest);
+  files['manifest.json'] = strToU8(JSON.stringify(manifest));
+  return Buffer.from(zipSync(files));
+}
+/** Appends a valid, new note entry; a non-atomic import would leave it behind. */
+function addNote(files: ArchiveFiles, manifest: any, title: string) {
+  const id = randomUUID();
+  const data = strToU8(`Synthetic restore entry: ${title}.`);
+  files[`originals/${id}`] = data;
+  manifest.items.push({
+    id,
+    kind: 'note',
+    title,
+    mimeType: 'text/plain;charset=utf-8',
+    byteLength: data.length,
+    contentSha256: createHash('sha256').update(data).digest('hex'),
+    createdAt: Date.now(),
+    originalPath: `originals/${id}`,
+  });
+  return id;
+}
+const zipFile = (buffer: Buffer, name = 'campus-recall-backup.zip') => ({
+  name,
+  mimeType: 'application/zip',
+  buffer,
+});
 
 interface Snapshot {
   items: any[];
@@ -364,4 +398,245 @@ test('[S12] reopening during processing recovers the claim under the processing 
   ]);
   expect(state.segments.map((s) => s.id)).toEqual([fresh.id]);
   expect(state.jobs).toEqual([]);
+});
+
+test('[S6] invalid archives restored through Settings change nothing in an existing library', async ({
+  context,
+  browser,
+}) => {
+  const archive = await mixedArchive(context);
+  const cases: [string, Buffer][] = [
+    [
+      'hash mismatch in the last entry',
+      rebuild(archive.bytes, (files, manifest) => {
+        addNote(files, manifest, 'Valid entry before a corrupt one');
+        const id = addNote(files, manifest, 'Corrupt entry');
+        files[`originals/${id}`]![0]! ^= 1;
+      }),
+    ],
+    [
+      'missing original file',
+      rebuild(archive.bytes, (files, manifest) => {
+        addNote(files, manifest, 'Valid entry before a missing one');
+        delete files[`originals/${addNote(files, manifest, 'Missing entry')}`];
+      }),
+    ],
+    [
+      'unsupported manifest version',
+      rebuild(archive.bytes, (files, manifest) => {
+        addNote(files, manifest, 'Valid entry in a future version');
+        manifest.version = 2;
+      }),
+    ],
+    [
+      'file outside the originals namespace',
+      rebuild(archive.bytes, (files, manifest) => {
+        addNote(files, manifest, 'Valid entry beside an unexpected file');
+        files['scripts/run.js'] = strToU8('alert(1)');
+      }),
+    ],
+    [
+      'repeated manifest ID',
+      rebuild(archive.bytes, (files, manifest) => {
+        addNote(files, manifest, 'Valid entry with a repeated ID');
+        manifest.items.push({ ...manifest.items.at(-1) });
+      }),
+    ],
+    [
+      'unsafe source URL',
+      rebuild(archive.bytes, (files, manifest) => {
+        addNote(files, manifest, 'Valid entry before an unsafe URL');
+        const webpage = manifest.items.find((item: any) => item.kind === 'webpage');
+        webpage.sourceUrl = 'javascript:alert(1)';
+      }),
+    ],
+    ['truncated ZIP', archive.bytes.subarray(0, Math.floor(archive.bytes.length / 2))],
+  ];
+  const profile = await browser.newContext();
+  try {
+    const page = await profile.newPage();
+    await enterApp(page);
+    await page.goto('/#/settings');
+    await page.getByLabel('Choose backup ZIP').setInputFiles(archive.file);
+    await expect(page.getByRole('status')).toContainText('Restored 7 items');
+    const before = await snapshot(page, APP_DB);
+    expectConsistent(before);
+    for (const [label, bytes] of cases) {
+      await page.getByLabel('Choose backup ZIP').setInputFiles(zipFile(bytes, `${label}.zip`));
+      await expect(page.getByRole('alert'), label).toContainText('Archive');
+      expect(await snapshot(page, APP_DB), label).toEqual(before);
+      await page.getByRole('button', { name: 'Dismiss error' }).click();
+      await expect(page.getByRole('alert')).toHaveCount(0);
+    }
+    await page.reload();
+    expect(await snapshot(page, APP_DB)).toEqual(before);
+  } finally {
+    await profile.close();
+  }
+});
+
+test('[S6] a storage failure part-way through a restore writes nothing and keeps existing items', async ({
+  context,
+}) => {
+  const archive = await mixedArchive(context);
+  const database = `forced-failure-${crypto.randomUUID()}`;
+  const tab = await harnessTab(context, database);
+  await tab.evaluate(() =>
+    (window as any).repository.save({ kind: 'note', text: 'Existing synthetic note.' }),
+  );
+  const before = await snapshot(tab, database);
+  // Test-only fault injection: the third original write inside the import transaction throws.
+  const outcome = await tab.evaluate(async (bytes) => {
+    const repository = (window as any).repository;
+    let writes = 0;
+    const failThird = () => {
+      if (++writes === 3) throw Error('Simulated storage write failure');
+    };
+    repository.database.originals.hook('creating', failThird);
+    try {
+      await repository.importArchive(new Blob([new Uint8Array(bytes)]));
+      return { rejected: false, writes };
+    } catch (cause: any) {
+      return { rejected: true, writes, message: String(cause?.message ?? cause) };
+    } finally {
+      repository.database.originals.hook('creating').unsubscribe(failThird);
+    }
+  }, Array.from(archive.bytes));
+  expect(outcome).toMatchObject({ rejected: true, writes: 3 });
+  expect(await snapshot(tab, database)).toEqual(before);
+  await tab.close();
+  const reopened = await harnessTab(context, database);
+  expect(await snapshot(reopened, database)).toEqual(before);
+  const report = await reopened.evaluate(
+    (bytes) => (window as any).repository.importArchive(new Blob([new Uint8Array(bytes)])),
+    Array.from(archive.bytes),
+  );
+  expect(report.importedIds).toHaveLength(7);
+  const after = await snapshot(reopened, database);
+  expectConsistent(after);
+  expect(after.items).toHaveLength(8);
+  expect(after.items.filter((item) => before.items.some((b) => b.id === item.id))).toEqual(
+    before.items,
+  );
+});
+
+test('[S6] closing the tab during a large restore leaves either the whole archive or none of it', async ({
+  context,
+  browser,
+}) => {
+  const archive = await mixedArchive(context);
+  // The seven entries plus 24 renamed copies (175 entries) so hashing and writing take
+  // measurable time. After the small restore, 168 are new and the original seven are duplicates.
+  const large = rebuild(archive.bytes, (files, manifest) => {
+    const entries = [...manifest.items];
+    for (let copy = 1; copy < 25; copy++)
+      for (const entry of entries) {
+        const id = randomUUID();
+        files[`originals/${id}`] = files[entry.originalPath]!;
+        manifest.items.push({
+          ...entry,
+          id,
+          title: `${entry.title} copy ${copy}`,
+          originalPath: `originals/${id}`,
+        });
+      }
+  });
+  /** Restores the small archive, then the large one, closing the tab `closeAfterMs` later. */
+  const restoreAndClose = async (closeAfterMs?: number) => {
+    const profile = await browser.newContext();
+    try {
+      const page = await profile.newPage();
+      await enterApp(page);
+      await page.goto('/#/settings');
+      await page.getByLabel('Choose backup ZIP').setInputFiles(archive.file);
+      await expect(page.getByRole('status')).toContainText('Restored 7 items');
+      const before = await snapshot(page, APP_DB);
+      const started = Date.now();
+      await page.getByLabel('Choose backup ZIP').setInputFiles(zipFile(large));
+      if (closeAfterMs === undefined) {
+        await expect(page.getByRole('status')).toContainText(
+          'Restored 168 items. Skipped 7 duplicates.',
+          {
+            timeout: 60000,
+          },
+        );
+      } else {
+        await page.waitForTimeout(Math.max(0, closeAfterMs - (Date.now() - started)));
+        await page.close();
+      }
+      const elapsed = Date.now() - started;
+      const reopened = await profile.newPage();
+      await reopened.goto('/#/library');
+      const after = await snapshot(reopened, APP_DB);
+      expectConsistent(after);
+      expect([7, 175]).toContain(after.items.length);
+      expect(after.items.filter((item) => before.items.some((b) => b.id === item.id))).toEqual(
+        before.items,
+      );
+      if (after.items.length > 7) {
+        expect(after.items.filter((item) => item.status === 'queued')).toHaveLength(175);
+        expect(after.jobs).toHaveLength(175);
+      }
+      return { elapsed, committed: after.items.length > 7 };
+    } finally {
+      await profile.close();
+    }
+  };
+  const complete = await restoreAndClose();
+  expect(complete.committed).toBe(true);
+  const outcomes = [];
+  for (const fraction of [0.25, 0.5, 0.75, 0.9]) {
+    const { committed } = await restoreAndClose(Math.round(complete.elapsed * fraction));
+    outcomes.push(`${fraction}: ${committed ? 'committed' : 'abandoned'}`);
+  }
+  test.info().annotations.push({
+    type: 'outcome',
+    description: `full restore ${complete.elapsed} ms; closed at ${outcomes.join(', ')}`,
+  });
+});
+
+test('[S12] a recoverable failure survives reopening and retry publishes one new generation', async ({
+  context,
+}) => {
+  const database = `retry-${crypto.randomUUID()}`;
+  const first = await harnessTab(context, database);
+  const { item, claim } = await first.evaluate(async () => {
+    const repository = (window as any).repository;
+    const item = await repository.save({ kind: 'note', text: 'Synthetic note that fails once.' });
+    const claim = await repository.claimNextJob();
+    await repository.failJob(claim, {
+      code: 'EXTRACTION_FAILED',
+      message: 'Simulated recoverable extraction failure.',
+      retryable: true,
+    });
+    return { item, claim };
+  });
+  await first.close();
+  const second = await harnessTab(context, database);
+  const failed = await snapshot(second, database);
+  expectConsistent(failed);
+  expect(failed.items[0]).toMatchObject({ status: 'failed', processingGeneration: 0 });
+  expect(failed.items[0].error.message).toBe('Simulated recoverable extraction failure.');
+  expect(failed.originals[0]!.sha256).toBe(item.contentSha256);
+  expect(failed.jobs).toEqual([]);
+  // Retry, as LocalEngine.indexItem does, moves to the next generation.
+  const retry = await second.evaluate(async (id) => {
+    const repository = (window as any).repository;
+    await repository.enqueueItem(id);
+    return repository.claimNextJob();
+  }, item.id);
+  expect(retry.generation).toBe(1);
+  expect(await publish(second, claim, await segmentFor(second, item.id))).toBe(false);
+  const fresh = await segmentFor(second, item.id);
+  expect(await publish(second, retry, fresh)).toBe(true);
+  expect(await publish(second, claim, await segmentFor(second, item.id))).toBe(false);
+  await second.close();
+  const third = await harnessTab(context, database);
+  const ready = await snapshot(third, database);
+  expectConsistent(ready);
+  expect(ready.items.map((i) => [i.status, i.processingGeneration, i.error])).toEqual([
+    ['ready', 1, undefined],
+  ]);
+  expect(ready.segments.map((s) => s.id)).toEqual([fresh.id]);
+  expect(ready.jobs).toEqual([]);
 });
