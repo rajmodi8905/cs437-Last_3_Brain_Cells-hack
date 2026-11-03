@@ -134,7 +134,9 @@ npm run format:check
 npx playwright install chromium
 npm run models:download
 npm run build
+npm run spec:mapping
 npm test
+npm run spec:summary
 npm run release:check
 ```
 
@@ -147,7 +149,7 @@ npm run test:browser       # production UI, responsive layouts and offline shell
 npm run test:acceptance    # actual extraction and retrieval
 ```
 
-The required browser suite uses Playwright Chromium. Additional engine diagnostics and shipping-Safari comparisons are retained in the [dated engineering report](docs/verification/2026-10-29-release-preparation.md). Physical-device evidence is listed above. Reports and screenshots are written to ignored `test-results/` and `playwright-report/`; synthetic fixtures and calibration methodology are documented in [acceptance design](docs/implementation/acceptance.md).
+The required browser suite uses Playwright Chromium. Additional engine diagnostics and shipping-Safari comparisons are retained in the [dated engineering report](docs/verification/2026-10-29-release-preparation.md). Physical-device evidence is listed above. Each suite writes its own reports to ignored `test-evidence/<suite>/`: runner JSON results, a `run.json` with the tested commit and exit code, and, for browser and acceptance, a separate HTML report with failure screenshots and traces. A later run moves the earlier evidence to `test-evidence/history/` instead of overwriting it. `npm run spec:summary` turns that evidence into the S1–S15 table; see [test evidence and the S1–S15 gate](docs/implementation/test-evidence.md). Synthetic fixtures and calibration methodology are documented in [acceptance design](docs/implementation/acceptance.md).
 
 Fixture regeneration needs macOS `say`, local ffmpeg and npm dependencies:
 
@@ -157,7 +159,7 @@ node scripts/create-fixtures.mjs
 
 ## Statement coverage and milestone evidence
 
-All fifteen statements map to actual test suites in [the coverage registry](tests/spec/coverage.json). `npm run check` validates that mapping; `npm test` executes the behavior. Registry completeness alone is not a test pass. The current local, CI and device results are above; [the verification index](docs/verification/README.md) is the current S1–S15 status reference. See [the October milestone audit](docs/verification/milestones-2026-10.md) for historical checkpoint evidence and late earlier milestones. Older reports retain their original dates and builds rather than representing current status.
+All fifteen statements map to exact test identities (suite, file and title) in [the coverage registry](tests/spec/coverage.json). `npm run check` validates the registry contract, `npm run spec:mapping` rejects titles that no longer exist, and `npm run spec:summary` passes a statement only when its mapped tests actually ran and passed. Registry completeness alone is not a test pass. The current local, CI and device results are above; [the verification index](docs/verification/README.md) is the current S1–S15 status reference. See [the October milestone audit](docs/verification/milestones-2026-10.md) for historical checkpoint evidence and late earlier milestones. Older reports retain their original dates and builds rather than representing current status.
 
 ## Reusable regression tools
 

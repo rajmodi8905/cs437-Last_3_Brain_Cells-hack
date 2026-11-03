@@ -7,3 +7,4 @@ public/runtime/
 public/asset-manifest.json
 playwright-report/
 test-results/
+test-evidence/

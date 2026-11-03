@@ -5,10 +5,13 @@ on:
     branches: [main]
 permissions:
   contents: read
+# Each suite is its own job and check. "checks" keeps the previous check name and passes only
+# when every suite job succeeded and every S1-S15 statement has executed, passing mapped tests.
 jobs:
-  checks:
+  static:
+    name: Static and fast checks
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -19,7 +22,56 @@ jobs:
       - run: npm audit --audit-level=low
       - run: npm run check
       - run: npm run format:check
+      - run: npm run spec:mapping
       - run: npm run test:fast
+      - name: Summarize fast-suite statement evidence
+        if: always()
+        run: npm run spec:summary -- --only fast --report-only
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: evidence-fast-attempt-${{ github.run_attempt }}
+          path: test-evidence/
+          if-no-files-found: warn
+          retention-days: 14
+
+  browser:
+    name: Production browser tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - run: npm run release:check
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:browser
+      - name: Summarize browser statement evidence
+        if: always()
+        run: npm run spec:summary -- --only browser --report-only
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: evidence-browser-attempt-${{ github.run_attempt }}
+          path: test-evidence/
+          if-no-files-found: warn
+          retention-days: 14
+
+  acceptance:
+    name: Actual-model acceptance
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
       - uses: actions/cache@v4
         with:
           path: .models
@@ -27,15 +79,61 @@ jobs:
       # Exercise model setup before any build can create its generated manifest.
       - run: npm run models:download
       - run: npm run build
-      - run: npm run release:check
       - run: npx playwright install --with-deps chromium
-      - run: npm run test:browser
       - run: npm run test:acceptance
+      - name: Summarize actual-model statement evidence
+        if: always()
+        run: npm run spec:summary -- --only acceptance --report-only
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: verification-results
-          path: |
-            test-results/
-            playwright-report/
-          retention-days: 7
+          name: evidence-acceptance-attempt-${{ github.run_attempt }}
+          path: test-evidence/
+          if-no-files-found: warn
+          retention-days: 14
+
+  checks:
+    name: checks
+    if: always()
+    needs: [static, browser, acceptance]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      # Each artifact keeps its own directory, so attempts never overwrite each other.
+      - uses: actions/download-artifact@v4
+        continue-on-error: true
+        with:
+          pattern: evidence-*
+          path: test-evidence
+      - name: Gate on S1-S15 executed test evidence
+        env:
+          SOURCE_SHA: ${{ github.sha }}
+          CR_PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: node scripts/spec-summary.mjs --sha "$SOURCE_SHA" --out spec-summary
+      - name: Require every suite job to succeed
+        if: always()
+        env:
+          STATIC: ${{ needs.static.result }}
+          BROWSER: ${{ needs.browser.result }}
+          ACCEPTANCE: ${{ needs.acceptance.result }}
+        run: |
+          status=0
+          {
+            echo '### Suite jobs'
+            for pair in "Static and fast checks=$STATIC" "Production browser tests=$BROWSER" "Actual-model acceptance=$ACCEPTANCE"; do
+              echo "- ${pair%%=*}: ${pair#*=}"
+              [ "${pair#*=}" = success ] || status=1
+            done
+          } | tee -a "$GITHUB_STEP_SUMMARY"
+          exit $status
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: spec-summary-attempt-${{ github.run_attempt }}
+          path: spec-summary/
+          if-no-files-found: warn
+          retention-days: 14

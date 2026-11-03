@@ -38,6 +38,10 @@ jobs:
       - run: npm run build
       - run: npx playwright install --with-deps chromium
       - run: npm test
+      # Blocks the candidate unless every S1-S15 statement has executed, passing mapped tests.
+      - name: Gate on S1-S15 executed test evidence
+        if: always()
+        run: node scripts/spec-summary.mjs --sha "$GITHUB_SHA"
       - name: Build project-path production candidate
         env:
           APP_BASE: /${{ github.event.repository.name }}/
@@ -61,6 +65,7 @@ jobs:
         with:
           name: release-verification
           path: |
+            test-evidence/
             test-results/
             playwright-report/
           retention-days: 7
