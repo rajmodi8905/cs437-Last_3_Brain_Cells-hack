@@ -1,4 +1,7 @@
 import { defineConfig } from '@playwright/test';
+// scripts/run-suite.mjs gives each suite its own evidence directory so browser and model
+// reports, screenshots and traces never overwrite each other. Direct runs keep the defaults.
+const evidence = process.env.CR_SUITE_DIR;
 export default defineConfig({
   testDir: 'tests',
   testMatch: ['e2e/**/*.spec.ts', 'acceptance/**/*.spec.ts'],
@@ -6,7 +9,16 @@ export default defineConfig({
   expect: { timeout: 15000 },
   workers: 1,
   fullyParallel: false,
-  reporter: [['list'], ['html', { open: 'never' }]],
+  ...(evidence
+    ? {
+        outputDir: `${evidence}/artifacts`,
+        reporter: [
+          ['list'],
+          ['html', { open: 'never', outputFolder: `${evidence}/html` }],
+          ['json', { outputFile: `${evidence}/results.json` }],
+        ],
+      }
+    : { reporter: [['list'], ['html', { open: 'never' }]] }),
   use: {
     baseURL: 'http://127.0.0.1:4174',
     browserName: 'chromium',

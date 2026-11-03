@@ -27,6 +27,7 @@ export interface Coverage {
 export interface RunRecord {
   suite?: Suite;
   sha?: string;
+  dirty?: boolean;
   exitCode?: number | null;
   signal?: string | null;
   runAttempt?: string;
@@ -49,6 +50,7 @@ export interface Summary {
     required: boolean;
     outcome: 'passed' | 'failed' | 'not-run' | 'stale';
     counts?: {
+      recorded: number;
       executed: number;
       passed: number;
       failed: number;

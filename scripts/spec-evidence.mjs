@@ -173,16 +173,23 @@ export function evaluate({ coverage, specIds, suites, sourceSha, required = SUIT
       problems.push(
         `Runner exited with ${run.exitCode ?? 'no exit code'}${run.signal ? ` (${run.signal})` : ''}.`,
       );
-    const stale = sourceSha && run.sha && run.sha !== sourceSha;
-    if (stale) problems.push(`Evidence is for ${run.sha}, not ${sourceSha}.`);
+    const otherCommit = sourceSha && run.sha && run.sha !== sourceSha;
+    if (otherCommit) problems.push(`Evidence is for ${run.sha}, not ${sourceSha}.`);
+    if (run.dirty)
+      problems.push(`Recorded from a checkout with uncommitted changes to ${run.sha}.`);
+    const stale = otherCommit || run.dirty === true;
     const counts = {
-      executed: results.filter((r) => r.status !== 'not-run').length,
+      recorded: results.length,
+      executed: count(results, 'passed') + count(results, 'flaky') + count(results, 'failed'),
       passed: count(results, 'passed') + count(results, 'flaky'),
       failed: count(results, 'failed'),
       skipped: count(results, 'skipped'),
       notRun: count(results, 'not-run'),
       flaky: count(results, 'flaky'),
     };
+    // Every failure is listed, including tests that are not mapped to a statement.
+    for (const result of results.filter((r) => r.status === 'failed'))
+      problems.push(`Failed: ${result.file} :: ${result.title}`);
     const outcome = stale
       ? 'stale'
       : !evidence.report
@@ -258,13 +265,16 @@ export function renderMarkdown(summary, context = {}) {
     `Tested commit: \`${summary.sourceSha ?? 'unknown'}\`${context.headSha && context.headSha !== summary.sourceSha ? ` (pull request head \`${context.headSha}\`)` : ''}`,
     `Required suites: ${summary.required.join(', ')}`,
     '',
-    '| Suite | Required | Outcome | Executed | Passed | Failed | Skipped | Not run |',
-    '| --- | --- | --- | --- | --- | --- | --- | --- |',
+    '| Suite | Required | Outcome | Recorded | Executed | Passed | Failed | Skipped | Not run |',
+    '| --- | --- | --- | --- | --- | --- | --- | --- | --- |',
   ];
   for (const row of summary.suites) {
     const c = row.counts;
+    const cells = c
+      ? [c.recorded, c.executed, c.passed, c.failed, c.skipped, c.notRun]
+      : ['-', '-', '-', '-', '-', '-'];
     lines.push(
-      `| ${row.suite} | ${row.required ? 'yes' : 'no'} | ${label(row.outcome)} | ${c?.executed ?? 0} | ${c?.passed ?? 0} | ${c?.failed ?? 0} | ${c?.skipped ?? 0} | ${c?.notRun ?? 0} |`,
+      `| ${row.suite} | ${row.required ? 'yes' : 'no'} | ${label(row.outcome)} | ${cells.join(' | ')} |`,
     );
   }
   lines.push(

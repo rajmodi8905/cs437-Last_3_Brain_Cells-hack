@@ -156,6 +156,18 @@ describe('S1-S15 gate', () => {
       'failed: tests/spec/save.test.ts :: saves > keeps bytes',
     );
   });
+  it('names failing tests that are not mapped to any statement', () => {
+    const suites = passing();
+    const report = vitestReport();
+    report.testResults[0].assertionResults[1].status = 'failed';
+    suites.fast = { run: run(1), report: normalizeVitest(report, root) };
+    const summary = summarize(suites);
+    expect(summary.statements[0].outcome).toBe('passed');
+    expect(summary.suites.find((s) => s.suite === 'fast')?.problems).toContain(
+      'Failed: tests/spec/save.test.ts :: unmapped helper',
+    );
+    expect(summary.gate).toBe('failed');
+  });
   it('reports a missing result when the suite ran without the mapped test', () => {
     const suites = passing();
     suites.acceptance.report = normalizePlaywright(
@@ -174,6 +186,9 @@ describe('S1-S15 gate', () => {
     expect(summary.suites.find((s) => s.suite === 'browser')?.outcome).toBe('not-run');
     expect(summary.statements[0].tests[1].status).toBe('not-run');
     expect(summary.gate).toBe('failed');
+    expect(renderMarkdown(summary)).toContain(
+      '| browser | yes | NOT-RUN | - | - | - | - | - | - |',
+    );
   });
   it('never treats a skipped required test as a pass', () => {
     const suites = passing();
@@ -208,6 +223,14 @@ describe('S1-S15 gate', () => {
     suites.browser.run = run(0, 'b'.repeat(40));
     const summary = summarize(suites);
     expect(summary.suites.find((s) => s.suite === 'browser')?.outcome).toBe('stale');
+    expect(summary.statements[0].outcome).toBe('stale');
+    expect(summary.gate).toBe('failed');
+  });
+  it('treats evidence from a checkout with uncommitted changes as stale', () => {
+    const suites = passing();
+    suites.fast.run = { ...run(), dirty: true };
+    const summary = summarize(suites);
+    expect(summary.suites.find((s) => s.suite === 'fast')?.outcome).toBe('stale');
     expect(summary.statements[0].outcome).toBe('stale');
     expect(summary.gate).toBe('failed');
   });
