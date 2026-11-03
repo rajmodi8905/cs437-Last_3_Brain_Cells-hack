@@ -23,12 +23,18 @@ Work in this order. Do not skip ahead.
    `tests/` file for the area you change (for example
    `tests/spec/storage-contracts.test.ts`, `tests/engine/<module>.test.ts`),
    or a new `tests/spec/<short-name>.test.ts`. Run
-   `npx vitest run <that file>` and show that this new test fails, then run
+   `npx vitest run <that file>` (or `npx playwright test <that file>` for a
+   test under `tests/e2e/` or `tests/acceptance/`) and show that this new test
+   fails on its own assertion, not on a timeout or a setup error. Then run
    `npm run test:fast` and show every old test still passes. If the new test
    passes already, the test is wrong: fix the test, not the code.
 4. **Code.** Change the smallest amount of code in `src/` that makes it pass.
-5. **Check.** Run `npm run check` and the full suite with `npm test`. Then run
-   the `spec-status` skill, if it is in the repo yet.
+5. **Check.** Run `npm run check`, then each part of the full suite on its
+   own: `npm run test:fast`, `npm run build` then `npm run test:browser`, and
+   `npm run test:acceptance` (`npm test` stops at the first failing part). Any
+   failure that also happens on `main` without your change is not yours: name
+   it as pre-existing, do not fix it here. Then run the `spec-status` skill, if
+   it is in the repo yet.
 6. **Commit** on that branch, one commit, message `S<n>: <statement>`. Do not push and do not merge: a
    teammate reviews the pull request.
 
