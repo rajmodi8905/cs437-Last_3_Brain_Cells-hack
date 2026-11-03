@@ -2,6 +2,12 @@
 
 A free, local personal library for screenshots, PDFs, notes, webpages and short recordings. Save an original, describe what you remember, and open the matching file, PDF page or media interval. There are no accounts, cloud inference calls, generated answers or API keys.
 
+
+
+https://github.com/user-attachments/assets/2947f113-1e72-4074-8d47-2b43daa21dfe
+
+
+
 Built by Raj Modi, Chaitanya and Nakshatra for CS437 at IIT Gandhinagar. A student project, not an official IITGN service. Interview evidence and testable requirements are in [SPEC.md](SPEC.md).
 
 For reviewers: [run locally](#run-locally) with `npm run dev` after installation; [run the full suite](#test) with `npm test` after its one-time browser/model/build setup. See [completed S1–S15 verification](docs/verification/README.md), [dependency validation](docs/verification/2026-11-02-dependency-remediation.md) and [AI-use notes](docs/ai-use.md).
