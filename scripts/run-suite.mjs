@@ -60,6 +60,9 @@ const record = {
 const save = (fields) =>
   writeFile(join(dir, 'run.json'), JSON.stringify({ ...record, ...fields }, null, 2) + '\n');
 await save({ exitCode: null, status: 'running' });
+// Playwright used to create test-results/ as its default output directory. Some tests write
+// reports there directly, so it must exist now that Playwright output goes to the evidence directory.
+await mkdir('test-results', { recursive: true });
 const started = Date.now();
 const child = spawn(process.execPath, args, {
   stdio: 'inherit',
