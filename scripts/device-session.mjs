@@ -4,7 +4,7 @@ import { createHash, createPrivateKey, X509Certificate } from 'node:crypto';
 import { chmod, copyFile, mkdir, readFile, readdir, writeFile } from 'node:fs/promises';
 import { isIP } from 'node:net';
 import { createServer } from 'node:https';
-import { dirname, join, relative, resolve, sep } from 'node:path';
+import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { build, preview } from 'vite';
 import { zipSync } from 'fflate';
 
@@ -25,7 +25,12 @@ for (let index = 0; index < args.length; index += 2) {
 }
 const directory = resolve(options['--directory'] || '.cache/device-session');
 const withinRepo = relative(process.cwd(), directory);
-if (!withinRepo.startsWith(`..${sep}`) && !withinRepo.startsWith(`.cache${sep}`))
+// On Windows a directory on another drive has no relative path; relative() returns it absolute.
+if (
+  !isAbsolute(withinRepo) &&
+  !withinRepo.startsWith(`..${sep}`) &&
+  !withinRepo.startsWith(`.cache${sep}`)
+)
   throw Error('Session certificates must stay under ignored .cache/ or outside this repository.');
 const sha = (bytes) => createHash('sha256').update(bytes).digest('hex');
 const git = (...arguments_) => execFileSync('git', arguments_, { encoding: 'utf8' }).trimEnd();
