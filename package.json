@@ -11,7 +11,7 @@
     "test": "npm run test:fast && npm run test:browser && npm run test:acceptance",
     "test:fast": "node scripts/run-suite.mjs fast",
     "build": "tsc --noEmit && vite build",
-    "check": "tsc --noEmit && eslint src tests && node scripts/check-product.mjs && node scripts/check-spec-coverage.mjs",
+    "check": "tsc --noEmit && eslint src tests pilot && node scripts/check-product.mjs && node scripts/check-spec-coverage.mjs",
     "predev": "node scripts/prepare-assets.mjs",
     "prebuild": "node scripts/prepare-assets.mjs",
     "test:browser": "node scripts/run-suite.mjs browser",
@@ -25,10 +25,11 @@
     "qa:device:prepare": "node scripts/device-session.mjs prepare",
     "qa:device:serve": "node scripts/device-session.mjs serve",
     "models:download": "node scripts/download-assets.mjs",
-    "format:check": "prettier --check src/ui src/app src/engine src/shared/browser-assets.ts src/main.tsx scripts tests/app tests/acceptance tests/e2e tests/engine tests/storage/integration.test.ts tests/spec tests/tooling vite.config.ts playwright.config.ts playwright.webkit.config.ts eslint.config.js src/sw.ts",
+    "format:check": "prettier --check src/ui src/app src/engine src/shared/browser-assets.ts src/main.tsx scripts tests/app tests/acceptance tests/e2e tests/engine tests/storage/integration.test.ts tests/spec tests/tooling vite.config.ts playwright.config.ts playwright.webkit.config.ts eslint.config.js src/sw.ts pilot",
     "premodels:download": "node scripts/prepare-assets.mjs",
     "release:check": "node scripts/check-release.mjs",
-    "test:webkit": "playwright test --config playwright.webkit.config.ts"
+    "test:webkit": "playwright test --config playwright.webkit.config.ts",
+    "test:pilot": "vitest run --config pilot/vitest.config.ts"
   },
   "dependencies": {
     "@ffmpeg/core": "0.12.10",
