@@ -4,7 +4,11 @@ import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import type { IncomingMessage, RequestListener, ServerResponse } from 'node:http';
 import {
   decideWrite,
+  PILOT_INDEX_VERSIONS,
+  searchMetadataDigest,
   validateCloudItem,
+  validateIndexBundle,
+  type IndexBundle,
   type CloudItem,
   type ItemWrite,
   type PilotErrorCode,
@@ -36,6 +40,8 @@ export interface PilotServerOptions {
    * Firebase project exists. When set, `/config` reports `dev` and `/dev/token` is enabled.
    */
   devSigner?: (email: string) => string;
+  /** Index versions accepted from devices; defaults to the pilot contract's list. */
+  supportedIndexVersions?: readonly string[];
 }
 
 const STATUS: Record<PilotErrorCode, number> = {
@@ -58,6 +64,8 @@ const RETRYABLE = new Set<PilotErrorCode>(['INTERNAL_ERROR']);
 const UUID_V4 = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 const COOKIE = 'recall_session';
 const MAX_JSON_BYTES = 64 * 1024;
+// 2,000 segments of 768 numbers as JSON stay well under this.
+const MAX_INDEX_BYTES = 24 * 1024 * 1024;
 
 class ApiError extends Error {
   constructor(
@@ -102,8 +110,11 @@ async function readBody(req: IncomingMessage, limit: number): Promise<Uint8Array
   }
   return new Uint8Array(Buffer.concat(parts));
 }
-async function readJson(req: IncomingMessage): Promise<Record<string, unknown>> {
-  const bytes = await readBody(req, MAX_JSON_BYTES);
+async function readJson(
+  req: IncomingMessage,
+  limit = MAX_JSON_BYTES,
+): Promise<Record<string, unknown>> {
+  const bytes = await readBody(req, limit);
   try {
     const value = JSON.parse(Buffer.from(bytes).toString('utf8'));
     if (value && typeof value === 'object' && !Array.isArray(value)) return value;
@@ -292,12 +303,13 @@ export function createPilotHandler(options: PilotServerOptions): RequestListener
       const session = await requireSession(req, true);
       const body = await readJson(req);
       const opId = opIdOf(body);
+      // Checked first: uploads begun before the library was removed must not complete.
+      await requireEpoch(session.ownerKey, body);
       const upload = await store.getUpload(match[1]);
       if (!upload || upload.ownerKey !== session.ownerKey)
         throw new ApiError('NOT_FOUND', 'Upload not found.');
       // A completed upload answers with its item, whatever the retry's operation ID.
       if (upload.result) return send(res, 200, { item: upload.result });
-      await requireEpoch(session.ownerKey, body);
       const result = await idempotent(session.ownerKey, opId, async () => {
         const count = Math.ceil(upload.item.byteLength / chunkBytes);
         const parts: Uint8Array[] = [];
@@ -354,9 +366,19 @@ export function createPilotHandler(options: PilotServerOptions): RequestListener
         }
         const next =
           write.type === 'delete'
-            ? { ...current, revision: decision.nextRevision, deleted: true, objectKey: undefined }
+            ? {
+                ...current,
+                revision: decision.nextRevision,
+                deleted: true,
+                objectKey: undefined,
+                indexObjectKey: undefined,
+                index: undefined,
+              }
             : { ...current, revision: decision.nextRevision, title: write.title };
-        if (write.type === 'delete' && current.objectKey) await objects.delete(current.objectKey);
+        if (write.type === 'delete') {
+          if (current.objectKey) await objects.delete(current.objectKey);
+          if (current.indexObjectKey) await objects.delete(current.indexObjectKey);
+        }
         await store.publish(session.ownerKey, next);
         return { status: 200, body: { item: publicItem(next) } };
       });
@@ -373,6 +395,58 @@ export function createPilotHandler(options: PilotServerOptions): RequestListener
         'content-type': item.mimeType,
         etag: `"sha256-${item.contentSha256}"`,
       });
+    }
+
+    if (path === '/vault' && method === 'DELETE') {
+      const session = await requireSession(req, true);
+      const body = await readJson(req);
+      if (body.confirm !== 'remove-cloud-library')
+        throw new ApiError('INVALID_INPUT', 'Confirm removing the cloud library.');
+      await requireEpoch(session.ownerKey, body);
+      const { epoch, removed } = await store.resetVault(session.ownerKey);
+      for (const item of removed) {
+        if (item.objectKey) await objects.delete(item.objectKey);
+        if (item.indexObjectKey) await objects.delete(item.indexObjectKey);
+      }
+      return send(res, 200, { vault: { epoch } });
+    }
+
+    if ((match = /^\/items\/([^/]+)\/index$/.exec(path)) && method === 'PUT') {
+      const session = await requireSession(req, true);
+      const body = await readJson(req, MAX_INDEX_BYTES);
+      const opId = opIdOf(body);
+      const epoch = await requireEpoch(session.ownerKey, body);
+      const result = await idempotent(session.ownerKey, opId, async () => {
+        const current = await store.getItem(session.ownerKey, match![1]);
+        if (!current) throw new ApiError('NOT_FOUND', 'Item not found.');
+        if (current.deleted) throw new ApiError('ITEM_DELETED', 'This item was deleted.');
+        const valid = validateIndexBundle(
+          body.bundle as IndexBundle,
+          {
+            globalId: current.globalId,
+            contentSha256: current.contentSha256,
+            searchMetadataDigest: await searchMetadataDigest(current),
+          },
+          options.supportedIndexVersions ?? PILOT_INDEX_VERSIONS,
+        );
+        if (!valid.ok) throw new ApiError(valid.code, valid.reason);
+        const indexObjectKey = `${session.ownerKey}/${epoch}/${current.globalId}/index`;
+        await objects.put(indexObjectKey, new TextEncoder().encode(JSON.stringify(body.bundle)));
+        // An index does not change the item's revision, so it never causes rename conflicts.
+        const next = { ...current, index: valid.value, indexObjectKey };
+        await store.publish(session.ownerKey, next);
+        return { status: 200, body: { item: publicItem(next) } };
+      });
+      return send(res, result.status, result.body);
+    }
+
+    if ((match = /^\/items\/([^/]+)\/index$/.exec(path)) && method === 'GET') {
+      const session = await requireSession(req, false);
+      const item = await store.getItem(session.ownerKey, match[1]);
+      if (item?.deleted) throw new ApiError('ITEM_DELETED', 'This item was deleted.');
+      const bytes = item?.indexObjectKey ? await objects.get(item.indexObjectKey) : undefined;
+      if (!item || !bytes) throw new ApiError('NOT_FOUND', 'No index for this item.');
+      return send(res, 200, bytes, { 'content-type': 'application/json' });
     }
 
     throw new ApiError('NOT_FOUND', 'No such endpoint.');

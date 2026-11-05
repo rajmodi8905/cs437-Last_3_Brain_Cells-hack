@@ -1,4 +1,4 @@
-import { lazy, Suspense } from 'react';
+import { lazy, Suspense, useEffect } from 'react';
 import { ArrowUpRight, Search, ShieldCheck, WifiOff, X } from 'lucide-react';
 import type { CampusRecallServices } from '../app/services';
 import { useCampusRecall } from '../app/useCampusRecall';
@@ -9,9 +9,14 @@ import { Landing } from './Landing';
 import { LibrarySearchScreen } from './screens/LibrarySearchScreen';
 import { SettingsScreen } from './screens/SettingsScreen';
 import { useModalFocus } from './useModalFocus';
+import { getAutoSync } from '../../pilot/client/autosync';
 const Policy = lazy(() => import('./Policy').then((m) => ({ default: m.Policy })));
 export function App({ services }: { services: CampusRecallServices }) {
   const model = useCampusRecall(services);
+  // Pilot Auto-sync runs app-wide once signed in and opted in.
+  useEffect(() => {
+    void getAutoSync(services).start();
+  }, [services]);
   useModalFocus(model);
   const {
     selected,

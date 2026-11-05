@@ -2,6 +2,10 @@
 import { LIMITS, SUPPORTED_MIME_TYPES, type ItemKind, type SourceLocation } from '../../src/shared';
 
 export const INDEX_DIMENSION = 768;
+/** Index versions the pilot accepts; must include the app's current INDEX_VERSION. */
+export const PILOT_INDEX_VERSIONS: readonly string[] = [
+  'gemma2-daa72c5-q4-768-ch256o48-img70-lowered1-notitledup1-asr2-ocrconf1-v8',
+];
 export const MAX_SEGMENTS_PER_BUNDLE = 2000;
 export const NORM_TOLERANCE = 1e-3;
 export const MAX_TITLE_CODE_POINTS = 120;
@@ -264,4 +268,14 @@ export function decideWrite(current: ItemState | undefined, write: ItemWrite): W
   if (write.expectedRevision !== current.revision)
     return { action: 'reject', code: 'REVISION_CONFLICT' };
   return { action: 'apply', nextRevision: current.revision + 1 };
+}
+
+/**
+ * Digest of the item metadata that search embeds (the title). An index built under another
+ * title is stale. Uses Web Crypto, available in browsers and Node.
+ */
+export async function searchMetadataDigest(item: { title: string }): Promise<string> {
+  const bytes = new TextEncoder().encode(JSON.stringify({ title: item.title }));
+  const digest = await globalThis.crypto.subtle.digest('SHA-256', bytes);
+  return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, '0')).join('');
 }

@@ -78,6 +78,18 @@ export class MemoryPilotStore implements PilotStore {
     return { cursor: changes.length, changes: changes.slice(after) };
   }
 
+  async resetVault(ownerKey: string) {
+    const vault = this.vaultOf(ownerKey);
+    const removed = [...vault.items.values()];
+    vault.epoch += 1;
+    vault.items.clear();
+    vault.changes = [];
+    vault.responses.clear();
+    for (const [id, upload] of this.uploads)
+      if (upload.ownerKey === ownerKey) this.uploads.delete(id);
+    return { epoch: vault.epoch, removed };
+  }
+
   /** Test helper: which owner an upload belongs to. */
   uploadOwner(uploadId: string) {
     return this.uploads.get(uploadId)?.ownerKey;

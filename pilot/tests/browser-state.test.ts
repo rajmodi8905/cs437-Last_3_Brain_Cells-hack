@@ -54,6 +54,31 @@ describe('Sync state saved in the browser', () => {
     b.close();
   });
 
+  it('keeps downloaded cloud indexes across reopening', async () => {
+    const account = unique();
+    const first = new IndexedDbSyncStateStore(account);
+    const entry = {
+      key: 'k1',
+      kind: 'pdf' as const,
+      segments: [
+        {
+          modality: 'text' as const,
+          location: { kind: 'page' as const, page: 2 },
+          text: 'x',
+          vector: [1, 0],
+        },
+      ],
+    };
+    await first.remoteIndex.put('g1', entry);
+    first.close();
+    const reopened = new IndexedDbSyncStateStore(account);
+    expect(await reopened.remoteIndex.get('g1')).toEqual(entry);
+    expect(await reopened.remoteIndex.all()).toEqual([{ globalId: 'g1', ...entry }]);
+    await reopened.remoteIndex.delete('g1');
+    expect(await reopened.remoteIndex.get('g1')).toBeUndefined();
+    reopened.close();
+  });
+
   it('refuses an account ID that could reach another database name', () => {
     expect(() => new IndexedDbSyncStateStore('../campus-recall')).toThrow();
     expect(() => new IndexedDbSyncStateStore('')).toThrow();

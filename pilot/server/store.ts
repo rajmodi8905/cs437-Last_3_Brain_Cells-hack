@@ -6,6 +6,7 @@ export type ItemDescription = Omit<CloudItem, 'globalId' | 'revision' | 'deleted
 
 export interface StoredItem extends CloudItem {
   objectKey?: string;
+  indexObjectKey?: string;
 }
 
 export interface Session {
@@ -51,6 +52,11 @@ export interface PilotStore {
   /** Stores the item and appends its change; the cursor is allocated in the same step. */
   publish(ownerKey: string, item: StoredItem): Promise<Change>;
   changesAfter(ownerKey: string, after: number): Promise<{ cursor: number; changes: Change[] }>;
+  /**
+   * Removes the account's cloud library: forgets its items, change feed and unfinished uploads
+   * and moves to a new epoch. Returns the removed items so their objects can be deleted.
+   */
+  resetVault(ownerKey: string): Promise<{ epoch: number; removed: StoredItem[] }>;
 }
 
 export interface ObjectStore {
@@ -62,6 +68,6 @@ export interface ObjectStore {
 /** What other devices see: tombstones keep only identity and revision. */
 export const publicItem = (item: StoredItem): Change['item'] => {
   if (item.deleted) return { globalId: item.globalId, revision: item.revision, deleted: true };
-  const { objectKey: _objectKey, ...visible } = item;
+  const { objectKey: _objectKey, indexObjectKey: _indexObjectKey, ...visible } = item;
   return visible;
 };

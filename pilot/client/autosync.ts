@@ -1,6 +1,7 @@
 // Auto-sync for the app: sign-in, explicit inclusion, a sync loop and the cloud list.
 // UI-agnostic; the Settings section subscribes to its view.
 import type { CampusRecallServices } from '../../src/app/services';
+import type { IndexedSegment, ItemKind, SearchableSegment } from '../../src/shared';
 import {
   ApiFailure,
   createApiClient,
@@ -24,10 +25,40 @@ export interface AutoSyncView {
   cloudOnly: ChangeItem[];
   conflicts: { title: string; remoteTitle: string }[];
   blocked: boolean;
+  /** Sync paused on this device. */
+  paused: boolean;
+  /** The cloud library was removed or reset; nothing syncs until the user starts again. */
+  needsResync: boolean;
+  /** Cloud items kept on this device for offline use. */
+  offlineIds: string[];
   error?: string;
 }
 
 const SYNC_EVERY_MS = 15_000;
+
+/** The engine hook search uses to include cloud items (see LocalEngine.extraSegments). */
+interface CloudSearchHook {
+  extraSegments?: (kind?: ItemKind) => Promise<SearchableSegment[]>;
+}
+/** The app's Dexie repository exposes its segments table; other repositories do not. */
+interface WithSegments {
+  database?: {
+    segments: {
+      where(index: string): { equals(value: string): { toArray(): Promise<IndexedSegment[]> } };
+    };
+  };
+}
+
+const controllers = new WeakMap<CampusRecallServices, AutoSyncController>();
+/** One controller per app, so syncing continues on every screen, not only Settings. */
+export function getAutoSync(services: CampusRecallServices) {
+  let controller = controllers.get(services);
+  if (!controller) {
+    controller = new AutoSyncController(services);
+    controllers.set(services, controller);
+  }
+  return controller;
+}
 const LIBRARY_ID_KEY = 'pilot-library-id';
 
 export class AutoSyncController {
@@ -40,6 +71,9 @@ export class AutoSyncController {
     cloudOnly: [],
     conflicts: [],
     blocked: false,
+    paused: false,
+    needsResync: false,
+    offlineIds: [],
   };
   private listeners = new Set<() => void>();
   private engine?: SyncEngine;
@@ -49,6 +83,7 @@ export class AutoSyncController {
   private unsubscribeLibrary?: () => void;
   private debounce?: ReturnType<typeof setTimeout>;
   private running?: Promise<void>;
+  private started?: Promise<void>;
 
   constructor(
     private services: CampusRecallServices,
@@ -67,7 +102,13 @@ export class AutoSyncController {
     this.listeners.forEach((listener) => listener());
   }
 
-  async start() {
+  /** Safe to call more than once; the first call does the work. */
+  start() {
+    this.started ??= this.begin();
+    return this.started;
+  }
+
+  private async begin() {
     try {
       const config = await this.api.config();
       this.set({ signInMode: config.signIn });
@@ -101,7 +142,11 @@ export class AutoSyncController {
       libraryId = globalThis.crypto.randomUUID();
       await this.services.preferences.set(LIBRARY_ID_KEY, libraryId);
     }
-    const library = repositoryLibrary(this.services.library);
+    const database = (this.services.library as WithSegments).database;
+    const library = repositoryLibrary(
+      this.services.library,
+      database ? (id) => database.segments.where('itemId').equals(id).toArray() : undefined,
+    );
     this.state = new IndexedDbSyncStateStore(session.account);
     this.engine = new SyncEngine({
       api: this.api,
@@ -114,8 +159,13 @@ export class AutoSyncController {
         },
       },
       state: this.state,
+      remoteIndex: this.state.remoteIndex,
+      offline: this.state.offline,
       libraryId,
     });
+    const engine = this.engine;
+    (this.services.engine as CloudSearchHook).extraSegments = async (kind) =>
+      (await engine.cloudSegments()).filter((segment) => !kind || segment.itemKind === kind);
     const snapshot = await this.state.load();
     this.set({ status: 'signed-in', email: session.email, error: undefined });
     await this.refresh(snapshot);
@@ -141,7 +191,8 @@ export class AutoSyncController {
       if (!this.engine || !this.state) return;
       this.set({ syncing: true });
       try {
-        const result = await this.engine.runOnce();
+        const result = await this.withSyncLock(() => this.engine!.runOnce());
+        if (!result) return;
         this.set({
           blocked: result.blocked === 'library-mismatch',
           error: result.failed ? 'Some changes could not be sent yet. Retrying.' : undefined,
@@ -168,9 +219,51 @@ export class AutoSyncController {
     };
   }
 
-  async signOut() {
+  async setPaused(paused: boolean) {
+    await this.engine?.setPaused(paused);
+    if (!paused) await this.syncNow();
+    else if (this.state) await this.refresh(await this.state.load());
+  }
+
+  async keepOffline(globalId: string) {
+    await this.engine?.keepOffline(globalId);
+    if (this.state) await this.refresh(await this.state.load());
+  }
+
+  async removeDownload(globalId: string) {
+    await this.engine?.removeDownload(globalId);
+    if (this.state) await this.refresh(await this.state.load());
+  }
+
+  async deleteCloudItem(globalId: string) {
+    await this.engine?.deleteCloudItem(globalId);
+    if (this.state) await this.refresh(await this.state.load());
+  }
+
+  async removeCloudLibrary() {
+    if (!this.engine || !this.session) return;
+    const { vault } = await this.engine.removeCloudLibrary();
+    this.session = { ...this.session, vault };
+    this.stopLoop();
+    if (this.state) await this.refresh(await this.state.load());
+  }
+
+  /** After the cloud library was removed elsewhere: forget old cloud state, opted out. */
+  async startAgain() {
+    const session = await this.api.restoreSession();
+    if (!session || !this.engine) return;
+    this.session = session;
+    await this.engine.startAgain(session.vault.epoch);
+    this.stopLoop();
+    if (this.state) await this.refresh(await this.state.load());
+  }
+
+  /** `removeLocalCopies` also deletes this account's sync state and offline copies here. */
+  async signOut(removeLocalCopies = false) {
     await this.api.signOut().catch(() => undefined);
+    const state = this.state;
     this.detach();
+    if (removeLocalCopies) await state?.destroy();
     this.set({
       status: 'signed-out',
       email: undefined,
@@ -179,6 +272,9 @@ export class AutoSyncController {
       cloudOnly: [],
       conflicts: [],
       blocked: false,
+      paused: false,
+      needsResync: false,
+      offlineIds: [],
     });
   }
 
@@ -199,12 +295,28 @@ export class AutoSyncController {
     );
   }
 
-  private detach() {
+  /** One tab syncs an account at a time; other tabs skip that pass. */
+  private async withSyncLock<T>(work: () => Promise<T>): Promise<T | undefined> {
+    const locks = (globalThis.navigator as Navigator | undefined)?.locks;
+    if (!locks || !this.session) return work();
+    return locks.request(
+      `campus-recall-sync-${this.session.account}`,
+      { ifAvailable: true },
+      async (lock) => (lock ? work() : undefined),
+    );
+  }
+
+  private stopLoop() {
     clearInterval(this.timer);
     clearTimeout(this.debounce);
     this.timer = undefined;
     this.unsubscribeLibrary?.();
     this.unsubscribeLibrary = undefined;
+  }
+
+  private detach() {
+    delete (this.services.engine as CloudSearchHook).extraSegments;
+    this.stopLoop();
     this.state?.close();
     this.state = undefined;
     this.engine = undefined;
@@ -212,10 +324,14 @@ export class AutoSyncController {
   }
 
   private async refresh(snapshot: SyncSnapshot) {
+    const offlineIds = (await this.engine?.offlineIds()) ?? [];
     const live = snapshot.mappings.filter((m) => m.state !== 'deleted');
     const mapped = new Set(live.map((m) => m.globalId));
     this.set({
       included: snapshot.included,
+      paused: !!snapshot.paused,
+      needsResync: !!snapshot.needsResync,
+      offlineIds,
       syncedCount: live.filter((m) => m.state === 'synced').length,
       cloudOnly: Object.values(snapshot.catalogue)
         .filter((item) => !mapped.has(item.globalId))

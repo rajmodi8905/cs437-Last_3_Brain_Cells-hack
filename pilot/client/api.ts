@@ -1,5 +1,5 @@
 // Typed browser client for the pilot API (docs/pilot/protocol.md).
-import type { CloudItem, PilotErrorCode } from '../contract';
+import type { CloudItem, IndexBundle, PilotErrorCode } from '../contract';
 
 export type ChangeItem = Partial<CloudItem> & Pick<CloudItem, 'globalId' | 'revision' | 'deleted'>;
 export type ItemDescription = Omit<CloudItem, 'globalId' | 'revision' | 'deleted' | 'index'>;
@@ -53,6 +53,12 @@ export interface ApiClient {
     body: { opId: string; epoch: number; expectedRevision: number },
   ): Promise<{ item: ChangeItem }>;
   original(globalId: string): Promise<Uint8Array>;
+  publishIndex(
+    globalId: string,
+    body: { opId: string; epoch: number; bundle: IndexBundle },
+  ): Promise<{ item: CloudItem }>;
+  index(globalId: string): Promise<IndexBundle>;
+  removeVault(body: { epoch: number; confirm: string }): Promise<{ vault: { epoch: number } }>;
 }
 
 export function createApiClient(options: { base: string; fetch?: typeof fetch }): ApiClient {
@@ -136,6 +142,15 @@ export function createApiClient(options: { base: string; fetch?: typeof fetch })
     },
     async remove(globalId, body) {
       return json(await request(`/items/${enc(globalId)}`, { method: 'DELETE' }, body));
+    },
+    async publishIndex(globalId, body) {
+      return json(await request(`/items/${enc(globalId)}/index`, { method: 'PUT' }, body));
+    },
+    async removeVault(body) {
+      return json(await request('/vault', { method: 'DELETE' }, body));
+    },
+    async index(globalId) {
+      return json(await request(`/items/${enc(globalId)}/index`));
     },
     async original(globalId) {
       const res = await request(`/items/${enc(globalId)}/original`);

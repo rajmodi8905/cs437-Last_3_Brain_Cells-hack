@@ -2,6 +2,7 @@ import { ArrowUpRight, ChevronRight, LoaderCircle } from 'lucide-react';
 import type { CampusRecallModel } from '../../app/useCampusRecall';
 import { kinds, kindLabels } from '../presentation';
 import { ItemRow } from '../ItemRow';
+import { CloudResultRow } from '../../../pilot/ui/CloudResultRow';
 export function LibrarySearchScreen({ model }: { model: CampusRecallModel }) {
   const {
     screen,
@@ -138,8 +139,15 @@ export function LibrarySearchScreen({ model }: { model: CampusRecallModel }) {
                 <div className="item-list">
                   {results.map((result) => {
                     const found = items.find((i) => i.id === result.itemId);
-                    return found ? (
-                      <ItemRow key={found.id} value={found} result={result} model={model} />
+                    if (found)
+                      return <ItemRow key={found.id} value={found} result={result} model={model} />;
+                    // Pilot: items saved on another device, found through their synced index.
+                    return result.itemId.startsWith('cloud:') ? (
+                      <CloudResultRow
+                        key={result.segmentId}
+                        result={result}
+                        services={model.services}
+                      />
                     ) : null;
                   })}
                 </div>
