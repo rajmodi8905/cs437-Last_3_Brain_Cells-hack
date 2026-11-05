@@ -17,7 +17,9 @@ export class ApiFailure extends Error {
 }
 
 export interface ApiClient {
-  signIn(idToken: string): Promise<{ csrf: string; email: string; vault: { epoch: number } }>;
+  signIn(
+    idToken: string,
+  ): Promise<{ csrf: string; email: string; account: string; vault: { epoch: number } }>;
   signOut(): Promise<void>;
   changes(
     epoch: number,
@@ -75,9 +77,12 @@ export function createApiClient(options: { base: string; fetch?: typeof fetch })
 
   return {
     async signIn(idToken) {
-      const body = await json<{ csrf: string; email: string; vault: { epoch: number } }>(
-        await request('/session', { method: 'POST' }, { idToken }),
-      );
+      const body = await json<{
+        csrf: string;
+        email: string;
+        account: string;
+        vault: { epoch: number };
+      }>(await request('/session', { method: 'POST' }, { idToken }));
       csrf = body.csrf;
       return body;
     },

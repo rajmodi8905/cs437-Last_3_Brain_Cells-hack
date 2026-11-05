@@ -53,6 +53,8 @@ export interface SyncSnapshot {
   epoch?: number;
   cursor: number;
   needsResync?: boolean;
+  /** The local library this state reconciles against; another library never plans deletes. */
+  libraryId?: string;
   mappings: Mapping[];
   ops: PendingOp[];
   /** Live cloud items by global ID, including ones that exist only on other devices. */

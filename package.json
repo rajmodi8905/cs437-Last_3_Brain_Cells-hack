@@ -29,7 +29,8 @@
     "premodels:download": "node scripts/prepare-assets.mjs",
     "release:check": "node scripts/check-release.mjs",
     "test:webkit": "playwright test --config playwright.webkit.config.ts",
-    "test:pilot": "vitest run --config pilot/vitest.config.ts"
+    "test:pilot": "vitest run --config pilot/vitest.config.ts",
+    "pilot:server": "node pilot/scripts/build-server.mjs && node .cache/pilot-server/main.mjs"
   },
   "dependencies": {
     "@ffmpeg/core": "0.12.10",

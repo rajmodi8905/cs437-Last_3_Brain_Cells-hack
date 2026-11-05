@@ -21,7 +21,7 @@ async function device(token = idToken()) {
   const api = createApiClient({ base: pilot.base, fetch: net.fetchImpl });
   const library = new MemoryLocalLibrary();
   const state = new MemorySyncStateStore();
-  const engine = new SyncEngine({ api, library, state });
+  const engine = new SyncEngine({ api, library, state, libraryId: 'phone-library' });
   const signedIn = await api.signIn(token);
   return { net, api, library, state, engine, epoch: signedIn.vault.epoch };
 }
@@ -151,6 +151,7 @@ describe('P08 no duplicates after crashes or lost responses', () => {
       api: phone.api,
       library: phone.library,
       state: phone.state,
+      libraryId: 'phone-library',
     });
     expect((await restarted.runOnce()).uploaded).toBe(1);
     expect((await phone.state.load()).ops).toHaveLength(0);
@@ -225,6 +226,33 @@ describe('P09 changes from other devices', () => {
     phone.net.controls.log.length = 0;
     await phone.engine.runOnce();
     expect(writes(phone.net.controls.log)).toEqual([]);
+  });
+});
+
+describe('P10 sync state is bound to one library', () => {
+  it('refuses to sync a different library instead of deleting everything in the cloud', async () => {
+    const phone = await device();
+    phone.library.add(
+      { kind: 'pdf', title: 'Hostel mess rules', mimeType: 'application/pdf' },
+      pdf,
+    );
+    await phone.engine.include(phone.epoch);
+    await phone.engine.runOnce();
+    // Same account state, but pointed at a new, empty library (for example a recreated database).
+    const other = new SyncEngine({
+      api: phone.api,
+      library: new MemoryLocalLibrary(),
+      state: phone.state,
+      libraryId: 'recreated-library',
+    });
+    phone.net.controls.log.length = 0;
+    expect(await other.runOnce()).toMatchObject({ blocked: 'library-mismatch', deleted: 0 });
+    expect(writes(phone.net.controls.log)).toEqual([]);
+    await expect(other.include(phone.epoch)).rejects.toThrow(/different library/);
+    const laptop = await device();
+    await laptop.engine.include(laptop.epoch);
+    await laptop.engine.runOnce();
+    expect(await laptop.engine.catalogue()).toHaveLength(1);
   });
 });
 

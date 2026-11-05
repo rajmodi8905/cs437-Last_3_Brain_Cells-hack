@@ -153,6 +153,26 @@ describe('P03/P12 sessions from Google sign-in', () => {
     expect(body.csrf).toMatch(/^[A-Za-z0-9_-]{20,}$/);
   });
 
+  it('returns a stable opaque account ID that differs between accounts', async () => {
+    const accountOf = async (token: string) =>
+      (
+        await (
+          await fetch(`${base}/session`, {
+            method: 'POST',
+            headers: { origin, 'content-type': 'application/json' },
+            body: JSON.stringify({ idToken: token }),
+          })
+        ).json()
+      ).account;
+    const first = await accountOf(idToken());
+    expect(first).toMatch(/^[0-9a-f]{32}$/);
+    expect(await accountOf(idToken())).toBe(first);
+    expect(await accountOf(idToken({ sub: 'subject-b', email: 'student.b@iitgn.ac.in' }))).not.toBe(
+      first,
+    );
+    expect(first).not.toContain('subject-a');
+  });
+
   it.each([
     ['a non-IITGN account', idToken({ email: 'someone@gmail.com' }), 403, 'NOT_ELIGIBLE'],
     ['a token signed by another key', idToken({}, stranger.privateKey), 401, 'UNAUTHENTICATED'],

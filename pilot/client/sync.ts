@@ -17,6 +17,8 @@ export interface SyncResult {
   deleted: number;
   conflicts: number;
   failed: number;
+  /** Set when the engine refused to run against a library other than the included one. */
+  blocked?: 'library-mismatch';
 }
 
 const isNetworkError = (cause: unknown) => !(cause instanceof ApiFailure);
@@ -26,23 +28,29 @@ export class SyncEngine {
   private library: LocalLibrary;
   private state: SyncStateStore;
   private newId: () => string;
+  private libraryId: string;
 
   constructor(options: {
     api: ApiClient;
     library: LocalLibrary;
     state: SyncStateStore;
     newId?: () => string;
+    /** Stable ID of the local library database being synced. */
+    libraryId: string;
   }) {
     this.api = options.api;
     this.library = options.library;
     this.state = options.state;
     this.newId = options.newId ?? (() => globalThis.crypto.randomUUID());
+    this.libraryId = options.libraryId;
   }
 
   /** Explicit opt-in: the signed-in user chose to sync this device's library. */
   async include(epoch: number) {
     const snapshot = await this.state.load();
-    await this.state.save({ ...snapshot, included: true, epoch });
+    if (snapshot.libraryId && snapshot.libraryId !== this.libraryId)
+      throw new Error('This account is already syncing a different library on this device.');
+    await this.state.save({ ...snapshot, included: true, epoch, libraryId: this.libraryId });
   }
 
   async catalogue(): Promise<ChangeItem[]> {
@@ -67,6 +75,8 @@ export class SyncEngine {
     const result: SyncResult = { uploaded: 0, renamed: 0, deleted: 0, conflicts: 0, failed: 0 };
     const snapshot = await this.state.load();
     if (!snapshot.included || snapshot.epoch === undefined || snapshot.needsResync) return result;
+    // A different or recreated library would look like mass deletion; refuse instead.
+    if (snapshot.libraryId !== this.libraryId) return { ...result, blocked: 'library-mismatch' };
 
     this.plan(snapshot, await this.library.listItems());
     await this.state.save(snapshot);

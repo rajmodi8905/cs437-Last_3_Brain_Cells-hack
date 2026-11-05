@@ -188,7 +188,13 @@ export function createPilotHandler(options: PilotServerOptions): RequestListener
       return send(
         res,
         200,
-        { csrf: session.csrf, email: session.email, vault },
+        {
+          csrf: session.csrf,
+          email: session.email,
+          // Opaque per-account ID so devices can keep each account's state apart.
+          account: createHash('sha256').update(session.ownerKey).digest('hex').slice(0, 32),
+          vault,
+        },
         {
           'set-cookie': `${COOKIE}=${session.id}; Path=/api; Max-Age=${sessionSeconds}; HttpOnly; Secure; SameSite=Lax`,
         },
