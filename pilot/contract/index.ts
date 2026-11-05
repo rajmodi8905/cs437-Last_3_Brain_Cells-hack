@@ -9,6 +9,7 @@ export const MAX_TITLE_CODE_POINTS = 120;
 export type PilotErrorCode =
   | 'UNAUTHENTICATED'
   | 'FORBIDDEN'
+  | 'NOT_FOUND'
   | 'NOT_ELIGIBLE'
   | 'VAULT_RESET'
   | 'REVISION_CONFLICT'

@@ -70,4 +70,12 @@ Each synced item shows two independent states: **original** (`local-only`, `uplo
 
 ## Errors
 
-`{ "error": { "code", "message", "retryable" } }` with codes: `UNAUTHENTICATED`, `FORBIDDEN`, `NOT_ELIGIBLE` (not a verified IITGN Google account), `VAULT_RESET`, `REVISION_CONFLICT`, `ITEM_DELETED`, `QUOTA_EXCEEDED`, `LIMIT_EXCEEDED`, `HASH_MISMATCH`, `INDEX_INCOMPATIBLE`, `INVALID_INPUT`, `RESYNC_REQUIRED`, `INTERNAL_ERROR`.
+`{ "error": { "code", "message", "retryable" } }` with codes: `UNAUTHENTICATED`, `FORBIDDEN`, `NOT_FOUND` (also returned for another account's items, so they cannot be told apart from missing ones), `NOT_ELIGIBLE` (not a verified IITGN Google account), `VAULT_RESET`, `REVISION_CONFLICT`, `ITEM_DELETED`, `QUOTA_EXCEEDED`, `LIMIT_EXCEEDED`, `HASH_MISMATCH`, `INDEX_INCOMPATIBLE`, `INVALID_INPUT`, `RESYNC_REQUIRED`, `INTERNAL_ERROR`.
+
+## Implementation status (5 November)
+
+`pilot/server/` implements the first server slice with plain `node:http`, no framework: Google token signature checks with Node's crypto (`tokens.ts`, with a cached Google key source for production), sessions with origin and CSRF checks, begin/chunk/complete uploads with hash and length verification, account quota, rename and delete through `decideWrite`, the change feed and original downloads. `pilot/tests/server.test.ts` covers it against a real local HTTP server with locally signed test tokens.
+
+Storage sits behind `PilotStore` and `ObjectStore` (`store.ts`). Only the in-memory versions exist (`memory.ts`); they are not durable and are for tests and local development only.
+
+Not built yet: PostgreSQL and Azure Blob storage adapters, index bundle publishing and download, vault removal, HTTP range downloads, expiry of abandoned uploads and their quota reservations, rate limiting, and a runnable server entry point. Real Google sign-in needs the pilot Firebase project, which does not exist yet.
