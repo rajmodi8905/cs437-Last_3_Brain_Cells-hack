@@ -1,6 +1,7 @@
 import { ArrowUpRight, ChevronRight, LoaderCircle } from 'lucide-react';
 import type { CampusRecallModel } from '../../app/useCampusRecall';
 import { bytes } from '../hooks';
+import { AutoSyncSection } from '../../../pilot/ui/AutoSyncSection';
 export function SettingsScreen({ model }: { model: CampusRecallModel }) {
   const {
     ready,
@@ -29,6 +30,7 @@ export function SettingsScreen({ model }: { model: CampusRecallModel }) {
         </div>
       </div>
       <div className="settings-grid">
+        <AutoSyncSection services={model.services} />
         <section className="surface settings-section">
           <div className="section-title">
             <div>

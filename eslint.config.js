@@ -14,7 +14,7 @@ export default tseslint.config(
     ],
   },
   {
-    files: ['src/**/*.{ts,tsx}', 'tests/**/*.{ts,tsx}', 'pilot/**/*.ts'],
+    files: ['src/**/*.{ts,tsx}', 'tests/**/*.{ts,tsx}', 'pilot/**/*.{ts,tsx}'],
     extends: [js.configs.recommended, ...tseslint.configs.recommended],
     plugins: { 'react-hooks': hooks },
     rules: {

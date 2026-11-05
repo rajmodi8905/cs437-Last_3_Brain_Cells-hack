@@ -31,7 +31,18 @@ export function idToken(over: Record<string, unknown> = {}, key: KeyObject = sig
   return `${header}.${payload}.${signer.sign(key).toString('base64url')}`;
 }
 
-export async function startPilotServer(quotaBytes = 5_000_000) {
+/** Signs a development token for `email` with the test key, as the dev token endpoint does. */
+export const devSigner = (email: string) =>
+  idToken({
+    sub: `dev-${email.toLowerCase()}`,
+    email,
+    email_verified: true,
+  });
+
+export async function startPilotServer(
+  quotaBytes = 5_000_000,
+  extra: { devSigner?: (email: string) => string } = {},
+) {
   const store = new MemoryPilotStore();
   const server: Server = createServer(
     createPilotHandler({
@@ -44,6 +55,7 @@ export async function startPilotServer(quotaBytes = 5_000_000) {
       nowSeconds: () => clock.now,
       quotaBytes,
       chunkBytes: 32 * 1024,
+      devSigner: extra.devSigner,
     }),
   );
   await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));

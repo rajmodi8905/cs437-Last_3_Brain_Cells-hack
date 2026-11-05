@@ -30,7 +30,8 @@
     "release:check": "node scripts/check-release.mjs",
     "test:webkit": "playwright test --config playwright.webkit.config.ts",
     "test:pilot": "vitest run --config pilot/vitest.config.ts",
-    "pilot:server": "node pilot/scripts/build-server.mjs && node .cache/pilot-server/main.mjs"
+    "pilot:server": "node pilot/scripts/build-server.mjs && node .cache/pilot-server/main.mjs",
+    "test:pilot:e2e": "playwright test --config pilot/playwright.config.ts"
   },
   "dependencies": {
     "@ffmpeg/core": "0.12.10",

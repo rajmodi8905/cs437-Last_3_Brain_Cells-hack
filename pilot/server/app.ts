@@ -31,6 +31,11 @@ export interface PilotServerOptions {
   quotaBytes: number;
   chunkBytes?: number;
   sessionSeconds?: number;
+  /**
+   * Local development only: signs a token for an email so the app can sign in before the
+   * Firebase project exists. When set, `/config` reports `dev` and `/dev/token` is enabled.
+   */
+  devSigner?: (email: string) => string;
 }
 
 const STATUS: Record<PilotErrorCode, number> = {
@@ -125,6 +130,13 @@ export function createPilotHandler(options: PilotServerOptions): RequestListener
   const chunkBytes = options.chunkBytes ?? 4 * 1024 * 1024;
   const sessionSeconds = options.sessionSeconds ?? 12 * 3600;
   const { store, objects } = options;
+  const sessionBody = async (session: Session) => ({
+    csrf: session.csrf,
+    email: session.email,
+    // Opaque per-account ID so devices can keep each account's state apart.
+    account: createHash('sha256').update(session.ownerKey).digest('hex').slice(0, 32),
+    vault: await store.vault(session.ownerKey),
+  });
 
   async function requireSession(req: IncomingMessage, write: boolean): Promise<Session> {
     const id = cookieValue(req, COOKIE);
@@ -184,21 +196,34 @@ export function createPilotHandler(options: PilotServerOptions): RequestListener
         expiresAt: now() + sessionSeconds,
       };
       await store.createSession(session);
-      const vault = await store.vault(session.ownerKey);
-      return send(
-        res,
-        200,
-        {
-          csrf: session.csrf,
-          email: session.email,
-          // Opaque per-account ID so devices can keep each account's state apart.
-          account: createHash('sha256').update(session.ownerKey).digest('hex').slice(0, 32),
-          vault,
-        },
-        {
-          'set-cookie': `${COOKIE}=${session.id}; Path=/api; Max-Age=${sessionSeconds}; HttpOnly; Secure; SameSite=Lax`,
-        },
-      );
+      return send(res, 200, await sessionBody(session), {
+        'set-cookie': `${COOKIE}=${session.id}; Path=/api; Max-Age=${sessionSeconds}; HttpOnly; Secure; SameSite=Lax`,
+      });
+    }
+
+    if (path === '/session' && method === 'GET') {
+      // Same-origin pages restore their CSRF token after a reload; other sites cannot read it.
+      return send(res, 200, await sessionBody(await requireSession(req, false)));
+    }
+
+    if (path === '/config' && method === 'GET') {
+      return send(res, 200, {
+        signIn: options.devSigner ? 'dev' : 'google',
+        projectId: options.projectId,
+      });
+    }
+
+    if (path === '/dev/token' && method === 'POST') {
+      if (!options.devSigner) throw new ApiError('NOT_FOUND', 'No such endpoint.');
+      if (req.headers.origin !== options.origin)
+        throw new ApiError(
+          'FORBIDDEN',
+          'Development sign-in is only accepted from the pilot site.',
+        );
+      const body = await readJson(req);
+      if (typeof body.email !== 'string' || !body.email || body.email.length > 254)
+        throw new ApiError('INVALID_INPUT', 'Enter an email address.');
+      return send(res, 200, { idToken: options.devSigner(body.email) });
     }
 
     if (path === '/session' && method === 'DELETE') {

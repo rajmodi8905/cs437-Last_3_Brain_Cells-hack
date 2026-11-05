@@ -16,10 +16,20 @@ export class ApiFailure extends Error {
   }
 }
 
+export interface SessionInfo {
+  csrf: string;
+  email: string;
+  account: string;
+  vault: { epoch: number };
+}
+
 export interface ApiClient {
-  signIn(
-    idToken: string,
-  ): Promise<{ csrf: string; email: string; account: string; vault: { epoch: number } }>;
+  config(): Promise<{ signIn: 'google' | 'dev'; projectId: string }>;
+  /** Development servers only: a token for a typed email. */
+  devToken(email: string): Promise<string>;
+  /** The current session from the cookie, or undefined when signed out. */
+  restoreSession(): Promise<SessionInfo | undefined>;
+  signIn(idToken: string): Promise<SessionInfo>;
   signOut(): Promise<void>;
   changes(
     epoch: number,
@@ -76,13 +86,28 @@ export function createApiClient(options: { base: string; fetch?: typeof fetch })
   const enc = encodeURIComponent;
 
   return {
+    async config() {
+      return json(await request('/config'));
+    },
+    async devToken(email) {
+      return (
+        await json<{ idToken: string }>(await request('/dev/token', { method: 'POST' }, { email }))
+      ).idToken;
+    },
+    async restoreSession() {
+      try {
+        const body = await json<SessionInfo>(await request('/session'));
+        csrf = body.csrf;
+        return body;
+      } catch (cause) {
+        if (cause instanceof ApiFailure && cause.code === 'UNAUTHENTICATED') return undefined;
+        throw cause;
+      }
+    },
     async signIn(idToken) {
-      const body = await json<{
-        csrf: string;
-        email: string;
-        account: string;
-        vault: { epoch: number };
-      }>(await request('/session', { method: 'POST' }, { idToken }));
+      const body = await json<SessionInfo>(
+        await request('/session', { method: 'POST' }, { idToken }),
+      );
       csrf = body.csrf;
       return body;
     },

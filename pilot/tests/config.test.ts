@@ -18,26 +18,26 @@ describe('Pilot server configuration', () => {
       staticDir: 'dist',
       quotaBytes: 200_000_000,
       allowedEmailDomain: 'iitgn.ac.in',
-      devPublicKeyFile: undefined,
+      devKeyFile: undefined,
     });
   });
 
   it('allows a development signing key only on a local origin', () => {
     expect(
       loadConfig({
-        PILOT_DEV_PUBLIC_KEY_FILE: '/tmp/dev.pem',
+        PILOT_DEV_KEY_FILE: '/tmp/dev-private.pem',
         PILOT_ORIGIN: 'http://127.0.0.1:4600',
       }),
-    ).toMatchObject({ projectId: 'campus-recall-pilot-dev', devPublicKeyFile: '/tmp/dev.pem' });
+    ).toMatchObject({ projectId: 'campus-recall-pilot-dev', devKeyFile: '/tmp/dev-private.pem' });
     expect(
       loadConfig({
-        PILOT_DEV_PUBLIC_KEY_FILE: '/tmp/dev.pem',
+        PILOT_DEV_KEY_FILE: '/tmp/dev-private.pem',
         PILOT_ORIGIN: 'http://localhost:4600',
       }),
     ).toMatchObject({ origin: 'http://localhost:4600' });
     expect(() =>
       loadConfig({
-        PILOT_DEV_PUBLIC_KEY_FILE: '/tmp/dev.pem',
+        PILOT_DEV_KEY_FILE: '/tmp/dev-private.pem',
         PILOT_ORIGIN: 'https://recall.example.in',
         PILOT_FIREBASE_PROJECT_ID: 'campus-recall-pilot',
       }),
