@@ -24,7 +24,11 @@ export interface SessionInfo {
 }
 
 export interface ApiClient {
-  config(): Promise<{ signIn: 'google' | 'dev'; projectId: string }>;
+  config(): Promise<{
+    signIn: 'google' | 'dev';
+    projectId: string;
+    firebase?: { apiKey: string; authDomain: string };
+  }>;
   /** Development servers only: a token for a typed email. */
   devToken(email: string): Promise<string>;
   /** The current session from the cookie, or undefined when signed out. */
@@ -52,7 +56,8 @@ export interface ApiClient {
     globalId: string,
     body: { opId: string; epoch: number; expectedRevision: number },
   ): Promise<{ item: ChangeItem }>;
-  original(globalId: string): Promise<Uint8Array>;
+  /** The original, or bytes `start` to `end` inclusive of it. */
+  original(globalId: string, range?: { start: number; end: number }): Promise<Uint8Array>;
   publishIndex(
     globalId: string,
     body: { opId: string; epoch: number; bundle: IndexBundle },
@@ -152,9 +157,15 @@ export function createApiClient(options: { base: string; fetch?: typeof fetch })
     async index(globalId) {
       return json(await request(`/items/${enc(globalId)}/index`));
     },
-    async original(globalId) {
-      const res = await request(`/items/${enc(globalId)}/original`);
-      return new Uint8Array(await res.arrayBuffer());
+    async original(globalId, range) {
+      const res = await request(
+        `/items/${enc(globalId)}/original`,
+        range ? { headers: { range: `bytes=${range.start}-${range.end}` } } : {},
+      );
+      const bytes = new Uint8Array(await res.arrayBuffer());
+      if (range && (res.status !== 206 || bytes.length !== range.end - range.start + 1))
+        throw new Error('The server did not return the requested part of the original.');
+      return bytes;
     },
   };
 }

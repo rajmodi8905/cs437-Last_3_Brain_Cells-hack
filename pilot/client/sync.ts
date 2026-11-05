@@ -28,6 +28,8 @@ export interface SyncResult {
   paused?: true;
   /** The cloud library was removed or reset; the user must start again. */
   needsResync?: true;
+  /** The account's cloud storage is full; the waiting uploads are retried later. */
+  quotaExceeded?: true;
   /** Set when the engine refused to run against a library other than the included one. */
   blocked?: 'library-mismatch';
 }
@@ -43,6 +45,7 @@ export class SyncEngine {
   private remoteIndex?: RemoteIndexStore;
   private offline?: OfflineStore;
   private indexVersion: string;
+  private downloadRangeBytes: number;
 
   constructor(options: {
     api: ApiClient;
@@ -57,6 +60,8 @@ export class SyncEngine {
     offline?: OfflineStore;
     /** The index version this device's search uses. */
     indexVersion?: string;
+    /** Originals larger than this are downloaded in parts of this size. */
+    downloadRangeBytes?: number;
   }) {
     this.api = options.api;
     this.library = options.library;
@@ -66,6 +71,7 @@ export class SyncEngine {
     this.remoteIndex = options.remoteIndex;
     this.offline = options.offline;
     this.indexVersion = options.indexVersion ?? PILOT_INDEX_VERSIONS[0];
+    this.downloadRangeBytes = options.downloadRangeBytes ?? 4 * 1024 * 1024;
   }
 
   /** Explicit opt-in: the signed-in user chose to sync this device's library. */
@@ -88,11 +94,28 @@ export class SyncEngine {
     if (!entry) throw new Error('This item is not in the cloud library.');
     const kept = await this.offline?.get(globalId);
     if (kept && kept.contentSha256 === entry.contentSha256) return kept.bytes;
-    const bytes = await this.api.original(globalId);
+    const bytes = await this.fetchOriginal(globalId, entry.byteLength);
     const digest = await globalThis.crypto.subtle.digest('SHA-256', bytes as BufferSource);
     const hex = [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, '0')).join('');
     if (hex !== entry.contentSha256)
       throw new Error('Downloaded original does not match its hash.');
+    return bytes;
+  }
+
+  /** Large media comes in parts, each retried once, so one dropped response costs one part. */
+  private async fetchOriginal(globalId: string, byteLength?: number) {
+    const size = this.downloadRangeBytes;
+    if (!byteLength || byteLength <= size) return this.api.original(globalId);
+    const bytes = new Uint8Array(byteLength);
+    for (let start = 0; start < byteLength; start += size) {
+      const range = { start, end: Math.min(start + size, byteLength) - 1 };
+      const part = await this.api
+        .original(globalId, range)
+        .catch((cause: unknown) =>
+          cause instanceof ApiFailure ? Promise.reject(cause) : this.api.original(globalId, range),
+        );
+      bytes.set(part, start);
+    }
     return bytes;
   }
 
@@ -349,6 +372,11 @@ export class SyncEngine {
     } catch (cause) {
       if (!(cause instanceof ApiFailure)) throw cause;
       if (cause.code === 'VAULT_RESET') throw cause;
+      if (cause.code === 'QUOTA_EXCEEDED' && op.kind === 'upload') {
+        // Not the item's fault: keep it waiting until space is freed.
+        result.quotaExceeded = true;
+        throw cause;
+      }
       if (cause.code === 'REVISION_CONFLICT' && mapping) {
         const current = cause.body.current as ChangeItem | undefined;
         mapping.state = 'conflict';

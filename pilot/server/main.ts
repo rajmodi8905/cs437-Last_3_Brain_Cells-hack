@@ -43,6 +43,7 @@ const api = createPilotHandler({
   objects: new MemoryObjectStore(),
   quotaBytes: config.quotaBytes,
   devSigner,
+  firebaseWeb: config.firebaseWeb,
 });
 createServer(createStaticHandler(config.staticDir, api)).listen(config.port, config.host, () => {
   console.log(`Pilot server on ${config.origin} (listening on ${config.host}:${config.port}).`);

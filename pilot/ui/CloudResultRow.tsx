@@ -41,6 +41,13 @@ export function CloudResultRow({
         </span>
         <button
           className="button secondary"
+          aria-label={`Open ${item.title} at ${locationLabel(result)}`}
+          onClick={() => controller.open(globalId, result.location)}
+        >
+          Open
+        </button>
+        <button
+          className="button secondary"
           aria-label={`Download ${item.title}`}
           onClick={async () => {
             setError('');

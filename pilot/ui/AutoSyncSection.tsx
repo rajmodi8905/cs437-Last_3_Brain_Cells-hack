@@ -61,6 +61,12 @@ export function AutoSyncSection({ services }: { services: CampusRecallServices }
 
       {view.status === 'signed-out' && (
         <>
+          {view.entry === 'insiit' && (
+            <p className="notice" role="status">
+              You opened Campus Recall from INSIIT. INSIIT does not sign you in here: sign in below
+              with your IITGN Google account.
+            </p>
+          )}
           <p>
             Local only. Your library stays on this device. Sign in with your IITGN account to keep a
             private copy in the cloud and open it on your other devices.
@@ -90,6 +96,16 @@ export function AutoSyncSection({ services }: { services: CampusRecallServices }
                 in.
               </p>
             </form>
+          ) : view.googleReady ? (
+            <button
+              className="button primary"
+              disabled={busy}
+              onPointerEnter={() => controller.prepareGoogle()}
+              onFocus={() => controller.prepareGoogle()}
+              onClick={act(() => controller.signInGoogle())}
+            >
+              Sign in with Google
+            </button>
           ) : (
             <p className="field-help">Google sign-in is not configured on this server yet.</p>
           )}
@@ -164,6 +180,13 @@ export function AutoSyncSection({ services }: { services: CampusRecallServices }
                         {bytes(item.byteLength ?? 0)}
                         {kept ? ' · Kept offline' : ''}
                       </span>
+                      <button
+                        className="button secondary"
+                        aria-label={`Open ${item.title}`}
+                        onClick={() => controller.open(item.globalId)}
+                      >
+                        Open
+                      </button>
                       <button
                         className="button secondary"
                         aria-label={`Download ${item.title}`}

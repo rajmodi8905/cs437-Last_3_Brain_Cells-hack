@@ -42,6 +42,8 @@ export interface PilotServerOptions {
   devSigner?: (email: string) => string;
   /** Index versions accepted from devices; defaults to the pilot contract's list. */
   supportedIndexVersions?: readonly string[];
+  /** Public Firebase web-app settings for direct Google sign-in; not secrets. */
+  firebaseWeb?: { apiKey: string; authDomain: string };
 }
 
 const STATUS: Record<PilotErrorCode, number> = {
@@ -136,6 +138,23 @@ const opIdOf = (body: Record<string, unknown>) => {
   return body.opId;
 };
 
+/** One `bytes=` range (start-end, start- or -suffix); undefined when it cannot be served. */
+function parseRange(header: string, size: number) {
+  const match = /^bytes=(\d*)-(\d*)$/.exec(header.trim());
+  if (!match || (match[1] === '' && match[2] === '')) return undefined;
+  let start: number;
+  let end: number;
+  if (match[1] === '') {
+    start = Math.max(0, size - Number(match[2]));
+    end = size - 1;
+  } else {
+    start = Number(match[1]);
+    end = match[2] === '' ? size - 1 : Math.min(Number(match[2]), size - 1);
+  }
+  if (!Number.isSafeInteger(start) || start >= size || end < start) return undefined;
+  return { start, end };
+}
+
 export function createPilotHandler(options: PilotServerOptions): RequestListener {
   const now = options.nowSeconds ?? (() => Math.floor(Date.now() / 1000));
   const chunkBytes = options.chunkBytes ?? 4 * 1024 * 1024;
@@ -221,6 +240,7 @@ export function createPilotHandler(options: PilotServerOptions): RequestListener
       return send(res, 200, {
         signIn: options.devSigner ? 'dev' : 'google',
         projectId: options.projectId,
+        ...(options.firebaseWeb && !options.devSigner ? { firebase: options.firebaseWeb } : {}),
       });
     }
 
@@ -295,7 +315,12 @@ export function createPilotHandler(options: PilotServerOptions): RequestListener
       const n = Number(match[2]);
       if (n * chunkBytes >= upload.item.byteLength)
         throw new ApiError('INVALID_INPUT', 'Chunk is beyond the declared length.');
-      upload.chunks.set(n, await readBody(req, chunkBytes));
+      // Each chunk must fill exactly its place, so stored bytes never exceed the declared size.
+      const expected = Math.min(chunkBytes, upload.item.byteLength - n * chunkBytes);
+      const part = await readBody(req, chunkBytes);
+      if (part.length !== expected)
+        throw new ApiError('INVALID_INPUT', `Chunk ${n} must be ${expected} bytes.`);
+      upload.chunks.set(n, part);
       return send(res, 204);
     }
 
@@ -391,9 +416,21 @@ export function createPilotHandler(options: PilotServerOptions): RequestListener
       const bytes =
         item && !item.deleted && item.objectKey ? await objects.get(item.objectKey) : undefined;
       if (!item || !bytes) throw new ApiError('NOT_FOUND', 'Item not found.');
-      return send(res, 200, bytes, {
+      const headers = {
         'content-type': item.mimeType,
         etag: `"sha256-${item.contentSha256}"`,
+        'accept-ranges': 'bytes',
+      };
+      const range = req.headers.range;
+      if (range === undefined) return send(res, 200, bytes, headers);
+      const parsed = parseRange(range, bytes.length);
+      if (!parsed)
+        return send(res, 416, errorBody('INVALID_INPUT', 'Requested range is not available.'), {
+          'content-range': `bytes */${bytes.length}`,
+        });
+      return send(res, 206, bytes.subarray(parsed.start, parsed.end + 1), {
+        ...headers,
+        'content-range': `bytes ${parsed.start}-${parsed.end}/${bytes.length}`,
       });
     }
 

@@ -1,7 +1,7 @@
 // Auto-sync for the app: sign-in, explicit inclusion, a sync loop and the cloud list.
 // UI-agnostic; the Settings section subscribes to its view.
 import type { CampusRecallServices } from '../../src/app/services';
-import type { IndexedSegment, ItemKind, SearchableSegment } from '../../src/shared';
+import type { IndexedSegment, ItemKind, SearchableSegment, SourceLocation } from '../../src/shared';
 import {
   ApiFailure,
   createApiClient,
@@ -9,6 +9,8 @@ import {
   type ChangeItem,
   type SessionInfo,
 } from './api';
+import { applyEntry } from './entry';
+import { googleIdToken, loadFirebase, type FirebaseAuthModule } from './google';
 import { IndexedDbSyncStateStore } from './idb';
 import { repositoryLibrary } from './library';
 import { SyncEngine } from './sync';
@@ -17,6 +19,12 @@ import type { SyncSnapshot } from './types';
 export interface AutoSyncView {
   status: 'loading' | 'unavailable' | 'signed-out' | 'signed-in';
   signInMode?: 'google' | 'dev';
+  /** Google sign-in is configured on this server. */
+  googleReady: boolean;
+  /** The user arrived through the INSIIT link. */
+  entry?: 'insiit';
+  /** The cloud item open in the viewer, and where in it. */
+  opened?: { globalId: string; location?: SourceLocation };
   email?: string;
   included: boolean;
   syncing: boolean;
@@ -65,6 +73,7 @@ export class AutoSyncController {
   private api: ApiClient;
   private view: AutoSyncView = {
     status: 'loading',
+    googleReady: false,
     included: false,
     syncing: false,
     syncedCount: 0,
@@ -84,6 +93,8 @@ export class AutoSyncController {
   private debounce?: ReturnType<typeof setTimeout>;
   private running?: Promise<void>;
   private started?: Promise<void>;
+  private google?: { apiKey: string; authDomain: string; projectId: string };
+  private firebase?: Promise<FirebaseAuthModule>;
 
   constructor(
     private services: CampusRecallServices,
@@ -109,9 +120,14 @@ export class AutoSyncController {
   }
 
   private async begin() {
+    // Drops entry and credential-like parameters from the address before anything else runs.
+    if (typeof location !== 'undefined' && applyEntry().from === 'insiit')
+      this.set({ entry: 'insiit' });
     try {
       const config = await this.api.config();
-      this.set({ signInMode: config.signIn });
+      if (config.signIn === 'google' && config.firebase)
+        this.google = { ...config.firebase, projectId: config.projectId };
+      this.set({ signInMode: config.signIn, googleReady: !!this.google });
     } catch {
       this.set({ status: 'unavailable' });
       return;
@@ -119,6 +135,18 @@ export class AutoSyncController {
     const session = await this.api.restoreSession().catch(() => undefined);
     if (session) await this.attach(session);
     else this.set({ status: 'signed-out' });
+  }
+
+  /** Loads the sign-in code ahead of the click, so the popup opens straight from it. */
+  prepareGoogle() {
+    if (this.google) this.firebase ??= loadFirebase();
+  }
+
+  async signInGoogle() {
+    const config = this.google;
+    if (!config) return;
+    this.prepareGoogle();
+    await this.signIn(() => googleIdToken(config, () => this.firebase!));
   }
 
   async signInDev(email: string) {
@@ -195,7 +223,11 @@ export class AutoSyncController {
         if (!result) return;
         this.set({
           blocked: result.blocked === 'library-mismatch',
-          error: result.failed ? 'Some changes could not be sent yet. Retrying.' : undefined,
+          error: result.quotaExceeded
+            ? 'Your cloud library is full. New items wait on this device until you delete something from the cloud library.'
+            : result.failed
+              ? 'Some changes could not be sent yet. Retrying.'
+              : undefined,
         });
       } catch (cause) {
         this.set({ error: messageFor(cause) });
@@ -212,11 +244,19 @@ export class AutoSyncController {
     if (!this.engine) throw new Error('Sign in first.');
     const item = this.view.cloudOnly.find((candidate) => candidate.globalId === globalId);
     const bytes = await this.engine.download(globalId);
-    const extension = EXTENSIONS[item?.mimeType ?? ''] ?? '';
     return {
       blob: new Blob([bytes as BlobPart], { type: item?.mimeType }),
-      name: `${item?.title ?? 'original'}${extension}`,
+      name: fileNameFor(item),
     };
+  }
+
+  /** Opens a cloud item in the viewer, at a page or time when search found one. */
+  open(globalId: string, location?: SourceLocation) {
+    this.set({ opened: { globalId, location } });
+  }
+
+  closeViewer() {
+    if (this.view.opened) this.set({ opened: undefined });
   }
 
   async setPaused(paused: boolean) {
@@ -267,6 +307,7 @@ export class AutoSyncController {
     this.set({
       status: 'signed-out',
       email: undefined,
+      opened: undefined,
       included: false,
       syncedCount: 0,
       cloudOnly: [],
@@ -357,7 +398,21 @@ const EXTENSIONS: Record<string, string> = {
   'text/plain;charset=utf-8': '.txt',
 };
 
+const FIREBASE_MESSAGES: Record<string, string> = {
+  'auth/popup-closed-by-user': 'Sign-in was cancelled.',
+  'auth/cancelled-popup-request': 'Sign-in was cancelled.',
+  'auth/popup-blocked': 'Allow pop-ups for this site, then try again.',
+  'auth/network-request-failed': 'Could not reach Google. Check your connection and try again.',
+};
+
+/** A download name: the title plus the extension of the original's type. */
+export function fileNameFor(item?: Pick<ChangeItem, 'title' | 'mimeType'>) {
+  return `${item?.title ?? 'original'}${EXTENSIONS[item?.mimeType ?? ''] ?? ''}`;
+}
+
 function messageFor(cause: unknown) {
+  const code = (cause as { code?: unknown } | undefined)?.code;
+  if (typeof code === 'string' && FIREBASE_MESSAGES[code]) return FIREBASE_MESSAGES[code];
   if (cause instanceof ApiFailure) {
     if (cause.code === 'NOT_ELIGIBLE')
       return 'Only verified IITGN accounts (@iitgn.ac.in) can sign in.';

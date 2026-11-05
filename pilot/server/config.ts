@@ -9,6 +9,8 @@ export interface PilotConfig {
   allowedEmailDomain: string;
   /** PEM private key for locally signed development tokens; only allowed on a local origin. */
   devKeyFile?: string;
+  /** Public Firebase web-app settings for direct Google sign-in. */
+  firebaseWeb?: { apiKey: string; authDomain: string };
 }
 
 const LOCAL_HOSTS = new Set(['localhost', '127.0.0.1', '[::1]']);
@@ -32,8 +34,15 @@ export function loadConfig(env: Record<string, string | undefined>): PilotConfig
   const quotaBytes = Number(env.PILOT_QUOTA_BYTES ?? 200_000_000);
   if (!Number.isSafeInteger(quotaBytes) || quotaBytes < 1)
     throw new Error('PILOT_QUOTA_BYTES must be a positive whole number.');
+  const apiKey = env.PILOT_FIREBASE_API_KEY || undefined;
+  const authDomain = env.PILOT_FIREBASE_AUTH_DOMAIN || undefined;
+  if (!apiKey !== !authDomain)
+    throw new Error('Set PILOT_FIREBASE_API_KEY and PILOT_FIREBASE_AUTH_DOMAIN together.');
+  if (authDomain && (authDomain.includes('/') || !URL.canParse(`https://${authDomain}`)))
+    throw new Error('PILOT_FIREBASE_AUTH_DOMAIN must be a host name.');
   return {
     projectId,
+    ...(apiKey && authDomain ? { firebaseWeb: { apiKey, authDomain } } : {}),
     origin,
     port,
     host: env.PILOT_HOST ?? '127.0.0.1',

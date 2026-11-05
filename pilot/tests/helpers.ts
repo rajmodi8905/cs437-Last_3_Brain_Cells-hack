@@ -41,7 +41,11 @@ export const devSigner = (email: string) =>
 
 export async function startPilotServer(
   quotaBytes = 5_000_000,
-  extra: { devSigner?: (email: string) => string } = {},
+  extra: {
+    devSigner?: (email: string) => string;
+    chunkBytes?: number;
+    firebaseWeb?: { apiKey: string; authDomain: string };
+  } = {},
 ) {
   const store = new MemoryPilotStore();
   const server: Server = createServer(
@@ -54,8 +58,9 @@ export async function startPilotServer(
       objects: new MemoryObjectStore(),
       nowSeconds: () => clock.now,
       quotaBytes,
-      chunkBytes: 32 * 1024,
+      chunkBytes: extra.chunkBytes ?? 32 * 1024,
       devSigner: extra.devSigner,
+      firebaseWeb: extra.firebaseWeb,
     }),
   );
   await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
