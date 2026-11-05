@@ -12,21 +12,22 @@ import { googleKeySource, staticKeySource } from './tokens';
 const config = loadConfig(process.env);
 const devKey = config.devKeyFile ? createPrivateKey(readFileSync(config.devKeyFile)) : undefined;
 
-/** Signs a Firebase-shaped token, so local sign-in takes the same path as Google's. */
+/** Signs a Google-shaped ID token, so local sign-in goes through the same identity checks. */
 const devSigner = devKey
   ? (email: string) => {
       const part = (value: unknown) => Buffer.from(JSON.stringify(value)).toString('base64url');
       const now = Math.floor(Date.now() / 1000);
       const header = part({ alg: 'RS256', kid: 'dev-key', typ: 'JWT' });
       const payload = part({
-        iss: `https://securetoken.google.com/${config.projectId}`,
-        aud: config.projectId,
+        iss: 'https://accounts.google.com',
+        aud: config.clientId,
         sub: `dev-${createHash('sha256').update(email.toLowerCase()).digest('hex').slice(0, 24)}`,
         iat: now,
         exp: now + 3600,
         email,
         email_verified: true,
-        firebase: { sign_in_provider: 'google.com' },
+        // Like Google, only Workspace accounts carry a hosted domain: here, the email's own.
+        hd: email.slice(email.lastIndexOf('@') + 1).toLowerCase(),
       });
       const signer = createSign('RSA-SHA256');
       signer.update(`${header}.${payload}`);
@@ -35,7 +36,7 @@ const devSigner = devKey
   : undefined;
 
 const api = createPilotHandler({
-  projectId: config.projectId,
+  clientId: config.clientId,
   allowedEmailDomain: config.allowedEmailDomain,
   origin: config.origin,
   keys: devKey ? staticKeySource({ 'dev-key': createPublicKey(devKey) }) : googleKeySource(),
@@ -43,7 +44,7 @@ const api = createPilotHandler({
   objects: new MemoryObjectStore(),
   quotaBytes: config.quotaBytes,
   devSigner,
-  firebaseWeb: config.firebaseWeb,
+  google: config.clientSecret ? { clientSecret: config.clientSecret } : undefined,
 });
 createServer(createStaticHandler(config.staticDir, api)).listen(config.port, config.host, () => {
   console.log(`Pilot server on ${config.origin} (listening on ${config.host}:${config.port}).`);

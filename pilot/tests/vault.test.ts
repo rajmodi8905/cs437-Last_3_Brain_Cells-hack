@@ -68,7 +68,7 @@ describe('P10 removing the cloud library', () => {
         },
       }),
     ).rejects.toMatchObject({ code: 'VAULT_RESET' });
-    expect(await pilot.store.committedBytes('campus-recall-pilot:subject-a')).toBe(0);
+    expect(await pilot.store.committedBytes('google:subject-a')).toBe(0);
     expect((await a.api.restoreSession())?.vault.epoch).toBe(2);
   });
 
@@ -91,7 +91,7 @@ describe('P10 removing the cloud library', () => {
     await expect(
       a.api.completeUpload(begun.uploadId, { opId: randomUUID(), epoch: 1 }),
     ).rejects.toMatchObject({ code: 'VAULT_RESET' });
-    expect(await pilot.store.committedBytes('campus-recall-pilot:subject-a')).toBe(0);
+    expect(await pilot.store.committedBytes('google:subject-a')).toBe(0);
   });
 
   it("leaves other accounts' libraries alone", async () => {

@@ -21,7 +21,7 @@ describe('Sign-in mode reported to the app', () => {
     const config = await fetch(`${pilot.base}/config`);
     expect(config.status).toBe(200);
     expect(config.headers.get('cache-control')).toBe('no-store');
-    expect(await config.json()).toEqual({ signIn: 'google', projectId: 'campus-recall-pilot' });
+    expect(await config.json()).toEqual({ signIn: 'google' });
     const token = await post(pilot.base, '/dev/token', { email: 'student@iitgn.ac.in' });
     expect(token.status).toBe(404);
   });

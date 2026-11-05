@@ -27,6 +27,15 @@ export interface UploadRecord {
   result?: CloudItem;
 }
 
+/** One Google sign-in in progress, bound to the browser that started it. */
+export interface LoginAttempt {
+  id: string;
+  state: string;
+  nonce: string;
+  codeVerifier: string;
+  expiresAt: number;
+}
+
 export interface Change {
   cursor: number;
   item: Partial<CloudItem> & Pick<CloudItem, 'globalId' | 'revision' | 'deleted'>;
@@ -42,6 +51,9 @@ export interface PilotStore {
   createSession(session: Session): Promise<void>;
   getSession(id: string): Promise<Session | undefined>;
   deleteSession(id: string): Promise<void>;
+  createLoginAttempt(attempt: LoginAttempt): Promise<void>;
+  /** Returns and removes the attempt in one step, so it can be used only once. */
+  takeLoginAttempt(id: string): Promise<LoginAttempt | undefined>;
   getItem(ownerKey: string, globalId: string): Promise<StoredItem | undefined>;
   /** Bytes held by live items plus reservations of unfinished uploads. */
   committedBytes(ownerKey: string): Promise<number>;

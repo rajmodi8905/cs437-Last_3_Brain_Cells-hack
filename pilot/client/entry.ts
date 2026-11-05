@@ -11,9 +11,14 @@ const CREDENTIAL_PARAMS = new Set([
   'oobcode',
 ]);
 
+const SIGN_IN_RESULTS = ['failed', 'cancelled', 'not-eligible'] as const;
+export type SignInResult = (typeof SIGN_IN_RESULTS)[number];
+
 export interface Entry {
   /** Set when the user arrived through the INSIIT link. */
   from?: 'insiit';
+  /** Set when Google sign-in came back without a session. */
+  signIn?: SignInResult;
   /** The address to show, without entry or credential parameters. */
   cleanUrl: string;
   strippedCredentials: boolean;
@@ -22,18 +27,23 @@ export interface Entry {
 function clean(params: URLSearchParams) {
   let stripped = false;
   let from: Entry['from'];
+  let signIn: Entry['signIn'];
   for (const key of [...params.keys()]) {
     const lower = key.toLowerCase();
+    const value = params.get(key);
     if (CREDENTIAL_PARAMS.has(lower)) {
       stripped = true;
       params.delete(key);
     } else if (lower === 'from') {
-      if (params.get(key) === 'insiit') from = 'insiit';
+      if (value === 'insiit') from = 'insiit';
+      params.delete(key);
+    } else if (lower === 'signin') {
+      if (SIGN_IN_RESULTS.includes(value as SignInResult)) signIn = value as SignInResult;
       params.delete(key);
     }
   }
   const rest = params.toString();
-  return { stripped, from, rest: rest ? `?${rest}` : '' };
+  return { stripped, from, signIn, rest: rest ? `?${rest}` : '' };
 }
 
 export function readEntry(href: string): Entry {
@@ -42,8 +52,10 @@ export function readEntry(href: string): Entry {
   const [route, hashQuery = ''] = url.hash.split('?');
   const inHash = clean(new URLSearchParams(hashQuery));
   const from = query.from ?? inHash.from;
+  const signIn = query.signIn ?? inHash.signIn;
   return {
     ...(from ? { from } : {}),
+    ...(signIn ? { signIn } : {}),
     cleanUrl: `${url.origin}${url.pathname}${query.rest}${route}${inHash.rest}`,
     strippedCredentials: query.stripped || inHash.stripped,
   };

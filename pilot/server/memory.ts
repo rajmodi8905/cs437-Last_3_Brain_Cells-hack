@@ -2,6 +2,7 @@
 import {
   publicItem,
   type Change,
+  type LoginAttempt,
   type ObjectStore,
   type PilotStore,
   type SavedResponse,
@@ -21,6 +22,7 @@ export class MemoryPilotStore implements PilotStore {
   private vaults = new Map<string, Vault>();
   private sessions = new Map<string, Session>();
   private uploads = new Map<string, UploadRecord>();
+  private attempts = new Map<string, LoginAttempt>();
 
   private vaultOf(ownerKey: string): Vault {
     let vault = this.vaults.get(ownerKey);
@@ -42,6 +44,14 @@ export class MemoryPilotStore implements PilotStore {
   }
   async deleteSession(id: string) {
     this.sessions.delete(id);
+  }
+  async createLoginAttempt(attempt: LoginAttempt) {
+    this.attempts.set(attempt.id, attempt);
+  }
+  async takeLoginAttempt(id: string) {
+    const attempt = this.attempts.get(id);
+    this.attempts.delete(id);
+    return attempt;
   }
   async getItem(ownerKey: string, globalId: string) {
     return this.vaultOf(ownerKey).items.get(globalId);

@@ -18,7 +18,7 @@ The wire format, states and limits referred to below are defined in [protocol.md
 
 ### P03 — Owner isolation
 
-**Statement:** A vault is reachable only with a valid session for its owner. The server derives ownership from the verified identity (Firebase project, subject and verified `@iitgn.ac.in` email), never from a client-supplied field.
+**Statement:** A vault is reachable only with a valid session for its owner. The server derives ownership from the verified identity (Google subject of a verified `@iitgn.ac.in` Workspace account), never from a client-supplied field.
 
 **Test:** User A reads and writes its vault; user B, an expired or wrongly signed token, a non-IITGN or unverified email, an anonymous identity, a guessed item ID and an edited ownership field are each rejected.
 
@@ -72,9 +72,9 @@ The wire format, states and limits referred to below are defined in [protocol.md
 
 ### P12 — Google sign-in
 
-**Statement:** Users sign in with a Google account through the pilot's own Firebase project; only verified `@iitgn.ac.in` accounts get a session, and sign-out ends cloud access on that device. INSIIT handoff is future scope and is not claimed.
+**Statement:** Users sign in with a Google account through Google sign-in run by the pilot server (no Firebase); only verified `@iitgn.ac.in` Workspace accounts get a session, each sign-in attempt is usable once, and sign-out ends cloud access on that device. INSIIT handoff is future scope and is not claimed.
 
-**Test:** Sign in with a test IITGN account and receive a session; a non-IITGN Google account is refused; after sign-out sync requests fail as unauthenticated.
+**Test:** Sign in with a test IITGN account and receive a session; a non-IITGN or personal Google account is refused; a replayed, expired, wrong-state or wrong-nonce return opens no session; after sign-out sync requests fail as unauthenticated.
 
 ### P13 — Durability, restart and backup
 

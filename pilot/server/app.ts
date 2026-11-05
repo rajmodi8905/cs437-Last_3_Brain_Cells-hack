@@ -1,6 +1,6 @@
 /// <reference types="node" />
 // Pilot sync API (docs/pilot/protocol.md). Plain node:http, no framework.
-import { createHash, randomBytes, randomUUID } from 'node:crypto';
+import { createHash, randomBytes, randomUUID, timingSafeEqual } from 'node:crypto';
 import type { IncomingMessage, RequestListener, ServerResponse } from 'node:http';
 import {
   decideWrite,
@@ -23,8 +23,19 @@ import {
 import type { KeySource } from './tokens';
 import { verifyIdToken } from './tokens';
 
+/** Google sign-in run by this server (OpenID Connect authorization code flow with PKCE). */
+export interface GoogleLoginOptions {
+  /** Secret of the pilot's Google OAuth web client; server-side only. */
+  clientSecret: string;
+  /** Google's endpoints by default; tests point them at a stand-in. */
+  authorizeUrl?: string;
+  tokenUrl?: string;
+  fetch?: typeof fetch;
+}
+
 export interface PilotServerOptions {
-  projectId: string;
+  /** The pilot's Google OAuth client ID: the audience every accepted ID token must have. */
+  clientId: string;
   allowedEmailDomain: string;
   /** The only browser origin allowed to sign in and write. */
   origin: string;
@@ -36,14 +47,14 @@ export interface PilotServerOptions {
   chunkBytes?: number;
   sessionSeconds?: number;
   /**
-   * Local development only: signs a token for an email so the app can sign in before the
-   * Firebase project exists. When set, `/config` reports `dev` and `/dev/token` is enabled.
+   * Local development only: signs a Google-shaped token for an email so the app can sign in
+   * without Google. When set, `/config` reports `dev` and `/dev/token` is enabled.
    */
   devSigner?: (email: string) => string;
   /** Index versions accepted from devices; defaults to the pilot contract's list. */
   supportedIndexVersions?: readonly string[];
-  /** Public Firebase web-app settings for direct Google sign-in; not secrets. */
-  firebaseWeb?: { apiKey: string; authDomain: string };
+  /** Enables `/auth/google/start` and `/auth/google/callback`. */
+  google?: GoogleLoginOptions;
 }
 
 const STATUS: Record<PilotErrorCode, number> = {
@@ -65,6 +76,13 @@ const STATUS: Record<PilotErrorCode, number> = {
 const RETRYABLE = new Set<PilotErrorCode>(['INTERNAL_ERROR']);
 const UUID_V4 = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 const COOKIE = 'recall_session';
+const LOGIN_COOKIE = 'recall_login';
+const LOGIN_SECONDS = 600;
+const GOOGLE_AUTHORIZE = 'https://accounts.google.com/o/oauth2/v2/auth';
+const GOOGLE_TOKEN = 'https://oauth2.googleapis.com/token';
+const random = () => randomBytes(32).toString('base64url');
+const sameText = (a: string, b: string) =>
+  a.length === b.length && timingSafeEqual(Buffer.from(a), Buffer.from(b));
 const MAX_JSON_BYTES = 64 * 1024;
 // 2,000 segments of 768 numbers as JSON stay well under this.
 const MAX_INDEX_BYTES = 24 * 1024 * 1024;
@@ -86,7 +104,7 @@ function send(
   res: ServerResponse,
   status: number,
   body?: unknown,
-  headers: Record<string, string> = {},
+  headers: Record<string, string | string[]> = {},
 ) {
   res.setHeader('cache-control', 'no-store');
   res.setHeader('x-content-type-options', 'nosniff');
@@ -168,6 +186,67 @@ export function createPilotHandler(options: PilotServerOptions): RequestListener
     vault: await store.vault(session.ownerKey),
   });
 
+  const sessionCookie = (session: Session) =>
+    `${COOKIE}=${session.id}; Path=/api; Max-Age=${sessionSeconds}; HttpOnly; Secure; SameSite=Lax`;
+  async function openSession(identity: { ownerKey: string; email: string }) {
+    const session: Session = {
+      id: randomBytes(32).toString('base64url'),
+      csrf: randomBytes(24).toString('base64url'),
+      ownerKey: identity.ownerKey,
+      email: identity.email,
+      expiresAt: now() + sessionSeconds,
+    };
+    await store.createSession(session);
+    return session;
+  }
+  const identityPolicy = (nonce?: string) => ({
+    clientId: options.clientId,
+    allowedEmailDomain: options.allowedEmailDomain,
+    nowSeconds: now(),
+    skewSeconds: 60,
+    ...(nonce !== undefined ? { nonce } : {}),
+  });
+  const callbackUrl = `${options.origin}/api/v1/auth/google/callback`;
+
+  /** Finishes a Google sign-in; returns the outcome shown to the user. */
+  async function finishGoogle(
+    google: GoogleLoginOptions,
+    req: IncomingMessage,
+    url: URL,
+  ): Promise<{ result: 'failed' | 'cancelled' | 'not-eligible' } | { session: Session }> {
+    const id = cookieValue(req, LOGIN_COOKIE);
+    // Taken (and so removed) before anything else: an attempt is usable once.
+    const attempt = id ? await store.takeLoginAttempt(id) : undefined;
+    const state = url.searchParams.get('state') ?? '';
+    if (!attempt || attempt.expiresAt <= now() || !sameText(state, attempt.state))
+      return { result: 'failed' };
+    if (url.searchParams.has('error')) return { result: 'cancelled' };
+    const code = url.searchParams.get('code');
+    if (!code) return { result: 'failed' };
+    const exchange = await (google.fetch ?? fetch)(google.tokenUrl ?? GOOGLE_TOKEN, {
+      method: 'POST',
+      headers: { 'content-type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
+        grant_type: 'authorization_code',
+        code,
+        client_id: options.clientId,
+        client_secret: google.clientSecret,
+        redirect_uri: callbackUrl,
+        code_verifier: attempt.codeVerifier,
+      }),
+    }).catch(() => undefined);
+    if (!exchange?.ok) return { result: 'failed' };
+    const body = (await exchange.json().catch(() => ({}))) as { id_token?: unknown };
+    const verified = await verifyIdToken(
+      body.id_token,
+      options.keys,
+      identityPolicy(attempt.nonce),
+    );
+    if (!verified.ok)
+      return { result: verified.code === 'NOT_ELIGIBLE' ? 'not-eligible' : 'failed' };
+    return { session: await openSession(verified.value) };
+  }
+
   async function requireSession(req: IncomingMessage, write: boolean): Promise<Session> {
     const id = cookieValue(req, COOKIE);
     const session = id ? await store.getSession(id) : undefined;
@@ -211,23 +290,58 @@ export function createPilotHandler(options: PilotServerOptions): RequestListener
       if (req.headers.origin !== options.origin)
         throw new ApiError('FORBIDDEN', 'Sign-in is only accepted from the pilot site.');
       const body = await readJson(req);
-      const verified = await verifyIdToken(body.idToken, options.keys, {
-        projectId: options.projectId,
-        allowedEmailDomain: options.allowedEmailDomain,
-        nowSeconds: now(),
-        skewSeconds: 60,
-      });
+      const verified = await verifyIdToken(body.idToken, options.keys, identityPolicy());
       if (!verified.ok) throw new ApiError(verified.code, verified.reason);
-      const session: Session = {
-        id: randomBytes(32).toString('base64url'),
-        csrf: randomBytes(24).toString('base64url'),
-        ownerKey: verified.value.ownerKey,
-        email: verified.value.email,
-        expiresAt: now() + sessionSeconds,
-      };
-      await store.createSession(session);
+      const session = await openSession(verified.value);
       return send(res, 200, await sessionBody(session), {
-        'set-cookie': `${COOKIE}=${session.id}; Path=/api; Max-Age=${sessionSeconds}; HttpOnly; Secure; SameSite=Lax`,
+        'set-cookie': sessionCookie(session),
+      });
+    }
+
+    if (path === '/auth/google/start' && method === 'GET' && options.google) {
+      const verifier = random();
+      const attempt = {
+        id: random(),
+        state: random(),
+        nonce: random(),
+        codeVerifier: verifier,
+        expiresAt: now() + LOGIN_SECONDS,
+      };
+      await store.createLoginAttempt(attempt);
+      const to = new URL(options.google.authorizeUrl ?? GOOGLE_AUTHORIZE);
+      for (const [name, value] of Object.entries({
+        client_id: options.clientId,
+        redirect_uri: callbackUrl,
+        response_type: 'code',
+        scope: 'openid email',
+        state: attempt.state,
+        nonce: attempt.nonce,
+        code_challenge: createHash('sha256').update(verifier).digest('base64url'),
+        code_challenge_method: 'S256',
+        hd: options.allowedEmailDomain,
+        prompt: 'select_account',
+      }))
+        to.searchParams.set(name, value);
+      return send(res, 302, undefined, {
+        location: to.href,
+        'referrer-policy': 'no-referrer',
+        'set-cookie': `${LOGIN_COOKIE}=${attempt.id}; Path=/api/v1/auth; Max-Age=${LOGIN_SECONDS}; HttpOnly; Secure; SameSite=Lax`,
+      });
+    }
+
+    if (path === '/auth/google/callback' && method === 'GET' && options.google) {
+      const outcome = await finishGoogle(options.google, req, url);
+      const clearLogin = `${LOGIN_COOKIE}=; Path=/api/v1/auth; Max-Age=0; HttpOnly; Secure; SameSite=Lax`;
+      if ('session' in outcome)
+        return send(res, 303, undefined, {
+          location: `${options.origin}/#/settings`,
+          'referrer-policy': 'no-referrer',
+          'set-cookie': [sessionCookie(outcome.session), clearLogin],
+        });
+      return send(res, 303, undefined, {
+        location: `${options.origin}/?signin=${outcome.result}#/settings`,
+        'referrer-policy': 'no-referrer',
+        'set-cookie': clearLogin,
       });
     }
 
@@ -237,11 +351,7 @@ export function createPilotHandler(options: PilotServerOptions): RequestListener
     }
 
     if (path === '/config' && method === 'GET') {
-      return send(res, 200, {
-        signIn: options.devSigner ? 'dev' : 'google',
-        projectId: options.projectId,
-        ...(options.firebaseWeb && !options.devSigner ? { firebase: options.firebaseWeb } : {}),
-      });
+      return send(res, 200, { signIn: options.devSigner ? 'dev' : 'google' });
     }
 
     if (path === '/dev/token' && method === 'POST') {

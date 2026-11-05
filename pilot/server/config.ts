@@ -1,6 +1,9 @@
 // Pilot server settings from environment variables, checked before anything starts.
 export interface PilotConfig {
-  projectId: string;
+  /** Google OAuth client ID, or a fixed local ID with a development key. */
+  clientId: string;
+  /** Google OAuth client secret; absent only with a development key. */
+  clientSecret?: string;
   origin: string;
   port: number;
   host: string;
@@ -9,8 +12,6 @@ export interface PilotConfig {
   allowedEmailDomain: string;
   /** PEM private key for locally signed development tokens; only allowed on a local origin. */
   devKeyFile?: string;
-  /** Public Firebase web-app settings for direct Google sign-in. */
-  firebaseWeb?: { apiKey: string; authDomain: string };
 }
 
 const LOCAL_HOSTS = new Set(['localhost', '127.0.0.1', '[::1]']);
@@ -28,21 +29,23 @@ export function loadConfig(env: Record<string, string | undefined>): PilotConfig
   const devKeyFile = env.PILOT_DEV_KEY_FILE || undefined;
   if (devKeyFile && !local)
     throw new Error('A development signing key is only allowed on a local origin.');
-  const projectId =
-    env.PILOT_FIREBASE_PROJECT_ID || (devKeyFile ? 'campus-recall-pilot-dev' : undefined);
-  if (!projectId) throw new Error('Set PILOT_FIREBASE_PROJECT_ID (or a local development key).');
+  const googleId = env.PILOT_GOOGLE_CLIENT_ID || undefined;
+  const clientSecret = env.PILOT_GOOGLE_CLIENT_SECRET || undefined;
+  if (!googleId !== !clientSecret)
+    throw new Error('Set PILOT_GOOGLE_CLIENT_ID and PILOT_GOOGLE_CLIENT_SECRET together.');
+  if (googleId && devKeyFile)
+    throw new Error('Use either Google sign-in or a development key, not both.');
+  const clientId = googleId ?? (devKeyFile ? 'campus-recall-pilot-dev' : undefined);
+  if (!clientId)
+    throw new Error(
+      'Set PILOT_GOOGLE_CLIENT_ID and PILOT_GOOGLE_CLIENT_SECRET (or a local development key).',
+    );
   const quotaBytes = Number(env.PILOT_QUOTA_BYTES ?? 200_000_000);
   if (!Number.isSafeInteger(quotaBytes) || quotaBytes < 1)
     throw new Error('PILOT_QUOTA_BYTES must be a positive whole number.');
-  const apiKey = env.PILOT_FIREBASE_API_KEY || undefined;
-  const authDomain = env.PILOT_FIREBASE_AUTH_DOMAIN || undefined;
-  if (!apiKey !== !authDomain)
-    throw new Error('Set PILOT_FIREBASE_API_KEY and PILOT_FIREBASE_AUTH_DOMAIN together.');
-  if (authDomain && (authDomain.includes('/') || !URL.canParse(`https://${authDomain}`)))
-    throw new Error('PILOT_FIREBASE_AUTH_DOMAIN must be a host name.');
   return {
-    projectId,
-    ...(apiKey && authDomain ? { firebaseWeb: { apiKey, authDomain } } : {}),
+    clientId,
+    ...(clientSecret ? { clientSecret } : {}),
     origin,
     port,
     host: env.PILOT_HOST ?? '127.0.0.1',

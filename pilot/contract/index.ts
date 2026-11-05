@@ -29,7 +29,7 @@ export type PilotErrorCode =
 export type Result<T> =
   { ok: true; value: T } | { ok: false; code: PilotErrorCode; reason: string };
 
-/** Decoded payload of a Firebase ID token whose signature has already been checked. */
+/** Decoded payload of a Google ID token whose signature has already been checked. */
 export interface IdentityClaims {
   iss: string;
   aud: string;
@@ -38,24 +38,30 @@ export interface IdentityClaims {
   exp: number;
   email?: string;
   email_verified?: boolean;
-  firebase?: { sign_in_provider?: string };
+  /** Google Workspace domain of the account; absent for personal Google accounts. */
+  hd?: string;
+  nonce?: string;
 }
 
 export interface IdentityPolicy {
-  projectId: string;
+  /** The pilot's Google OAuth client ID, which must be the token's audience. */
+  clientId: string;
   allowedEmailDomain: string;
   nowSeconds: number;
   /** Allowed clock skew in seconds for iat/exp. */
   skewSeconds: number;
+  /** The nonce of the sign-in attempt, when the token came from the server's own redirect. */
+  nonce?: string;
 }
 
 export interface VerifiedIdentity {
-  /** Ownership key: `${projectId}:${sub}`. Never the email. */
+  /** Ownership key: `google:${sub}`. Never the email. */
   ownerKey: string;
-  projectId: string;
   subject: string;
   email: string;
 }
+
+const GOOGLE_ISSUERS = new Set(['https://accounts.google.com', 'accounts.google.com']);
 
 export interface CloudItem {
   globalId: string;
@@ -136,34 +142,32 @@ export function checkIdentityClaims(
   claims: IdentityClaims,
   policy: IdentityPolicy,
 ): Result<VerifiedIdentity> {
-  if (claims.iss !== `https://securetoken.google.com/${policy.projectId}`)
-    return fail('UNAUTHENTICATED', 'Token issuer does not match the pilot project.');
-  if (claims.aud !== policy.projectId)
-    return fail('UNAUTHENTICATED', 'Token audience does not match the pilot project.');
+  if (!GOOGLE_ISSUERS.has(claims.iss))
+    return fail('UNAUTHENTICATED', 'Token was not issued by Google.');
+  if (claims.aud !== policy.clientId)
+    return fail('UNAUTHENTICATED', 'Token audience is not the pilot client.');
   if (typeof claims.sub !== 'string' || !claims.sub || claims.sub.length > 128)
     return fail('UNAUTHENTICATED', 'Token subject is missing or invalid.');
   if (!Number.isFinite(claims.exp) || claims.exp + policy.skewSeconds <= policy.nowSeconds)
     return fail('UNAUTHENTICATED', 'Token has expired.');
   if (!Number.isFinite(claims.iat) || claims.iat - policy.skewSeconds > policy.nowSeconds)
     return fail('UNAUTHENTICATED', 'Token was issued in the future.');
-  if (claims.firebase?.sign_in_provider !== 'google.com')
-    return fail('NOT_ELIGIBLE', 'Only Google sign-in is accepted.');
+  if (policy.nonce !== undefined && claims.nonce !== policy.nonce)
+    return fail('UNAUTHENTICATED', 'Token does not belong to this sign-in attempt.');
   if (claims.email_verified !== true) return fail('NOT_ELIGIBLE', 'Email is not verified.');
+  const domain = policy.allowedEmailDomain.toLowerCase();
   const email = typeof claims.email === 'string' ? claims.email.toLowerCase() : '';
   const at = email.lastIndexOf('@');
-  if (at < 1 || email.slice(at + 1) !== policy.allowedEmailDomain.toLowerCase())
+  // The hosted-domain claim proves an IITGN Workspace account; a personal Google account
+  // registered with an IITGN address has a matching email but no `hd`.
+  if (at < 1 || email.slice(at + 1) !== domain || claims.hd?.toLowerCase() !== domain)
     return fail(
       'NOT_ELIGIBLE',
       `Only verified @${policy.allowedEmailDomain} accounts can sign in.`,
     );
   return {
     ok: true,
-    value: {
-      ownerKey: `${policy.projectId}:${claims.sub}`,
-      projectId: policy.projectId,
-      subject: claims.sub,
-      email,
-    },
+    value: { ownerKey: `google:${claims.sub}`, subject: claims.sub, email },
   };
 }
 

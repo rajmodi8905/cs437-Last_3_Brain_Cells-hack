@@ -3,11 +3,11 @@
 import { createHash, createSign, generateKeyPairSync, type KeyObject } from 'node:crypto';
 import { createServer, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
-import { createPilotHandler } from '../server/app';
+import { createPilotHandler, type GoogleLoginOptions } from '../server/app';
 import { MemoryObjectStore, MemoryPilotStore } from '../server/memory';
 import { staticKeySource } from '../server/tokens';
 
-export const projectId = 'campus-recall-pilot';
+export const clientId = '1234-pilot.apps.googleusercontent.com';
 export const origin = 'https://recall.example.test';
 const signing = generateKeyPairSync('rsa', { modulusLength: 2048 });
 export const clock = { now: 1_762_300_000 };
@@ -16,14 +16,14 @@ export function idToken(over: Record<string, unknown> = {}, key: KeyObject = sig
   const part = (value: unknown) => Buffer.from(JSON.stringify(value)).toString('base64url');
   const header = part({ alg: 'RS256', kid: 'test-key', typ: 'JWT' });
   const payload = part({
-    iss: `https://securetoken.google.com/${projectId}`,
-    aud: projectId,
+    iss: 'https://accounts.google.com',
+    aud: clientId,
     sub: 'subject-a',
     iat: clock.now - 10,
     exp: clock.now + 3000,
     email: 'student.a@iitgn.ac.in',
     email_verified: true,
-    firebase: { sign_in_provider: 'google.com' },
+    hd: 'iitgn.ac.in',
     ...over,
   });
   const signer = createSign('RSA-SHA256');
@@ -44,13 +44,13 @@ export async function startPilotServer(
   extra: {
     devSigner?: (email: string) => string;
     chunkBytes?: number;
-    firebaseWeb?: { apiKey: string; authDomain: string };
+    google?: GoogleLoginOptions;
   } = {},
 ) {
   const store = new MemoryPilotStore();
   const server: Server = createServer(
     createPilotHandler({
-      projectId,
+      clientId,
       allowedEmailDomain: 'iitgn.ac.in',
       origin,
       keys: staticKeySource({ 'test-key': signing.publicKey }),
@@ -60,7 +60,7 @@ export async function startPilotServer(
       quotaBytes,
       chunkBytes: extra.chunkBytes ?? 32 * 1024,
       devSigner: extra.devSigner,
-      firebaseWeb: extra.firebaseWeb,
+      google: extra.google,
     }),
   );
   await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));

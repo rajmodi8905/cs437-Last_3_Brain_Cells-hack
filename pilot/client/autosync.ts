@@ -9,8 +9,7 @@ import {
   type ChangeItem,
   type SessionInfo,
 } from './api';
-import { applyEntry } from './entry';
-import { googleIdToken, loadFirebase, type FirebaseAuthModule } from './google';
+import { applyEntry, type SignInResult } from './entry';
 import { IndexedDbSyncStateStore } from './idb';
 import { repositoryLibrary } from './library';
 import { SyncEngine } from './sync';
@@ -93,12 +92,10 @@ export class AutoSyncController {
   private debounce?: ReturnType<typeof setTimeout>;
   private running?: Promise<void>;
   private started?: Promise<void>;
-  private google?: { apiKey: string; authDomain: string; projectId: string };
-  private firebase?: Promise<FirebaseAuthModule>;
 
   constructor(
     private services: CampusRecallServices,
-    apiBase = '/api/v1',
+    private apiBase = '/api/v1',
   ) {
     this.api = createApiClient({ base: apiBase });
   }
@@ -121,13 +118,12 @@ export class AutoSyncController {
 
   private async begin() {
     // Drops entry and credential-like parameters from the address before anything else runs.
-    if (typeof location !== 'undefined' && applyEntry().from === 'insiit')
-      this.set({ entry: 'insiit' });
+    const entry = typeof location !== 'undefined' ? applyEntry() : undefined;
+    if (entry?.from === 'insiit') this.set({ entry: 'insiit' });
+    if (entry?.signIn) this.set({ error: SIGN_IN_MESSAGES[entry.signIn] });
     try {
       const config = await this.api.config();
-      if (config.signIn === 'google' && config.firebase)
-        this.google = { ...config.firebase, projectId: config.projectId };
-      this.set({ signInMode: config.signIn, googleReady: !!this.google });
+      this.set({ signInMode: config.signIn, googleReady: config.signIn === 'google' });
     } catch {
       this.set({ status: 'unavailable' });
       return;
@@ -137,16 +133,10 @@ export class AutoSyncController {
     else this.set({ status: 'signed-out' });
   }
 
-  /** Loads the sign-in code ahead of the click, so the popup opens straight from it. */
-  prepareGoogle() {
-    if (this.google) this.firebase ??= loadFirebase();
-  }
-
-  async signInGoogle() {
-    const config = this.google;
-    if (!config) return;
-    this.prepareGoogle();
-    await this.signIn(() => googleIdToken(config, () => this.firebase!));
+  /** Leaves for Google; the server finishes sign-in and brings the user back to Settings. */
+  signInGoogle(go: (url: string) => void = (url) => location.assign(url)) {
+    if (!this.view.googleReady) return;
+    go(`${this.apiBase}/auth/google/start`);
   }
 
   async signInDev(email: string) {
@@ -398,11 +388,10 @@ const EXTENSIONS: Record<string, string> = {
   'text/plain;charset=utf-8': '.txt',
 };
 
-const FIREBASE_MESSAGES: Record<string, string> = {
-  'auth/popup-closed-by-user': 'Sign-in was cancelled.',
-  'auth/cancelled-popup-request': 'Sign-in was cancelled.',
-  'auth/popup-blocked': 'Allow pop-ups for this site, then try again.',
-  'auth/network-request-failed': 'Could not reach Google. Check your connection and try again.',
+const SIGN_IN_MESSAGES: Record<SignInResult, string> = {
+  cancelled: 'Sign-in was cancelled.',
+  'not-eligible': 'Only IITGN Google accounts (@iitgn.ac.in) can sign in.',
+  failed: 'Sign-in did not finish. Try again.',
 };
 
 /** A download name: the title plus the extension of the original's type. */
@@ -411,8 +400,6 @@ export function fileNameFor(item?: Pick<ChangeItem, 'title' | 'mimeType'>) {
 }
 
 function messageFor(cause: unknown) {
-  const code = (cause as { code?: unknown } | undefined)?.code;
-  if (typeof code === 'string' && FIREBASE_MESSAGES[code]) return FIREBASE_MESSAGES[code];
   if (cause instanceof ApiFailure) {
     if (cause.code === 'NOT_ELIGIBLE')
       return 'Only verified IITGN accounts (@iitgn.ac.in) can sign in.';

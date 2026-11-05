@@ -24,11 +24,7 @@ export interface SessionInfo {
 }
 
 export interface ApiClient {
-  config(): Promise<{
-    signIn: 'google' | 'dev';
-    projectId: string;
-    firebase?: { apiKey: string; authDomain: string };
-  }>;
+  config(): Promise<{ signIn: 'google' | 'dev' }>;
   /** Development servers only: a token for a typed email. */
   devToken(email: string): Promise<string>;
   /** The current session from the cookie, or undefined when signed out. */

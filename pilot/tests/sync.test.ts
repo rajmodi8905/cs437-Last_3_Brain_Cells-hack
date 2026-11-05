@@ -132,7 +132,7 @@ describe('P08 no duplicates after crashes or lost responses', () => {
     expect((await phone.engine.runOnce()).failed).toBe(1);
     expect((await phone.engine.runOnce()).uploaded).toBe(1);
     // A second upload would leave an unfinished reservation counted against the quota.
-    expect(await pilot.store.committedBytes('campus-recall-pilot:subject-a')).toBe(pdf.length);
+    expect(await pilot.store.committedBytes('google:subject-a')).toBe(pdf.length);
   });
 
   it('keeps planned work across a restart and sends it once when the network returns', async () => {

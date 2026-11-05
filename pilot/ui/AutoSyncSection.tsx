@@ -97,15 +97,18 @@ export function AutoSyncSection({ services }: { services: CampusRecallServices }
               </p>
             </form>
           ) : view.googleReady ? (
-            <button
-              className="button primary"
-              disabled={busy}
-              onPointerEnter={() => controller.prepareGoogle()}
-              onFocus={() => controller.prepareGoogle()}
-              onClick={act(() => controller.signInGoogle())}
-            >
-              Sign in with Google
-            </button>
+            <>
+              <button
+                className="button primary"
+                disabled={busy}
+                onClick={() => controller.signInGoogle()}
+              >
+                Sign in with Google
+              </button>
+              <p className="field-help">
+                You go to Google to choose your IITGN account, then come back here.
+              </p>
+            </>
           ) : (
             <p className="field-help">Google sign-in is not configured on this server yet.</p>
           )}

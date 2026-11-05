@@ -1,5 +1,5 @@
 /// <reference types="node" />
-// Firebase ID token verification with Node's crypto: signature here, claims in the contract.
+// Google ID token verification with Node's crypto: signature here, claims in the contract.
 import { createPublicKey, verify, type JsonWebKey, type KeyObject } from 'node:crypto';
 import {
   checkIdentityClaims,
@@ -17,10 +17,9 @@ export const staticKeySource = (keys: Record<string, KeyObject>): KeySource => (
   getKey: async (kid) => (Object.hasOwn(keys, kid) ? keys[kid] : undefined),
 });
 
-const GOOGLE_JWKS =
-  'https://www.googleapis.com/service_accounts/v1/jwk/securetoken@system.gserviceaccount.com';
+const GOOGLE_JWKS = 'https://www.googleapis.com/oauth2/v3/certs';
 
-/** Google's published Firebase signing keys, cached for their max-age. */
+/** Google's published OpenID Connect signing keys, cached for their max-age. */
 export function googleKeySource(fetchJson: typeof fetch = fetch): KeySource {
   let keys = new Map<string, KeyObject>();
   let expiresAt = 0;
@@ -60,7 +59,7 @@ const decode = (part: string): unknown => {
   }
 };
 
-/** Verifies an RS256 Firebase ID token, then applies the contract's identity rules. */
+/** Verifies an RS256 Google ID token, then applies the contract's identity rules. */
 export async function verifyIdToken(
   token: unknown,
   keys: KeySource,

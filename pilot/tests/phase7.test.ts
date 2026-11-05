@@ -3,10 +3,8 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { LIMITS, type ItemKind } from '../../src/shared';
 import { createApiClient } from '../client/api';
 import { readEntry } from '../client/entry';
-import { googleIdToken, type FirebaseAuthModule } from '../client/google';
 import { MemoryLocalLibrary, MemorySyncStateStore } from '../client/memory';
 import { SyncEngine } from '../client/sync';
-import { loadConfig } from '../server/config';
 import { deviceFetch, idToken, sha256, startPilotServer } from './helpers';
 
 let pilot: Awaited<ReturnType<typeof startPilotServer>> | undefined;
@@ -185,7 +183,7 @@ describe('P11 quota counts stored bytes', () => {
     expect(result).toMatchObject({ uploaded: 1, failed: 1, quotaExceeded: true });
     const { changes } = await phone.api.changes(phone.epoch, 0);
     expect(changes.map((change) => change.item.title)).toEqual(['First']);
-    expect(await pilot.store.committedBytes('campus-recall-pilot:subject-a')).toBe(60_000);
+    expect(await pilot.store.committedBytes('google:subject-a')).toBe(60_000);
 
     // The waiting item goes up once space is freed, without being added again.
     const first = (await phone.engine.catalogue()).find((item) => item.title === 'First')!;
@@ -240,7 +238,7 @@ describe('P11 ranged downloads of originals', () => {
   });
 });
 
-describe('P12 entry from INSIIT and direct Google sign-in', () => {
+describe('P12 entry from INSIIT', () => {
   it('opens from an INSIIT link and strips anything that looks like a credential', () => {
     expect(readEntry('https://recall.example/?from=insiit#/library')).toEqual({
       from: 'insiit',
@@ -255,6 +253,15 @@ describe('P12 entry from INSIIT and direct Google sign-in', () => {
       from: 'insiit',
       cleanUrl: 'https://recall.example/#/settings?tab=sync',
       strippedCredentials: true,
+    });
+    expect(readEntry('https://recall.example/?signin=not-eligible#/settings')).toEqual({
+      signIn: 'not-eligible',
+      cleanUrl: 'https://recall.example/#/settings',
+      strippedCredentials: false,
+    });
+    expect(readEntry('https://recall.example/?signin=anything-else#/settings')).toEqual({
+      cleanUrl: 'https://recall.example/#/settings',
+      strippedCredentials: false,
     });
     expect(readEntry('https://recall.example/#/search')).toEqual({
       cleanUrl: 'https://recall.example/#/search',
@@ -271,79 +278,5 @@ describe('P12 entry from INSIIT and direct Google sign-in', () => {
     );
     expect(res.status).toBe(400);
     expect(res.headers.get('set-cookie')).toBeNull();
-  });
-
-  it('reports the public Firebase web configuration only when it is set', async () => {
-    pilot = await startPilotServer(5_000_000, {
-      firebaseWeb: { apiKey: 'public-web-key', authDomain: 'recall.example.test' },
-    });
-    expect(await (await fetch(`${pilot.base}/config`)).json()).toEqual({
-      signIn: 'google',
-      projectId: 'campus-recall-pilot',
-      firebase: { apiKey: 'public-web-key', authDomain: 'recall.example.test' },
-    });
-  });
-
-  it('reads the web configuration from the environment, both values or neither', () => {
-    const base = { PILOT_FIREBASE_PROJECT_ID: 'campus-recall-pilot' };
-    expect(loadConfig(base).firebaseWeb).toBeUndefined();
-    expect(
-      loadConfig({
-        ...base,
-        PILOT_FIREBASE_API_KEY: 'public-web-key',
-        PILOT_FIREBASE_AUTH_DOMAIN: 'recall.example.test',
-      }).firebaseWeb,
-    ).toEqual({ apiKey: 'public-web-key', authDomain: 'recall.example.test' });
-    expect(() => loadConfig({ ...base, PILOT_FIREBASE_API_KEY: 'public-web-key' })).toThrow(
-      /PILOT_FIREBASE_AUTH_DOMAIN/,
-    );
-  });
-
-  function fakeFirebase(getIdToken: () => Promise<string>) {
-    const calls: string[] = [];
-    let parameters: Record<string, string> = {};
-    const module: FirebaseAuthModule = {
-      initializeApp: (config, name) => {
-        calls.push(`app ${name} ${config.projectId}`);
-        return { name } as never;
-      },
-      getApps: () => [],
-      initializeAuth: (_app, deps) => {
-        calls.push(`auth ${deps?.persistence === module.inMemoryPersistence ? 'memory' : 'other'}`);
-        return {} as never;
-      },
-      inMemoryPersistence: { type: 'NONE' } as never,
-      browserPopupRedirectResolver: {} as never,
-      GoogleAuthProvider: class {
-        setCustomParameters(value: Record<string, string>) {
-          parameters = value;
-          return this;
-        }
-      } as never,
-      signInWithPopup: async () => {
-        calls.push('popup');
-        return { user: { getIdToken } } as never;
-      },
-      signOut: async () => {
-        calls.push('signOut');
-      },
-    };
-    return { module, calls, parameters: () => parameters };
-  }
-  const web = { apiKey: 'public-web-key', authDomain: 'recall.example.test', projectId: 'p' };
-
-  it('gets one Google ID token without keeping a Firebase login on the device', async () => {
-    const fake = fakeFirebase(async () => 'firebase-id-token');
-    expect(await googleIdToken(web, async () => fake.module)).toBe('firebase-id-token');
-    expect(fake.parameters()).toMatchObject({ hd: 'iitgn.ac.in', prompt: 'select_account' });
-    expect(fake.calls).toEqual(['app campus-recall-pilot p', 'auth memory', 'popup', 'signOut']);
-  });
-
-  it('signs out of Firebase even when getting the token fails', async () => {
-    const fake = fakeFirebase(async () => {
-      throw new Error('token failed');
-    });
-    await expect(googleIdToken(web, async () => fake.module)).rejects.toThrow('token failed');
-    expect(fake.calls.at(-1)).toBe('signOut');
   });
 });

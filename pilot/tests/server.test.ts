@@ -13,7 +13,7 @@ import { createPilotHandler } from '../server/app';
 import { MemoryObjectStore, MemoryPilotStore } from '../server/memory';
 import { staticKeySource } from '../server/tokens';
 
-const projectId = 'campus-recall-pilot';
+const clientId = '1234-pilot.apps.googleusercontent.com';
 const origin = 'https://recall.example.test';
 const signing = generateKeyPairSync('rsa', { modulusLength: 2048 });
 const stranger = generateKeyPairSync('rsa', { modulusLength: 2048 });
@@ -28,14 +28,14 @@ function idToken(
   const header = b64url(JSON.stringify({ alg: 'RS256', kid, typ: 'JWT' }));
   const payload = b64url(
     JSON.stringify({
-      iss: `https://securetoken.google.com/${projectId}`,
-      aud: projectId,
+      iss: 'https://accounts.google.com',
+      aud: clientId,
       sub: 'subject-a',
       iat: clock - 10,
       exp: clock + 3000,
       email: 'student.a@iitgn.ac.in',
       email_verified: true,
-      firebase: { sign_in_provider: 'google.com' },
+      hd: 'iitgn.ac.in',
       ...over,
     }),
   );
@@ -50,7 +50,7 @@ let store: MemoryPilotStore;
 beforeEach(async () => {
   store = new MemoryPilotStore();
   const handler = createPilotHandler({
-    projectId,
+    clientId,
     allowedEmailDomain: 'iitgn.ac.in',
     origin,
     keys: staticKeySource({ 'test-key': signing.publicKey }),
@@ -291,12 +291,12 @@ describe('P03 owner isolation', () => {
     const res = await json(b, `/items/${globalId}/upload`, 'POST', {
       opId: randomUUID(),
       epoch: b.epoch,
-      ownerKey: `${projectId}:subject-a`,
+      ownerKey: 'google:subject-a',
       item: describeItem(pdf),
     });
     expect(res.status).toBe(200);
     const a = await signIn();
-    expect(store.uploadOwner((await res.json()).uploadId)).toBe(`${projectId}:subject-b`);
+    expect(store.uploadOwner((await res.json()).uploadId)).toBe('google:subject-b');
     expect((await changes(a)).changes).toHaveLength(0);
   });
 });

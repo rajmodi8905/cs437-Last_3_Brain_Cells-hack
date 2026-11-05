@@ -8,33 +8,46 @@ import {
   type IndexBundle,
 } from '../contract';
 
-const projectId = 'campus-recall-pilot';
+const clientId = '1234-pilot.apps.googleusercontent.com';
 const now = 1_762_300_000;
-const policy = { projectId, allowedEmailDomain: 'iitgn.ac.in', nowSeconds: now, skewSeconds: 60 };
+const policy = { clientId, allowedEmailDomain: 'iitgn.ac.in', nowSeconds: now, skewSeconds: 60 };
 const claims = (over: Partial<IdentityClaims> = {}): IdentityClaims => ({
-  iss: `https://securetoken.google.com/${projectId}`,
-  aud: projectId,
+  iss: 'https://accounts.google.com',
+  aud: clientId,
   sub: 'google-subject-1',
   iat: now - 30,
   exp: now + 3000,
   email: 'student@iitgn.ac.in',
   email_verified: true,
-  firebase: { sign_in_provider: 'google.com' },
+  hd: 'iitgn.ac.in',
   ...over,
 });
 
 describe('P03/P12 identity: only verified IITGN Google accounts own a vault', () => {
-  it('derives the owner from project and subject, never the email', () => {
+  it('derives the owner from the Google subject, never the email', () => {
     const result = checkIdentityClaims(claims(), policy);
     expect(result).toEqual({
       ok: true,
       value: {
-        ownerKey: `${projectId}:google-subject-1`,
-        projectId,
+        ownerKey: 'google:google-subject-1',
         subject: 'google-subject-1',
         email: 'student@iitgn.ac.in',
       },
     });
+  });
+
+  it("accepts both of Google's issuer spellings", () => {
+    expect(checkIdentityClaims(claims({ iss: 'accounts.google.com' }), policy).ok).toBe(true);
+  });
+
+  it('requires the nonce of the sign-in attempt when there is one', () => {
+    const attempt = { ...policy, nonce: 'nonce-1' };
+    expect(checkIdentityClaims(claims({ nonce: 'nonce-1' }), attempt).ok).toBe(true);
+    for (const nonce of ['nonce-2', undefined])
+      expect(checkIdentityClaims(claims({ nonce }), attempt)).toMatchObject({
+        ok: false,
+        code: 'UNAUTHENTICATED',
+      });
   });
 
   it('accepts the domain case-insensitively', () => {
@@ -42,7 +55,7 @@ describe('P03/P12 identity: only verified IITGN Google accounts own a vault', ()
   });
 
   it.each([
-    ['wrong audience', { aud: 'another-project' }],
+    ['wrong audience', { aud: '9999-other.apps.googleusercontent.com' }],
     ['wrong issuer', { iss: 'https://securetoken.google.com/another-project' }],
     ['expired token', { exp: now - 120 }],
     ['token issued in the future', { iat: now + 600 }],
@@ -60,8 +73,8 @@ describe('P03/P12 identity: only verified IITGN Google accounts own a vault', ()
     ['a look-alike domain', { email: 'student@iitgn.ac.in.example.com' }],
     ['a subdomain', { email: 'student@mail.iitgn.ac.in' }],
     ['a missing email', { email: undefined }],
-    ['an anonymous sign-in', { firebase: { sign_in_provider: 'anonymous' } }],
-    ['a password sign-in', { firebase: { sign_in_provider: 'password' } }],
+    ['a personal Google account with no IITGN Workspace domain', { hd: undefined }],
+    ['another Workspace domain', { hd: 'example.edu' }],
   ])('rejects %s as NOT_ELIGIBLE', (_name, over) => {
     expect(checkIdentityClaims(claims(over), policy)).toMatchObject({
       ok: false,
