@@ -89,6 +89,20 @@ const MIGRATIONS = [
 ];
 
 const SCHEMA = /^[a-z_][a-z0-9_]{0,62}$/;
+/** Every table a backup holds, in an order that satisfies foreign keys on restore. */
+export const BACKUP_TABLES = [
+  'vaults',
+  'items',
+  'changes',
+  'responses',
+  'uploads',
+  'upload_chunks',
+  'sessions',
+  'login_attempts',
+] as const;
+export type BackupTable = (typeof BACKUP_TABLES)[number];
+/** The database version this code writes and can restore. */
+export const DATABASE_VERSION = MIGRATIONS.length;
 type Query = Pick<pg.PoolClient, 'query'>;
 
 export class PostgresPilotStore implements PilotStore {
@@ -170,6 +184,67 @@ export class PostgresPilotStore implements PilotStore {
 
   async close() {
     await this.pool.end();
+  }
+
+  get schemaName() {
+    return this.schema;
+  }
+
+  /** True when no table holds a row. */
+  async isEmpty() {
+    for (const table of BACKUP_TABLES) {
+      const { rows } = await this.pool.query(`SELECT 1 FROM ${table} LIMIT 1`);
+      if (rows.length) return false;
+    }
+    return true;
+  }
+
+  /**
+   * Reads every row of every table from one consistent snapshot, as JSON, in restore order.
+   * Writes that commit meanwhile are either wholly in the snapshot or wholly not.
+   */
+  async exportRows(onRow: (table: BackupTable, row: unknown) => void) {
+    const db = await this.pool.connect();
+    try {
+      await db.query('BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY');
+      for (const table of BACKUP_TABLES) {
+        const { rows } = await db.query<{ row: unknown }>(
+          `SELECT to_jsonb(t) AS row FROM ${table} t`,
+        );
+        for (const { row } of rows) onRow(table, row);
+      }
+      await db.query('COMMIT');
+    } catch (cause) {
+      await db.query('ROLLBACK').catch(() => undefined);
+      throw cause;
+    } finally {
+      db.release();
+    }
+  }
+
+  /** Writes exported rows into this (empty) schema in one transaction. */
+  async importRows(rows: Map<BackupTable, unknown[]>) {
+    await this.transaction(async (db) => {
+      for (const table of BACKUP_TABLES) {
+        const all = rows.get(table) ?? [];
+        for (let i = 0; i < all.length; i += 500)
+          await db.query(
+            `INSERT INTO ${table} SELECT * FROM jsonb_populate_recordset(NULL::${table}, $1::jsonb)`,
+            [JSON.stringify(all.slice(i, i + 500))],
+          );
+      }
+    });
+  }
+
+  /** Live items' stored object keys, for checking object storage after a restore. */
+  async liveObjectKeys() {
+    const { rows } = await this.pool.query<{ key: string }>(
+      `SELECT data->>'objectKey' AS key FROM items WHERE NOT deleted AND data ? 'objectKey'
+       UNION ALL
+       SELECT data->>'indexObjectKey' FROM items WHERE NOT deleted AND data ? 'indexObjectKey'
+       ORDER BY 1`,
+    );
+    return rows.map((row) => row.key);
   }
 
   /** Tests only: removes everything this store created. */

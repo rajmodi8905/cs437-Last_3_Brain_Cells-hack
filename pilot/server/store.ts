@@ -127,6 +127,8 @@ export interface ObjectStore {
   delete(key: string): Promise<void>;
   /** Writes `target` as the parts joined in order, holding at most one part in memory. */
   compose(target: string, parts: string[]): Promise<void>;
+  /** Keys that start with `prefix`, sorted. */
+  list(prefix: string): Promise<string[]>;
 }
 
 /** What other devices see: tombstones keep only identity and revision. */

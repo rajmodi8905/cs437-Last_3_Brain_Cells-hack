@@ -2,8 +2,9 @@
 import { build } from 'esbuild';
 
 await build({
-  entryPoints: ['pilot/server/main.ts'],
-  outfile: '.cache/pilot-server/main.mjs',
+  entryPoints: { main: 'pilot/server/main.ts', backup: 'pilot/server/backup-cli.ts' },
+  outdir: '.cache/pilot-server',
+  outExtension: { '.js': '.mjs' },
   bundle: true,
   platform: 'node',
   format: 'esm',

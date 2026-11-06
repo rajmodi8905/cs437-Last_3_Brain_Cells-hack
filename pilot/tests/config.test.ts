@@ -38,8 +38,28 @@ describe('Pilot server configuration', () => {
           accountUrl: 'https://campusrecallpilot.blob.core.windows.net',
           container: 'pilot',
         },
+        backup: { container: 'pilot-backups', everyHours: 24, keep: 14 },
       },
     });
+  });
+
+  it('reads the backup schedule and refuses one that is not sensible', () => {
+    const env = { ...G, ...DURABLE, PILOT_ORIGIN: 'https://recall.example.in' };
+    expect(
+      loadConfig({
+        ...env,
+        PILOT_BACKUP_CONTAINER: 'nightly',
+        PILOT_BACKUP_EVERY_HOURS: '6',
+        PILOT_BACKUP_KEEP: '30',
+      }).storage,
+    ).toMatchObject({ backup: { container: 'nightly', everyHours: 6, keep: 30 } });
+    expect(() => loadConfig({ ...env, PILOT_BACKUP_CONTAINER: 'pilot' })).toThrow(
+      /separate container/,
+    );
+    expect(() => loadConfig({ ...env, PILOT_BACKUP_EVERY_HOURS: '0' })).toThrow(
+      /PILOT_BACKUP_EVERY_HOURS/,
+    );
+    expect(() => loadConfig({ ...env, PILOT_BACKUP_KEEP: '1' })).toThrow(/PILOT_BACKUP_KEEP/);
   });
 
   it('keeps data in memory only on a local origin', () => {
@@ -63,6 +83,7 @@ describe('Pilot server configuration', () => {
       databaseUrl: 'postgres://pilot@127.0.0.1:5432/pilot',
       schema: 'dev_pilot',
       blob: { connectionString: 'UseDevelopmentStorage=true', container: 'dev' },
+      backup: { container: 'pilot-backups', everyHours: 24, keep: 14 },
     });
     expect(() => loadConfig({ ...local, PILOT_ORIGIN: 'https://recall.example.in' })).toThrow(
       /managed identity/,

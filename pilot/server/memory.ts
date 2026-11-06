@@ -165,6 +165,9 @@ export class MemoryObjectStore implements ObjectStore {
     const bytes = this.objects.get(key);
     return bytes && range ? bytes.slice(range.start, range.end + 1) : bytes?.slice();
   }
+  async list(prefix: string) {
+    return [...this.objects.keys()].filter((key) => key.startsWith(prefix)).sort();
+  }
   async compose(target: string, parts: string[]) {
     const pieces = parts.map((key) => {
       const part = this.objects.get(key);

@@ -313,6 +313,13 @@ describe.each(objectStores)('ObjectStore: %s', (name, available, open) => {
     await objects.delete('a/b');
   });
 
+  it('lists keys under a prefix in order', async () => {
+    const objects = await open();
+    for (const key of ['b/2', 'a/1', 'b/1', 'b10/x']) await objects.put(key, bytes(3));
+    expect(await objects.list('b/')).toEqual(['b/1', 'b/2']);
+    expect(await objects.list('zzz/')).toEqual([]);
+  });
+
   it('joins parts into one object in order', async () => {
     const objects = await open();
     const parts = [bytes(300, 1), bytes(300, 2), bytes(17, 3)];

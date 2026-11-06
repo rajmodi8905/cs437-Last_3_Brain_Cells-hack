@@ -5,6 +5,7 @@ import { readFileSync } from 'node:fs';
 import { createServer } from 'node:http';
 import { cleanUpPilot, createPilotHandler } from './app';
 import { loadConfig } from './config';
+import { backupDatabase, pruneBackups } from './backup';
 import { AzureBlobObjectStore, managedIdentityCredential } from './blob';
 import { MemoryObjectStore, MemoryPilotStore } from './memory';
 import { PostgresPilotStore } from './postgres';
@@ -45,18 +46,19 @@ const store =
         schema: storage.schema,
       })
     : new MemoryPilotStore();
-const objects =
+const openContainer = (container: string) =>
   storage.kind === 'durable'
-    ? await AzureBlobObjectStore.open(
+    ? AzureBlobObjectStore.open(
         'connectionString' in storage.blob
-          ? storage.blob
+          ? { connectionString: storage.blob.connectionString, container }
           : {
               accountUrl: storage.blob.accountUrl,
-              container: storage.blob.container,
+              container,
               credential: managedIdentityCredential({ clientId: storage.blob.clientId }),
             },
       )
-    : new MemoryObjectStore();
+    : Promise.resolve(new MemoryObjectStore());
+const objects = await openContainer(storage.kind === 'durable' ? storage.blob.container : '');
 
 const api = createPilotHandler({
   clientId: config.clientId,
@@ -88,3 +90,19 @@ const cleanUp = () =>
   );
 void cleanUp();
 setInterval(cleanUp, 10 * 60_000).unref();
+
+// Database backups: one at start-up, then on the configured schedule, keeping the newest few.
+if (storage.kind === 'durable' && store instanceof PostgresPilotStore) {
+  const target = await openContainer(storage.backup.container);
+  const backUp = async () => {
+    try {
+      const { key } = await backupDatabase({ store, target });
+      const removed = await pruneBackups(target, storage.backup.keep);
+      console.log(`Backup ${key} stored; ${removed.length} older removed.`);
+    } catch (cause) {
+      console.error('Pilot backup failed', cause);
+    }
+  };
+  void backUp();
+  setInterval(backUp, storage.backup.everyHours * 3600_000).unref();
+}

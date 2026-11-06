@@ -87,6 +87,12 @@ export class AzureBlobObjectStore implements ObjectStore {
     await this.container.getBlobClient(key).deleteIfExists();
   }
 
+  async list(prefix: string) {
+    const keys: string[] = [];
+    for await (const blob of this.container.listBlobsFlat({ prefix })) keys.push(blob.name);
+    return keys.sort();
+  }
+
   async compose(target: string, parts: string[]) {
     const blob = this.container.getBlockBlobClient(target);
     const ids: string[] = [];

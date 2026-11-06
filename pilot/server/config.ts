@@ -28,6 +28,8 @@ export type StorageConfig =
       blob:
         | { accountUrl: string; container: string; clientId?: string }
         | { connectionString: string; container: string };
+      /** Database backups go to their own container in the same account. */
+      backup: { container: string; everyHours: number; keep: number };
     };
 
 const SCHEMA = /^[a-z_][a-z0-9_]{0,62}$/;
@@ -64,6 +66,17 @@ function loadStorage(env: Record<string, string | undefined>, local: boolean): S
       throw new Error('PILOT_BLOB_ACCOUNT_URL must be the HTTPS account endpoint.');
   }
   const clientId = env.PILOT_MANAGED_IDENTITY_CLIENT_ID || undefined;
+  const backupContainer = env.PILOT_BACKUP_CONTAINER ?? 'pilot-backups';
+  if (!CONTAINER.test(backupContainer))
+    throw new Error('PILOT_BACKUP_CONTAINER must be a valid Blob container name.');
+  if (backupContainer === container)
+    throw new Error('Backups need a separate container from the originals.');
+  const everyHours = Number(env.PILOT_BACKUP_EVERY_HOURS ?? 24);
+  if (!Number.isInteger(everyHours) || everyHours < 1 || everyHours > 168)
+    throw new Error('PILOT_BACKUP_EVERY_HOURS must be a whole number from 1 to 168.');
+  const keep = Number(env.PILOT_BACKUP_KEEP ?? 14);
+  if (!Number.isInteger(keep) || keep < 2 || keep > 365)
+    throw new Error('PILOT_BACKUP_KEEP must be a whole number from 2 to 365.');
   return {
     kind: 'durable',
     databaseUrl,
@@ -71,6 +84,7 @@ function loadStorage(env: Record<string, string | undefined>, local: boolean): S
     blob: accountUrl
       ? { accountUrl, container, ...(clientId ? { clientId } : {}) }
       : { connectionString: connectionString!, container },
+    backup: { container: backupContainer, everyHours, keep },
   };
 }
 
