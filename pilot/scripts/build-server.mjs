@@ -9,4 +9,8 @@ await build({
   format: 'esm',
   target: 'node24',
   logLevel: 'warning',
+  // CommonJS dependencies (pg, the Azure SDK) require Node built-ins; ESM output needs a require.
+  banner: {
+    js: "import { createRequire as __pilotCreateRequire } from 'node:module'; const require = __pilotCreateRequire(import.meta.url);",
+  },
 });

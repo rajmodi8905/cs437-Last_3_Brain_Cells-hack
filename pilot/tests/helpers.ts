@@ -5,6 +5,7 @@ import { createServer, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { createPilotHandler, type GoogleLoginOptions } from '../server/app';
 import { MemoryObjectStore, MemoryPilotStore } from '../server/memory';
+import type { ObjectStore, PilotStore } from '../server/store';
 import { staticKeySource } from '../server/tokens';
 
 export const clientId = '1234-pilot.apps.googleusercontent.com';
@@ -45,9 +46,12 @@ export async function startPilotServer(
     devSigner?: (email: string) => string;
     chunkBytes?: number;
     google?: GoogleLoginOptions;
+    /** Durable stores for restart tests; in-memory ones by default. */
+    store?: PilotStore;
+    objects?: ObjectStore;
   } = {},
 ) {
-  const store = new MemoryPilotStore();
+  const store: PilotStore = extra.store ?? new MemoryPilotStore();
   const server: Server = createServer(
     createPilotHandler({
       clientId,
@@ -55,7 +59,7 @@ export async function startPilotServer(
       origin,
       keys: staticKeySource({ 'test-key': signing.publicKey }),
       store,
-      objects: new MemoryObjectStore(),
+      objects: extra.objects ?? new MemoryObjectStore(),
       nowSeconds: () => clock.now,
       quotaBytes,
       chunkBytes: extra.chunkBytes ?? 32 * 1024,

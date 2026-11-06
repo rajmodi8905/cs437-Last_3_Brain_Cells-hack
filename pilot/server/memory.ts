@@ -1,5 +1,7 @@
 // In-memory stores for tests and local development. Not durable; never use for the hosted pilot.
+import type { CloudItem } from '../contract';
 import {
+  VaultResetError,
   publicItem,
   type Change,
   type LoginAttempt,
@@ -23,6 +25,7 @@ export class MemoryPilotStore implements PilotStore {
   private sessions = new Map<string, Session>();
   private uploads = new Map<string, UploadRecord>();
   private attempts = new Map<string, LoginAttempt>();
+  private received = new Map<string, Set<number>>();
 
   private vaultOf(ownerKey: string): Vault {
     let vault = this.vaults.get(ownerKey);
@@ -76,8 +79,22 @@ export class MemoryPilotStore implements PilotStore {
   async getUpload(uploadId: string) {
     return this.uploads.get(uploadId);
   }
-  async publish(ownerKey: string, item: StoredItem) {
+  async recordChunk(uploadId: string, n: number) {
+    let set = this.received.get(uploadId);
+    if (!set) this.received.set(uploadId, (set = new Set()));
+    set.add(n);
+  }
+  async receivedChunks(uploadId: string) {
+    return [...(this.received.get(uploadId) ?? [])].sort((a, b) => a - b);
+  }
+  async finishUpload(uploadId: string, result: CloudItem) {
+    const upload = this.uploads.get(uploadId);
+    if (upload) upload.result = result;
+    this.received.delete(uploadId);
+  }
+  async publish(ownerKey: string, item: StoredItem, epoch: number) {
     const vault = this.vaultOf(ownerKey);
+    if (vault.epoch !== epoch) throw new VaultResetError();
     vault.items.set(item.globalId, item);
     const change = { cursor: vault.changes.length + 1, item: publicItem(item) };
     vault.changes.push(change);
@@ -95,9 +112,14 @@ export class MemoryPilotStore implements PilotStore {
     vault.items.clear();
     vault.changes = [];
     vault.responses.clear();
+    const abandoned: { uploadId: string; chunks: number[] }[] = [];
     for (const [id, upload] of this.uploads)
-      if (upload.ownerKey === ownerKey) this.uploads.delete(id);
-    return { epoch: vault.epoch, removed };
+      if (upload.ownerKey === ownerKey) {
+        if (!upload.result) abandoned.push({ uploadId: id, chunks: await this.receivedChunks(id) });
+        this.uploads.delete(id);
+        this.received.delete(id);
+      }
+    return { epoch: vault.epoch, removed: removed.filter((item) => !item.deleted), abandoned };
   }
 
   /** Test helper: which owner an upload belongs to. */
@@ -109,10 +131,25 @@ export class MemoryPilotStore implements PilotStore {
 export class MemoryObjectStore implements ObjectStore {
   private objects = new Map<string, Uint8Array>();
   async put(key: string, bytes: Uint8Array) {
-    this.objects.set(key, bytes);
+    this.objects.set(key, bytes.slice());
   }
-  async get(key: string) {
-    return this.objects.get(key);
+  async get(key: string, range?: { start: number; end: number }) {
+    const bytes = this.objects.get(key);
+    return bytes && range ? bytes.slice(range.start, range.end + 1) : bytes?.slice();
+  }
+  async compose(target: string, parts: string[]) {
+    const pieces = parts.map((key) => {
+      const part = this.objects.get(key);
+      if (!part) throw new Error(`Missing part ${key}`);
+      return part;
+    });
+    const joined = new Uint8Array(pieces.reduce((sum, part) => sum + part.length, 0));
+    let at = 0;
+    for (const part of pieces) {
+      joined.set(part, at);
+      at += part.length;
+    }
+    this.objects.set(target, joined);
   }
   async delete(key: string) {
     this.objects.delete(key);

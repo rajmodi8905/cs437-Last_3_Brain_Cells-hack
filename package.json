@@ -30,10 +30,12 @@
     "release:check": "node scripts/check-release.mjs",
     "test:webkit": "playwright test --config playwright.webkit.config.ts",
     "test:pilot": "vitest run --config pilot/vitest.config.ts",
+    "test:pilot:storage": "node pilot/scripts/test-storage.mjs",
     "pilot:server": "node pilot/scripts/build-server.mjs && node .cache/pilot-server/main.mjs",
     "test:pilot:e2e": "playwright test --config pilot/playwright.config.ts"
   },
   "dependencies": {
+    "@azure/storage-blob": "12.34.0",
     "@ffmpeg/core": "0.12.10",
     "@ffmpeg/ffmpeg": "0.12.15",
     "@huggingface/transformers": "4.3.1",
@@ -41,6 +43,7 @@
     "fflate": "0.8.3",
     "lucide-react": "1.61.0",
     "pdfjs-dist": "6.4.299",
+    "pg": "8.23.1",
     "react": "19.2.0",
     "react-dom": "19.2.0",
     "tesseract.js": "7.0.0"
@@ -52,6 +55,7 @@
     "@testing-library/react": "16.3.2",
     "@testing-library/user-event": "14.6.1",
     "@types/node": "24.10.0",
+    "@types/pg": "8.23.1",
     "@types/react": "19.2.2",
     "@types/react-dom": "19.2.2",
     "@vitejs/plugin-react": "5.0.4",

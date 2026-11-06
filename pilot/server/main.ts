@@ -5,7 +5,9 @@ import { readFileSync } from 'node:fs';
 import { createServer } from 'node:http';
 import { createPilotHandler } from './app';
 import { loadConfig } from './config';
+import { AzureBlobObjectStore, managedIdentityCredential } from './blob';
 import { MemoryObjectStore, MemoryPilotStore } from './memory';
+import { PostgresPilotStore } from './postgres';
 import { createStaticHandler } from './static';
 import { googleKeySource, staticKeySource } from './tokens';
 
@@ -35,19 +37,44 @@ const devSigner = devKey
     }
   : undefined;
 
+const { storage } = config;
+const store =
+  storage.kind === 'durable'
+    ? await PostgresPilotStore.open({
+        connectionString: storage.databaseUrl,
+        schema: storage.schema,
+      })
+    : new MemoryPilotStore();
+const objects =
+  storage.kind === 'durable'
+    ? await AzureBlobObjectStore.open(
+        'connectionString' in storage.blob
+          ? storage.blob
+          : {
+              accountUrl: storage.blob.accountUrl,
+              container: storage.blob.container,
+              credential: managedIdentityCredential({ clientId: storage.blob.clientId }),
+            },
+      )
+    : new MemoryObjectStore();
+
 const api = createPilotHandler({
   clientId: config.clientId,
   allowedEmailDomain: config.allowedEmailDomain,
   origin: config.origin,
   keys: devKey ? staticKeySource({ 'dev-key': createPublicKey(devKey) }) : googleKeySource(),
-  store: new MemoryPilotStore(),
-  objects: new MemoryObjectStore(),
+  store,
+  objects,
   quotaBytes: config.quotaBytes,
   devSigner,
   google: config.clientSecret ? { clientSecret: config.clientSecret } : undefined,
 });
 createServer(createStaticHandler(config.staticDir, api)).listen(config.port, config.host, () => {
   console.log(`Pilot server on ${config.origin} (listening on ${config.host}:${config.port}).`);
-  console.log('Storage is in memory only: everything is lost when the server stops.');
+  console.log(
+    storage.kind === 'durable'
+      ? `Storage: PostgreSQL (schema ${storage.schema}) and Azure Blob (container ${storage.blob.container}).`
+      : 'Storage is in memory only: everything is lost when the server stops.',
+  );
   if (devKey) console.log('Development sign-in is on: any typed IITGN email can sign in.');
 });

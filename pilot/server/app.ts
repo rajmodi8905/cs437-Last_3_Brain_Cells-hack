@@ -14,7 +14,9 @@ import {
   type PilotErrorCode,
 } from '../contract';
 import {
+  VaultResetError,
   publicItem,
+  stagingKey,
   type ItemDescription,
   type ObjectStore,
   type PilotStore,
@@ -409,7 +411,6 @@ export function createPilotHandler(options: PilotServerOptions): RequestListener
           epoch,
           globalId,
           item: description,
-          chunks: new Map(),
         });
         return { status: 200, body: { uploadId, chunkBytes } };
       });
@@ -430,7 +431,8 @@ export function createPilotHandler(options: PilotServerOptions): RequestListener
       const part = await readBody(req, chunkBytes);
       if (part.length !== expected)
         throw new ApiError('INVALID_INPUT', `Chunk ${n} must be ${expected} bytes.`);
-      upload.chunks.set(n, part);
+      await objects.put(stagingKey(upload.uploadId, n), part);
+      await store.recordChunk(upload.uploadId, n);
       return send(res, 204);
     }
 
@@ -439,7 +441,7 @@ export function createPilotHandler(options: PilotServerOptions): RequestListener
       const body = await readJson(req);
       const opId = opIdOf(body);
       // Checked first: uploads begun before the library was removed must not complete.
-      await requireEpoch(session.ownerKey, body);
+      const epoch = await requireEpoch(session.ownerKey, body);
       const upload = await store.getUpload(match[1]);
       if (!upload || upload.ownerKey !== session.ownerKey)
         throw new ApiError('NOT_FOUND', 'Upload not found.');
@@ -447,22 +449,35 @@ export function createPilotHandler(options: PilotServerOptions): RequestListener
       if (upload.result) return send(res, 200, { item: upload.result });
       const result = await idempotent(session.ownerKey, opId, async () => {
         const count = Math.ceil(upload.item.byteLength / chunkBytes);
-        const parts: Uint8Array[] = [];
+        const received = new Set(await store.receivedChunks(upload.uploadId));
+        const parts: string[] = [];
         for (let n = 0; n < count; n++) {
-          const part = upload.chunks.get(n);
-          if (!part) throw new ApiError('INVALID_INPUT', `Chunk ${n} is missing.`);
-          parts.push(part);
+          if (!received.has(n)) throw new ApiError('INVALID_INPUT', `Chunk ${n} is missing.`);
+          parts.push(stagingKey(upload.uploadId, n));
         }
-        const bytes = new Uint8Array(Buffer.concat(parts));
-        if (bytes.length !== upload.item.byteLength)
+        // Hash the staged parts one at a time; the whole file is never held in memory.
+        const hash = createHash('sha256');
+        let length = 0;
+        for (const key of parts) {
+          const part = await objects.get(key);
+          if (!part) throw new ApiError('INVALID_INPUT', 'A chunk is missing; send it again.');
+          hash.update(part);
+          length += part.length;
+        }
+        if (length !== upload.item.byteLength)
           throw new ApiError('HASH_MISMATCH', 'Uploaded length does not match the declaration.');
-        if (createHash('sha256').update(bytes).digest('hex') !== upload.item.contentSha256)
+        if (hash.digest('hex') !== upload.item.contentSha256)
           throw new ApiError('HASH_MISMATCH', 'Uploaded bytes do not match the declared SHA-256.');
         const existing = await store.getItem(session.ownerKey, upload.globalId);
         if (existing?.deleted) throw new ApiError('ITEM_DELETED', 'This item was deleted.');
-        if (existing) throw new ApiError('INVALID_INPUT', 'This item already exists.');
+        if (existing) {
+          // Published before a crash, but not yet marked finished: finish it now.
+          const published = publicItem(existing) as CloudItem;
+          await store.finishUpload(upload.uploadId, published);
+          return { status: 200, body: { item: published } };
+        }
         const objectKey = `${session.ownerKey}/${upload.epoch}/${upload.globalId}/original`;
-        await objects.put(objectKey, bytes);
+        await objects.compose(objectKey, parts);
         const item = {
           ...upload.item,
           globalId: upload.globalId,
@@ -470,10 +485,11 @@ export function createPilotHandler(options: PilotServerOptions): RequestListener
           deleted: false,
           objectKey,
         };
-        await store.publish(session.ownerKey, item);
-        upload.result = publicItem(item) as CloudItem;
-        upload.chunks.clear();
-        return { status: 200, body: { item: upload.result } };
+        await store.publish(session.ownerKey, item, epoch);
+        const published = publicItem(item) as CloudItem;
+        await store.finishUpload(upload.uploadId, published);
+        for (const key of parts) await objects.delete(key);
+        return { status: 200, body: { item: published } };
       });
       return send(res, result.status, result.body);
     }
@@ -482,7 +498,7 @@ export function createPilotHandler(options: PilotServerOptions): RequestListener
       const session = await requireSession(req, true);
       const body = await readJson(req);
       const opId = opIdOf(body);
-      await requireEpoch(session.ownerKey, body);
+      const epoch = await requireEpoch(session.ownerKey, body);
       const result = await idempotent(session.ownerKey, opId, async () => {
         const current = await store.getItem(session.ownerKey, match![1]);
         if (!current) throw new ApiError('NOT_FOUND', 'Item not found.');
@@ -514,7 +530,7 @@ export function createPilotHandler(options: PilotServerOptions): RequestListener
           if (current.objectKey) await objects.delete(current.objectKey);
           if (current.indexObjectKey) await objects.delete(current.indexObjectKey);
         }
-        await store.publish(session.ownerKey, next);
+        await store.publish(session.ownerKey, next, epoch);
         return { status: 200, body: { item: publicItem(next) } };
       });
       return send(res, result.status, result.body);
@@ -523,24 +539,27 @@ export function createPilotHandler(options: PilotServerOptions): RequestListener
     if ((match = /^\/items\/([^/]+)\/original$/.exec(path)) && method === 'GET') {
       const session = await requireSession(req, false);
       const item = await store.getItem(session.ownerKey, match[1]);
-      const bytes =
-        item && !item.deleted && item.objectKey ? await objects.get(item.objectKey) : undefined;
-      if (!item || !bytes) throw new ApiError('NOT_FOUND', 'Item not found.');
+      if (!item || item.deleted || !item.objectKey)
+        throw new ApiError('NOT_FOUND', 'Item not found.');
+      const size = item.byteLength;
       const headers = {
         'content-type': item.mimeType,
         etag: `"sha256-${item.contentSha256}"`,
         'accept-ranges': 'bytes',
       };
       const range = req.headers.range;
-      if (range === undefined) return send(res, 200, bytes, headers);
-      const parsed = parseRange(range, bytes.length);
-      if (!parsed)
+      const parsed = range === undefined ? undefined : parseRange(range, size);
+      if (range !== undefined && !parsed)
         return send(res, 416, errorBody('INVALID_INPUT', 'Requested range is not available.'), {
-          'content-range': `bytes */${bytes.length}`,
+          'content-range': `bytes */${size}`,
         });
-      return send(res, 206, bytes.subarray(parsed.start, parsed.end + 1), {
+      // Only the requested part is read from storage.
+      const bytes = await objects.get(item.objectKey, parsed);
+      if (!bytes) throw new ApiError('NOT_FOUND', 'Item not found.');
+      if (!parsed) return send(res, 200, bytes, headers);
+      return send(res, 206, bytes, {
         ...headers,
-        'content-range': `bytes ${parsed.start}-${parsed.end}/${bytes.length}`,
+        'content-range': `bytes ${parsed.start}-${parsed.end}/${size}`,
       });
     }
 
@@ -550,11 +569,13 @@ export function createPilotHandler(options: PilotServerOptions): RequestListener
       if (body.confirm !== 'remove-cloud-library')
         throw new ApiError('INVALID_INPUT', 'Confirm removing the cloud library.');
       await requireEpoch(session.ownerKey, body);
-      const { epoch, removed } = await store.resetVault(session.ownerKey);
+      const { epoch, removed, abandoned } = await store.resetVault(session.ownerKey);
       for (const item of removed) {
         if (item.objectKey) await objects.delete(item.objectKey);
         if (item.indexObjectKey) await objects.delete(item.indexObjectKey);
       }
+      for (const upload of abandoned)
+        for (const n of upload.chunks) await objects.delete(stagingKey(upload.uploadId, n));
       return send(res, 200, { vault: { epoch } });
     }
 
@@ -581,7 +602,7 @@ export function createPilotHandler(options: PilotServerOptions): RequestListener
         await objects.put(indexObjectKey, new TextEncoder().encode(JSON.stringify(body.bundle)));
         // An index does not change the item's revision, so it never causes rename conflicts.
         const next = { ...current, index: valid.value, indexObjectKey };
-        await store.publish(session.ownerKey, next);
+        await store.publish(session.ownerKey, next, epoch);
         return { status: 200, body: { item: publicItem(next) } };
       });
       return send(res, result.status, result.body);
@@ -600,8 +621,13 @@ export function createPilotHandler(options: PilotServerOptions): RequestListener
   }
 
   return (req, res) => {
-    route(req, res).catch((cause: unknown) => {
+    route(req, res).catch((caught: unknown) => {
       if (res.headersSent) return res.destroy();
+      // A reset between the epoch check and the write is reported like an old epoch.
+      const cause =
+        caught instanceof VaultResetError
+          ? new ApiError('VAULT_RESET', 'This cloud library was reset; resynchronise first.')
+          : caught;
       if (cause instanceof ApiError)
         return send(res, STATUS[cause.code], {
           ...errorBody(cause.code, cause.message),

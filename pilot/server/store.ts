@@ -17,14 +17,25 @@ export interface Session {
   expiresAt: number;
 }
 
+/** An upload in progress. Its chunk bytes live in the object store under `stagingKey`. */
 export interface UploadRecord {
   uploadId: string;
   ownerKey: string;
   epoch: number;
   globalId: string;
   item: ItemDescription;
-  chunks: Map<number, Uint8Array>;
+  /** The published item, once completion succeeded. */
   result?: CloudItem;
+}
+
+export const stagingKey = (uploadId: string, n: number) => `staging/${uploadId}/${n}`;
+
+/** Thrown by `publish` when the account's cloud library was reset since the caller checked. */
+export class VaultResetError extends Error {
+  constructor() {
+    super('The cloud library was reset.');
+    this.name = 'VaultResetError';
+  }
 }
 
 /** One Google sign-in in progress, bound to the browser that started it. */
@@ -61,20 +72,38 @@ export interface PilotStore {
   saveResponse(ownerKey: string, opId: string, response: SavedResponse): Promise<void>;
   createUpload(upload: UploadRecord): Promise<void>;
   getUpload(uploadId: string): Promise<UploadRecord | undefined>;
-  /** Stores the item and appends its change; the cursor is allocated in the same step. */
-  publish(ownerKey: string, item: StoredItem): Promise<Change>;
+  /** Notes that chunk `n` is stored; repeating it is harmless. */
+  recordChunk(uploadId: string, n: number): Promise<void>;
+  /** Received chunk numbers in ascending order. */
+  receivedChunks(uploadId: string): Promise<number[]>;
+  /** Marks the upload complete with its published item; it no longer reserves quota. */
+  finishUpload(uploadId: string, result: CloudItem): Promise<void>;
+  /**
+   * Stores the item and appends its change in one step, allocating the next cursor, only if the
+   * account is still at `epoch`; otherwise throws `VaultResetError` and changes nothing.
+   */
+  publish(ownerKey: string, item: StoredItem, epoch: number): Promise<Change>;
   changesAfter(ownerKey: string, after: number): Promise<{ cursor: number; changes: Change[] }>;
   /**
-   * Removes the account's cloud library: forgets its items, change feed and unfinished uploads
-   * and moves to a new epoch. Returns the removed items so their objects can be deleted.
+   * Removes the account's cloud library: forgets its items, change feed, saved results and
+   * unfinished uploads and moves to a new epoch. Returns the removed items and the abandoned
+   * uploads' received chunks so their objects can be deleted.
    */
-  resetVault(ownerKey: string): Promise<{ epoch: number; removed: StoredItem[] }>;
+  resetVault(ownerKey: string): Promise<{
+    epoch: number;
+    removed: StoredItem[];
+    abandoned: { uploadId: string; chunks: number[] }[];
+  }>;
 }
 
 export interface ObjectStore {
   put(key: string, bytes: Uint8Array): Promise<void>;
-  get(key: string): Promise<Uint8Array | undefined>;
+  /** The object, or bytes `start` to `end` inclusive of it; undefined when it does not exist. */
+  get(key: string, range?: { start: number; end: number }): Promise<Uint8Array | undefined>;
+  /** Deleting a missing object is not an error. */
   delete(key: string): Promise<void>;
+  /** Writes `target` as the parts joined in order, holding at most one part in memory. */
+  compose(target: string, parts: string[]): Promise<void>;
 }
 
 /** What other devices see: tombstones keep only identity and revision. */
