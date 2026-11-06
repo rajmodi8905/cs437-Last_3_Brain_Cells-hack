@@ -3,7 +3,7 @@
 import { createHash, createPrivateKey, createPublicKey, createSign } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { createServer } from 'node:http';
-import { createPilotHandler } from './app';
+import { cleanUpPilot, createPilotHandler } from './app';
 import { loadConfig } from './config';
 import { AzureBlobObjectStore, managedIdentityCredential } from './blob';
 import { MemoryObjectStore, MemoryPilotStore } from './memory';
@@ -68,6 +68,8 @@ const api = createPilotHandler({
   quotaBytes: config.quotaBytes,
   devSigner,
   google: config.clientSecret ? { clientSecret: config.clientSecret } : undefined,
+  trustProxy: config.trustProxy,
+  limits: { signInBurst: config.signInPerMinute, signInPerMinute: config.signInPerMinute },
 });
 createServer(createStaticHandler(config.staticDir, api)).listen(config.port, config.host, () => {
   console.log(`Pilot server on ${config.origin} (listening on ${config.host}:${config.port}).`);
@@ -78,3 +80,11 @@ createServer(createStaticHandler(config.staticDir, api)).listen(config.port, con
   );
   if (devKey) console.log('Development sign-in is on: any typed IITGN email can sign in.');
 });
+
+// Clean up expired sessions, sign-in attempts and abandoned uploads now and every 10 minutes.
+const cleanUp = () =>
+  cleanUpPilot({ store, objects }).catch((cause: unknown) =>
+    console.error('Pilot clean-up failed', cause),
+  );
+void cleanUp();
+setInterval(cleanUp, 10 * 60_000).unref();

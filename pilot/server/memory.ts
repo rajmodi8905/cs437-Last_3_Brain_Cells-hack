@@ -4,6 +4,7 @@ import {
   VaultResetError,
   publicItem,
   type Change,
+  type CleanUpCutoffs,
   type LoginAttempt,
   type ObjectStore,
   type PilotStore,
@@ -17,7 +18,7 @@ interface Vault {
   epoch: number;
   items: Map<string, StoredItem>;
   changes: Change[];
-  responses: Map<string, SavedResponse>;
+  responses: Map<string, SavedResponse & { savedAt: number }>;
 }
 
 export class MemoryPilotStore implements PilotStore {
@@ -68,10 +69,37 @@ export class MemoryPilotStore implements PilotStore {
     return bytes;
   }
   async savedResponse(ownerKey: string, opId: string) {
-    return this.vaultOf(ownerKey).responses.get(opId);
+    const saved = this.vaultOf(ownerKey).responses.get(opId);
+    return saved && { status: saved.status, body: saved.body };
   }
-  async saveResponse(ownerKey: string, opId: string, response: SavedResponse) {
-    this.vaultOf(ownerKey).responses.set(opId, response);
+  async saveResponse(
+    ownerKey: string,
+    opId: string,
+    response: SavedResponse,
+    savedAt = Math.floor(Date.now() / 1000),
+  ) {
+    const responses = this.vaultOf(ownerKey).responses;
+    if (!responses.has(opId)) responses.set(opId, { ...response, savedAt });
+  }
+  async cleanUp(cutoffs: CleanUpCutoffs) {
+    for (const [id, session] of this.sessions)
+      if (session.expiresAt <= cutoffs.now) this.sessions.delete(id);
+    for (const [id, attempt] of this.attempts)
+      if (attempt.expiresAt <= cutoffs.now) this.attempts.delete(id);
+    const abandoned: { uploadId: string; chunks: number[] }[] = [];
+    for (const [id, upload] of this.uploads) {
+      const old = upload.result
+        ? upload.createdAt < cutoffs.finishedBefore
+        : upload.createdAt < cutoffs.abandonedBefore;
+      if (!old) continue;
+      if (!upload.result) abandoned.push({ uploadId: id, chunks: await this.receivedChunks(id) });
+      this.uploads.delete(id);
+      this.received.delete(id);
+    }
+    for (const vault of this.vaults.values())
+      for (const [opId, saved] of vault.responses)
+        if (saved.savedAt < cutoffs.responsesBefore) vault.responses.delete(opId);
+    return { abandoned };
   }
   async createUpload(upload: UploadRecord) {
     this.uploads.set(upload.uploadId, upload);

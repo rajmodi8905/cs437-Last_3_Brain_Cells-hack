@@ -28,6 +28,8 @@ describe('Pilot server configuration', () => {
       quotaBytes: 200_000_000,
       allowedEmailDomain: 'iitgn.ac.in',
       devKeyFile: undefined,
+      trustProxy: false,
+      signInPerMinute: 10,
       storage: {
         kind: 'durable',
         databaseUrl: 'postgres://pilot@db.internal:5432/pilot',
@@ -109,6 +111,8 @@ describe('Pilot server configuration', () => {
     ['plain HTTP on a public origin', { ...G, PILOT_ORIGIN: 'http://x.in' }],
     ['a non-numeric port', { ...G, PILOT_PORT: 'eighty' }],
     ['a zero quota', { ...G, PILOT_QUOTA_BYTES: '0' }],
+    ['a trust-proxy value that is not 0 or 1', { ...G, PILOT_TRUST_PROXY: 'yes' }],
+    ['a sign-in limit that is not a positive number', { ...G, PILOT_SIGN_IN_PER_MINUTE: '0' }],
     ['a database without object storage', { ...G, PILOT_DATABASE_URL: 'postgres://x/y' }],
     [
       'object storage without a database',

@@ -13,6 +13,9 @@ export interface PilotConfig {
   /** PEM private key for locally signed development tokens; only allowed on a local origin. */
   devKeyFile?: string;
   storage: StorageConfig;
+  /** Behind our own HTTPS proxy, which appends the client address to X-Forwarded-For. */
+  trustProxy: boolean;
+  signInPerMinute: number;
 }
 
 export type StorageConfig =
@@ -97,6 +100,11 @@ export function loadConfig(env: Record<string, string | undefined>): PilotConfig
     throw new Error(
       'Set PILOT_GOOGLE_CLIENT_ID and PILOT_GOOGLE_CLIENT_SECRET (or a local development key).',
     );
+  const signInPerMinute = Number(env.PILOT_SIGN_IN_PER_MINUTE ?? 10);
+  if (!Number.isSafeInteger(signInPerMinute) || signInPerMinute < 1)
+    throw new Error('PILOT_SIGN_IN_PER_MINUTE must be a positive whole number.');
+  if (env.PILOT_TRUST_PROXY !== undefined && !['0', '1'].includes(env.PILOT_TRUST_PROXY))
+    throw new Error('PILOT_TRUST_PROXY must be 0 or 1.');
   const quotaBytes = Number(env.PILOT_QUOTA_BYTES ?? 200_000_000);
   if (!Number.isSafeInteger(quotaBytes) || quotaBytes < 1)
     throw new Error('PILOT_QUOTA_BYTES must be a positive whole number.');
@@ -111,5 +119,7 @@ export function loadConfig(env: Record<string, string | undefined>): PilotConfig
     allowedEmailDomain: 'iitgn.ac.in',
     devKeyFile,
     storage: loadStorage(env, local),
+    trustProxy: env.PILOT_TRUST_PROXY === '1',
+    signInPerMinute,
   };
 }

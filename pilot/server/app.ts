@@ -22,6 +22,7 @@ import {
   type PilotStore,
   type Session,
 } from './store';
+import { DEFAULT_LIMITS, RateLimiter, type RateLimits } from './limits';
 import type { KeySource } from './tokens';
 import { verifyIdToken } from './tokens';
 
@@ -57,6 +58,37 @@ export interface PilotServerOptions {
   supportedIndexVersions?: readonly string[];
   /** Enables `/auth/google/start` and `/auth/google/callback`. */
   google?: GoogleLoginOptions;
+  limits?: Partial<RateLimits>;
+  /**
+   * Behind our own reverse proxy: take the client address from the last `X-Forwarded-For`
+   * entry, which that proxy appends. Off by default, so the header cannot be forged.
+   */
+  trustProxy?: boolean;
+  /** Unfinished uploads expire after this many seconds; a day by default. */
+  uploadTtlSeconds?: number;
+}
+
+const DAY = 24 * 3600;
+/** Finished uploads and saved operation results are kept for the length of the pilot. */
+export const RETENTION_SECONDS = 30 * DAY;
+
+/** Deletes expired and abandoned data; run at start and then periodically. */
+export async function cleanUpPilot(options: {
+  store: PilotStore;
+  objects: ObjectStore;
+  nowSeconds?: () => number;
+  uploadTtlSeconds?: number;
+}) {
+  const now = (options.nowSeconds ?? (() => Math.floor(Date.now() / 1000)))();
+  const { abandoned } = await options.store.cleanUp({
+    now,
+    abandonedBefore: now - (options.uploadTtlSeconds ?? DAY),
+    finishedBefore: now - RETENTION_SECONDS,
+    responsesBefore: now - RETENTION_SECONDS,
+  });
+  for (const upload of abandoned)
+    for (const n of upload.chunks) await options.objects.delete(stagingKey(upload.uploadId, n));
+  return { abandonedUploads: abandoned.length };
 }
 
 const STATUS: Record<PilotErrorCode, number> = {
@@ -73,9 +105,10 @@ const STATUS: Record<PilotErrorCode, number> = {
   HASH_MISMATCH: 422,
   INDEX_INCOMPATIBLE: 422,
   INVALID_INPUT: 400,
+  RATE_LIMITED: 429,
   INTERNAL_ERROR: 500,
 };
-const RETRYABLE = new Set<PilotErrorCode>(['INTERNAL_ERROR']);
+const RETRYABLE = new Set<PilotErrorCode>(['INTERNAL_ERROR', 'RATE_LIMITED']);
 const UUID_V4 = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 const COOKIE = 'recall_session';
 const LOGIN_COOKIE = 'recall_login';
@@ -94,10 +127,20 @@ class ApiError extends Error {
     readonly code: PilotErrorCode,
     message: string,
     readonly extra: Record<string, unknown> = {},
+    readonly headers: Record<string, string> = {},
   ) {
     super(message);
   }
 }
+const limited = (seconds: number) =>
+  new ApiError(
+    'RATE_LIMITED',
+    'Too many requests. Try again shortly.',
+    {},
+    {
+      'retry-after': String(seconds),
+    },
+  );
 const errorBody = (code: PilotErrorCode, message: string) => ({
   error: { code, message, retryable: RETRYABLE.has(code) },
 });
@@ -180,6 +223,20 @@ export function createPilotHandler(options: PilotServerOptions): RequestListener
   const chunkBytes = options.chunkBytes ?? 4 * 1024 * 1024;
   const sessionSeconds = options.sessionSeconds ?? 12 * 3600;
   const { store, objects } = options;
+  const uploadTtl = options.uploadTtlSeconds ?? DAY;
+  const limits = { ...DEFAULT_LIMITS, ...options.limits };
+  const byAddress = new RateLimiter(limits.addressBurst, limits.addressPerSecond, now);
+  const signIns = new RateLimiter(limits.signInBurst, limits.signInPerMinute / 60, now);
+  const byAccount = new RateLimiter(limits.accountBurst, limits.accountPerSecond, now);
+  const clientAddress = (req: IncomingMessage) => {
+    const forwarded = options.trustProxy ? req.headers['x-forwarded-for'] : undefined;
+    const last = typeof forwarded === 'string' ? forwarded.split(',').at(-1)?.trim() : undefined;
+    return last || req.socket.remoteAddress || 'unknown';
+  };
+  const limitSignIn = (req: IncomingMessage) => {
+    const wait = signIns.take(clientAddress(req));
+    if (wait) throw limited(wait);
+  };
   const sessionBody = async (session: Session) => ({
     csrf: session.csrf,
     email: session.email,
@@ -256,6 +313,8 @@ export function createPilotHandler(options: PilotServerOptions): RequestListener
       if (session) await store.deleteSession(session.id);
       throw new ApiError('UNAUTHENTICATED', 'Sign in again.');
     }
+    const wait = byAccount.take(session.ownerKey);
+    if (wait) throw limited(wait);
     if (
       write &&
       (req.headers.origin !== options.origin || req.headers['x-recall-csrf'] !== session.csrf)
@@ -278,7 +337,7 @@ export function createPilotHandler(options: PilotServerOptions): RequestListener
     const saved = await store.savedResponse(ownerKey, opId);
     if (saved) return saved;
     const result = await run();
-    await store.saveResponse(ownerKey, opId, result);
+    await store.saveResponse(ownerKey, opId, result, now());
     return result;
   }
 
@@ -287,6 +346,13 @@ export function createPilotHandler(options: PilotServerOptions): RequestListener
     const path = url.pathname.replace(/^\/api\/v1/, '');
     const method = req.method ?? 'GET';
     let match: RegExpExecArray | null;
+    const wait = byAddress.take(clientAddress(req));
+    if (wait) throw limited(wait);
+    if (
+      (method === 'POST' && (path === '/session' || path === '/dev/token')) ||
+      path.startsWith('/auth/')
+    )
+      limitSignIn(req);
 
     if (path === '/session' && method === 'POST') {
       if (req.headers.origin !== options.origin)
@@ -411,6 +477,7 @@ export function createPilotHandler(options: PilotServerOptions): RequestListener
           epoch,
           globalId,
           item: description,
+          createdAt: now(),
         });
         return { status: 200, body: { uploadId, chunkBytes } };
       });
@@ -423,6 +490,8 @@ export function createPilotHandler(options: PilotServerOptions): RequestListener
       if (!upload || upload.ownerKey !== session.ownerKey)
         throw new ApiError('NOT_FOUND', 'Upload not found.');
       if (upload.result) return send(res, 204);
+      if (upload.createdAt + uploadTtl <= now())
+        throw new ApiError('NOT_FOUND', 'This upload expired; start it again.');
       const n = Number(match[2]);
       if (n * chunkBytes >= upload.item.byteLength)
         throw new ApiError('INVALID_INPUT', 'Chunk is beyond the declared length.');
@@ -447,6 +516,8 @@ export function createPilotHandler(options: PilotServerOptions): RequestListener
         throw new ApiError('NOT_FOUND', 'Upload not found.');
       // A completed upload answers with its item, whatever the retry's operation ID.
       if (upload.result) return send(res, 200, { item: upload.result });
+      if (upload.createdAt + uploadTtl <= now())
+        throw new ApiError('NOT_FOUND', 'This upload expired; start it again.');
       const result = await idempotent(session.ownerKey, opId, async () => {
         const count = Math.ceil(upload.item.byteLength / chunkBytes);
         const received = new Set(await store.receivedChunks(upload.uploadId));
@@ -629,10 +700,12 @@ export function createPilotHandler(options: PilotServerOptions): RequestListener
           ? new ApiError('VAULT_RESET', 'This cloud library was reset; resynchronise first.')
           : caught;
       if (cause instanceof ApiError)
-        return send(res, STATUS[cause.code], {
-          ...errorBody(cause.code, cause.message),
-          ...cause.extra,
-        });
+        return send(
+          res,
+          STATUS[cause.code],
+          { ...errorBody(cause.code, cause.message), ...cause.extra },
+          cause.headers,
+        );
       console.error('Pilot API error', cause);
       send(res, 500, errorBody('INTERNAL_ERROR', 'Something went wrong. Try again.'));
     });

@@ -7,6 +7,7 @@ import {
   VaultResetError,
   publicItem,
   type Change,
+  type CleanUpCutoffs,
   type LoginAttempt,
   type PilotStore,
   type SavedResponse,
@@ -73,6 +74,17 @@ const MIGRATIONS = [
     code_verifier text NOT NULL,
     expires_at bigint NOT NULL
   );
+  `,
+  // 2: times the clean-up uses, in seconds like the rest of the server.
+  `
+  ALTER TABLE uploads ADD COLUMN created_seconds bigint NOT NULL
+    DEFAULT (extract(epoch FROM now()))::bigint;
+  ALTER TABLE responses ADD COLUMN saved_at bigint NOT NULL
+    DEFAULT (extract(epoch FROM now()))::bigint;
+  CREATE INDEX uploads_created ON uploads (created_seconds);
+  CREATE INDEX responses_saved ON responses (saved_at);
+  CREATE INDEX sessions_expiry ON sessions (expires_at);
+  CREATE INDEX login_attempts_expiry ON login_attempts (expires_at);
   `,
 ];
 
@@ -252,30 +264,37 @@ export class PostgresPilotStore implements PilotStore {
     );
     return rows[0] ? { status: rows[0].status, body: rows[0].body } : undefined;
   }
-  async saveResponse(ownerKey: string, opId: string, response: SavedResponse) {
+  async saveResponse(
+    ownerKey: string,
+    opId: string,
+    response: SavedResponse,
+    savedAt = Math.floor(Date.now() / 1000),
+  ) {
     await this.pool.query(
-      `INSERT INTO responses (owner_key, op_id, status, body) VALUES ($1, $2, $3, $4)
+      `INSERT INTO responses (owner_key, op_id, status, body, saved_at) VALUES ($1, $2, $3, $4, $5)
        ON CONFLICT DO NOTHING`,
-      [ownerKey, opId, response.status, JSON.stringify(response.body)],
+      [ownerKey, opId, response.status, JSON.stringify(response.body), savedAt],
     );
   }
 
   async createUpload(upload: UploadRecord) {
     await this.pool.query(
-      `INSERT INTO uploads (upload_id, owner_key, epoch, global_id, item)
-       VALUES ($1, $2, $3, $4, $5)`,
+      `INSERT INTO uploads (upload_id, owner_key, epoch, global_id, item, created_seconds)
+       VALUES ($1, $2, $3, $4, $5, $6)`,
       [
         upload.uploadId,
         upload.ownerKey,
         upload.epoch,
         upload.globalId,
         JSON.stringify(upload.item),
+        upload.createdAt,
       ],
     );
   }
   async getUpload(uploadId: string): Promise<UploadRecord | undefined> {
     const { rows } = await this.pool.query(
-      'SELECT upload_id, owner_key, epoch, global_id, item, result FROM uploads WHERE upload_id = $1',
+      `SELECT upload_id, owner_key, epoch, global_id, item, result, created_seconds
+         FROM uploads WHERE upload_id = $1`,
       [uploadId],
     );
     const row = rows[0];
@@ -286,6 +305,7 @@ export class PostgresPilotStore implements PilotStore {
       epoch: row.epoch,
       globalId: row.global_id,
       item: row.item,
+      createdAt: Number(row.created_seconds),
       ...(row.result ? { result: row.result } : {}),
     };
   }
@@ -343,6 +363,31 @@ export class PostgresPilotStore implements PilotStore {
     const changes = rows.map((row) => ({ cursor: Number(row.cursor), item: row.item }));
     // The cursor is the last change returned, so a change committed meanwhile is never skipped.
     return { cursor: changes.at(-1)?.cursor ?? after, changes };
+  }
+
+  async cleanUp(cutoffs: CleanUpCutoffs) {
+    return this.transaction(async (db) => {
+      await db.query('DELETE FROM sessions WHERE expires_at <= $1', [cutoffs.now]);
+      await db.query('DELETE FROM login_attempts WHERE expires_at <= $1', [cutoffs.now]);
+      const stale = await db.query<{ upload_id: string; finished: boolean; chunks: number[] }>(
+        `SELECT u.upload_id, u.result IS NOT NULL AS finished,
+                COALESCE(array_agg(c.n ORDER BY c.n) FILTER (WHERE c.n IS NOT NULL), '{}') AS chunks
+           FROM uploads u LEFT JOIN upload_chunks c ON c.upload_id = u.upload_id
+          WHERE (u.result IS NULL AND u.created_seconds < $1)
+             OR (u.result IS NOT NULL AND u.created_seconds < $2)
+          GROUP BY u.upload_id ORDER BY u.upload_id`,
+        [cutoffs.abandonedBefore, cutoffs.finishedBefore],
+      );
+      await db.query('DELETE FROM uploads WHERE upload_id = ANY($1)', [
+        stale.rows.map((row) => row.upload_id),
+      ]);
+      await db.query('DELETE FROM responses WHERE saved_at < $1', [cutoffs.responsesBefore]);
+      return {
+        abandoned: stale.rows
+          .filter((row) => !row.finished)
+          .map((row) => ({ uploadId: row.upload_id, chunks: row.chunks })),
+      };
+    });
   }
 
   async resetVault(ownerKey: string) {

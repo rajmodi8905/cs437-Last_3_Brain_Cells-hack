@@ -128,6 +128,7 @@ describe.each(stores)('PilotStore: %s', (name, available, open) => {
       ownerKey: 'google:a',
       epoch: 1,
       globalId: 'i1',
+      createdAt: 10,
       item: {
         kind: 'pdf' as const,
         title: 'T',
@@ -165,6 +166,7 @@ describe.each(stores)('PilotStore: %s', (name, available, open) => {
       ownerKey: 'google:a',
       epoch: 1,
       globalId: 'i3',
+      createdAt: 10,
       item: {
         kind: 'pdf',
         title: 'T',
@@ -189,6 +191,77 @@ describe.each(stores)('PilotStore: %s', (name, available, open) => {
     expect(await store.getItem('google:b', 'i2')).toEqual(item('i2'));
     // The feed restarts in the new epoch.
     expect((await store.publish('google:a', item('i4'), 2)).cursor).toBe(1);
+  });
+});
+
+const cleanupStores = stores;
+describe.each(cleanupStores)('PilotStore clean-up: %s', (name, available, open) => {
+  if (!available) {
+    it.skip(`needs PILOT_TEST_DATABASE_URL (run npm run test:pilot:storage) for ${name}`);
+    return;
+  }
+  const upload = (uploadId: string, createdAt: number) => ({
+    uploadId,
+    ownerKey: 'google:a',
+    epoch: 1,
+    globalId: `item-${uploadId}`,
+    createdAt,
+    item: {
+      kind: 'pdf' as const,
+      title: 'T',
+      mimeType: 'application/pdf',
+      byteLength: 100,
+      contentSha256: 'd'.repeat(64),
+      createdAt: 1,
+    },
+  });
+
+  it('removes expired sessions and attempts, abandoned uploads and old results only', async () => {
+    const store = await open();
+    for (const [id, expiresAt] of [
+      ['old', 100],
+      ['new', 300],
+    ] as const) {
+      await store.createSession({
+        id,
+        csrf: 'c',
+        ownerKey: 'google:a',
+        email: 'a@iitgn.ac.in',
+        expiresAt,
+      });
+      await store.createLoginAttempt({ id, state: 's', nonce: 'n', codeVerifier: 'v', expiresAt });
+    }
+    await store.createUpload(upload('stale', 10));
+    await store.recordChunk('stale', 1);
+    await store.recordChunk('stale', 0);
+    await store.createUpload(upload('fresh', 250));
+    await store.createUpload(upload('done-old', 10));
+    await store.createUpload(upload('done-new', 250));
+    for (const id of ['done-old', 'done-new'])
+      await store.finishUpload(id, { ...item(`item-${id}`), byteLength: 100 });
+    await store.saveResponse('google:a', 'op-old', { status: 200, body: {} }, 10);
+    await store.saveResponse('google:a', 'op-new', { status: 200, body: {} }, 250);
+    expect(await store.committedBytes('google:a')).toBe(200);
+
+    const cleaned = await store.cleanUp({
+      now: 200,
+      abandonedBefore: 100,
+      finishedBefore: 100,
+      responsesBefore: 100,
+    });
+    expect(cleaned.abandoned).toEqual([{ uploadId: 'stale', chunks: [0, 1] }]);
+    expect(await store.getSession('old')).toBeUndefined();
+    expect(await store.getSession('new')).toBeDefined();
+    expect(await store.takeLoginAttempt('old')).toBeUndefined();
+    expect(await store.takeLoginAttempt('new')).toBeDefined();
+    expect(await store.getUpload('stale')).toBeUndefined();
+    expect(await store.getUpload('done-old')).toBeUndefined();
+    expect(await store.getUpload('fresh')).toBeDefined();
+    expect(await store.getUpload('done-new')).toBeDefined();
+    expect(await store.receivedChunks('stale')).toEqual([]);
+    expect(await store.savedResponse('google:a', 'op-old')).toBeUndefined();
+    expect(await store.savedResponse('google:a', 'op-new')).toBeDefined();
+    expect(await store.committedBytes('google:a')).toBe(100);
   });
 });
 

@@ -3,7 +3,8 @@
 import { createHash, createSign, generateKeyPairSync, type KeyObject } from 'node:crypto';
 import { createServer, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
-import { createPilotHandler, type GoogleLoginOptions } from '../server/app';
+import { cleanUpPilot, createPilotHandler, type GoogleLoginOptions } from '../server/app';
+import type { RateLimits } from '../server/limits';
 import { MemoryObjectStore, MemoryPilotStore } from '../server/memory';
 import type { ObjectStore, PilotStore } from '../server/store';
 import { staticKeySource } from '../server/tokens';
@@ -49,9 +50,13 @@ export async function startPilotServer(
     /** Durable stores for restart tests; in-memory ones by default. */
     store?: PilotStore;
     objects?: ObjectStore;
+    limits?: Partial<RateLimits>;
+    trustProxy?: boolean;
   } = {},
 ) {
   const store: PilotStore = extra.store ?? new MemoryPilotStore();
+  const objects: ObjectStore = extra.objects ?? new MemoryObjectStore();
+  const nowSeconds = () => clock.now;
   const server: Server = createServer(
     createPilotHandler({
       clientId,
@@ -59,8 +64,11 @@ export async function startPilotServer(
       origin,
       keys: staticKeySource({ 'test-key': signing.publicKey }),
       store,
-      objects: extra.objects ?? new MemoryObjectStore(),
-      nowSeconds: () => clock.now,
+      objects,
+      nowSeconds,
+      // Tests sign in often on a frozen clock; the limit tests set their own.
+      limits: { signInBurst: 1000, ...extra.limits },
+      trustProxy: extra.trustProxy,
       quotaBytes,
       chunkBytes: extra.chunkBytes ?? 32 * 1024,
       devSigner: extra.devSigner,
@@ -70,7 +78,8 @@ export async function startPilotServer(
   await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
   const base = `http://127.0.0.1:${(server.address() as AddressInfo).port}/api/v1`;
   const close = () => new Promise<void>((resolve) => server.close(() => resolve()));
-  return { base, store, close };
+  const cleanUp = () => cleanUpPilot({ store, objects, nowSeconds });
+  return { base, store, objects, cleanUp, close };
 }
 
 /**

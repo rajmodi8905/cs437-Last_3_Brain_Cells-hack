@@ -24,6 +24,8 @@ export interface UploadRecord {
   epoch: number;
   globalId: string;
   item: ItemDescription;
+  /** When the upload began, in seconds; unfinished uploads expire after a day. */
+  createdAt: number;
   /** The published item, once completion succeeded. */
   result?: CloudItem;
 }
@@ -69,7 +71,13 @@ export interface PilotStore {
   /** Bytes held by live items plus reservations of unfinished uploads. */
   committedBytes(ownerKey: string): Promise<number>;
   savedResponse(ownerKey: string, opId: string): Promise<SavedResponse | undefined>;
-  saveResponse(ownerKey: string, opId: string, response: SavedResponse): Promise<void>;
+  /** `savedAt` (seconds) decides when the result is cleaned up; defaults to now. */
+  saveResponse(
+    ownerKey: string,
+    opId: string,
+    response: SavedResponse,
+    savedAt?: number,
+  ): Promise<void>;
   createUpload(upload: UploadRecord): Promise<void>;
   getUpload(uploadId: string): Promise<UploadRecord | undefined>;
   /** Notes that chunk `n` is stored; repeating it is harmless. */
@@ -94,6 +102,21 @@ export interface PilotStore {
     removed: StoredItem[];
     abandoned: { uploadId: string; chunks: number[] }[];
   }>;
+  /**
+   * Deletes sessions and sign-in attempts that expired by `now`, unfinished uploads begun before
+   * `abandonedBefore`, finished uploads begun before `finishedBefore` and operation results
+   * saved before `responsesBefore`. Returns the abandoned uploads' chunks to delete.
+   */
+  cleanUp(
+    cutoffs: CleanUpCutoffs,
+  ): Promise<{ abandoned: { uploadId: string; chunks: number[] }[] }>;
+}
+
+export interface CleanUpCutoffs {
+  now: number;
+  abandonedBefore: number;
+  finishedBefore: number;
+  responsesBefore: number;
 }
 
 export interface ObjectStore {

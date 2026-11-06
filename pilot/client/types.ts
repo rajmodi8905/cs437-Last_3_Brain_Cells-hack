@@ -58,6 +58,8 @@ export type PendingOp =
       globalId: string;
       uploadId?: string;
       chunkBytes?: number;
+      /** Chunks the server has acknowledged, so a resumed upload does not send them again. */
+      sentChunks?: number;
     }
   | {
       kind: 'rename';

@@ -1,7 +1,12 @@
 // Auto-sync engine. Each pass: plan local changes into saved operations, pull the server's
 // change feed and apply it locally, then send the saved operations. Planning is reconciliation
 // against the last agreed state, so a crash between a local save and an upload loses nothing.
-import { PILOT_INDEX_VERSIONS, searchMetadataDigest, validateIndexBundle } from '../contract';
+import {
+  PILOT_INDEX_VERSIONS,
+  searchMetadataDigest,
+  validateIndexBundle,
+  type CloudItem,
+} from '../contract';
 import { ApiFailure, type ApiClient, type ChangeItem } from './api';
 import { emptySnapshot } from './types';
 import type {
@@ -34,7 +39,11 @@ export interface SyncResult {
   blocked?: 'library-mismatch';
 }
 
-const isNetworkError = (cause: unknown) => !(cause instanceof ApiFailure);
+/** No answer, or the server asked to come back later: keep the work and stop this pass. */
+const isTransient = (cause: unknown) =>
+  !(cause instanceof ApiFailure) ||
+  cause.code === 'RATE_LIMITED' ||
+  cause.code === 'INTERNAL_ERROR';
 
 export class SyncEngine {
   private api: ApiClient;
@@ -165,7 +174,7 @@ export class SyncEngine {
           return { ...result, needsResync: true };
         }
         await this.state.save(snapshot);
-        if (isNetworkError(cause)) break;
+        if (isTransient(cause)) break;
         continue;
       }
       await this.state.save(snapshot);
@@ -318,24 +327,46 @@ export class SyncEngine {
           if (mapping) mapping.state = 'deleted';
           return;
         }
-        if (!op.uploadId) {
-          const { kind, title, mimeType, byteLength, contentSha256, createdAt, sourceUrl } = local;
-          const begun = await this.api.beginUpload(op.globalId, {
-            opId: op.opId,
-            epoch,
-            item: { kind, title, mimeType, byteLength, contentSha256, createdAt, sourceUrl },
-          });
-          op.uploadId = begun.uploadId;
-          op.chunkBytes = begun.chunkBytes;
-          await this.state.save(snapshot);
+        let item: CloudItem | undefined;
+        for (let attempt = 0; !item; attempt++) {
+          try {
+            if (!op.uploadId) {
+              const { kind, title, mimeType, byteLength, contentSha256, createdAt, sourceUrl } =
+                local;
+              const begun = await this.api.beginUpload(op.globalId, {
+                opId: op.opId,
+                epoch,
+                item: { kind, title, mimeType, byteLength, contentSha256, createdAt, sourceUrl },
+              });
+              op.uploadId = begun.uploadId;
+              op.chunkBytes = begun.chunkBytes;
+              op.sentChunks = 0;
+              await this.state.save(snapshot);
+            }
+            const size = op.chunkBytes!;
+            for (let n = op.sentChunks ?? 0; n * size < bytes.length; n++) {
+              await this.api.putChunk(op.uploadId, n, bytes.slice(n * size, (n + 1) * size));
+              op.sentChunks = n + 1;
+              await this.state.save(snapshot);
+            }
+            ({ item } = await this.api.completeUpload(op.uploadId, {
+              opId: op.completeOpId,
+              epoch,
+            }));
+          } catch (cause) {
+            // The server expired the unfinished upload: begin once more with new operation IDs.
+            if (attempt > 0 || !(cause instanceof ApiFailure) || cause.code !== 'NOT_FOUND')
+              throw cause;
+            Object.assign(op, {
+              uploadId: undefined,
+              chunkBytes: undefined,
+              sentChunks: 0,
+              opId: this.newId(),
+              completeOpId: this.newId(),
+            });
+            await this.state.save(snapshot);
+          }
         }
-        const size = op.chunkBytes!;
-        for (let n = 0; n * size < bytes.length; n++)
-          await this.api.putChunk(op.uploadId, n, bytes.slice(n * size, (n + 1) * size));
-        const { item } = await this.api.completeUpload(op.uploadId, {
-          opId: op.completeOpId,
-          epoch,
-        });
         snapshot.catalogue[item.globalId] = item;
         if (mapping)
           Object.assign(mapping, {
@@ -399,7 +430,7 @@ export class SyncEngine {
         result.deleted++;
         return;
       }
-      if (mapping && cause.code !== 'INTERNAL_ERROR') {
+      if (mapping && !isTransient(cause)) {
         mapping.state = cause.code === 'ITEM_DELETED' ? 'deleted' : 'failed';
         this.removeOp(snapshot, op);
       }

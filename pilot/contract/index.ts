@@ -24,6 +24,7 @@ export type PilotErrorCode =
   | 'INDEX_INCOMPATIBLE'
   | 'INVALID_INPUT'
   | 'RESYNC_REQUIRED'
+  | 'RATE_LIMITED'
   | 'INTERNAL_ERROR';
 
 export type Result<T> =
