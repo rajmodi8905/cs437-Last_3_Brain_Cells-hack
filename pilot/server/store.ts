@@ -60,6 +60,8 @@ export interface SavedResponse {
 }
 
 export interface PilotStore {
+  /** Serializes one owner's complete mutation; durable stores commit all its writes together. */
+  withOwnerLock<T>(ownerKey: string, run: () => Promise<T>): Promise<T>;
   vault(ownerKey: string): Promise<{ epoch: number }>;
   createSession(session: Session): Promise<void>;
   getSession(id: string): Promise<Session | undefined>;

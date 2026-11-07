@@ -1,6 +1,8 @@
 # Campus Recall
 
-A free, local personal library for screenshots, PDFs, notes, webpages and short recordings. Save an original, describe what you remember, and open the matching file, PDF page or media interval. There are no accounts, cloud inference calls, generated answers or API keys.
+A free personal library for screenshots, PDFs, notes, webpages and short recordings. Save an original, describe what you remember, and open the matching file, PDF page or media interval. Processing and search run on your device. Local only needs no account; this separate pilot branch also offers optional Google sign-in and private Azure Auto-sync. There are no cloud inference calls, generated answers or personal inference API keys.
+
+**Auto-sync pilot, 6 November 2026:** The [Azure deployment](https://campusrecall.indiasouthcentral.cloudapp.azure.com) is live. Google sign-in with the owner’s IITGN account, hosted storage/recovery and browser PWA checks passed; see the [release record](docs/pilot/2026-11-06-release.md). The export deadline and compute cutoff are **6 December 2026 at 17:47 IST (12:17 UTC)**. Export cloud originals through Settings before then. See the [pilot specification](docs/pilot/SPEC.md), [deployment runbook](docs/pilot/deployment.md), [privacy policy](docs/pilot/privacy-policy.md) and [terms](docs/pilot/terms-and-conditions.md). The completed local-only submission, root S1–S15 specification and historical evidence remain a separate baseline. [7 November phone/publication checkpoint](docs/pilot/2026-11-07-phone-check.md).
 
 
 
@@ -42,7 +44,7 @@ Device reports preserve measured versus owner-confirmed evidence and their origi
 
 ## Deployment: remaining release phase
 
-No hosted deployment is published. Select and authorize the host, review its actual policy/logging facts, publish the verified artifact and validate the hosted HTTPS, MIME/cache, installation and update behavior. The rollout also records actual outside-group users and their feedback; no user count or hosted result is claimed in advance. The [deployment runbook](docs/implementation/deployment.md) describes this phase.
+The separate Auto-sync pilot is live on Azure. Real Google sign-in with the owner’s IITGN account and the hosted storage/recovery/PWA checks are recorded in the [6 November release](docs/pilot/2026-11-06-release.md). Physical-device pilot installation and outside-group usage are not claimed. Its [deployment runbook](docs/pilot/deployment.md) covers the API, durable storage, backups and compute cutoff. The [original static release runbook](docs/implementation/deployment.md) and verification below describe the preserved local-only baseline. No outside-group user count or physical-device pilot result is claimed.
 
 ## Course check-in: 3 November 2026
 

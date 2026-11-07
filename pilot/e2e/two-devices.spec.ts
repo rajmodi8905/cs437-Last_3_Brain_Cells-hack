@@ -18,6 +18,7 @@ async function signIn(page: Page, email: string) {
   await page.goto('/#/settings');
   const sync = page.getByRole('region', { name: 'Auto-sync' });
   await expect(sync).toContainText('Local only');
+  await sync.getByRole('button', { name: 'Set up Auto-sync' }).click();
   await sync.getByLabel('IITGN email').fill(email);
   await sync.getByRole('button', { name: 'Sign in (development)' }).click();
   await expect(sync).toContainText(`Signed in as ${email}`);
@@ -75,9 +76,11 @@ test('a non-IITGN email cannot sign in', async ({ browser }) => {
   const page = await openApp(browser);
   await page.goto('/#/settings');
   const sync = page.getByRole('region', { name: 'Auto-sync' });
+  await sync.getByRole('button', { name: 'Set up Auto-sync' }).click();
   await sync.getByLabel('IITGN email').fill('someone@gmail.com');
   await sync.getByRole('button', { name: 'Sign in (development)' }).click();
   await expect(sync.getByRole('alert')).toContainText('IITGN');
+  await sync.getByRole('button', { name: 'Use Local only' }).click();
   await expect(sync).toContainText('Local only');
 });
 

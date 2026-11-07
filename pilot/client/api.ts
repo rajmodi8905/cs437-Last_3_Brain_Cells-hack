@@ -10,6 +10,7 @@ export class ApiFailure extends Error {
     readonly code: PilotErrorCode,
     message: string,
     readonly body: Record<string, unknown>,
+    readonly retryAfterSeconds?: number,
   ) {
     super(message);
     this.name = 'ApiFailure';
@@ -85,6 +86,7 @@ export function createApiClient(options: { base: string; fetch?: typeof fetch })
         body.error?.code ?? 'INTERNAL_ERROR',
         body.error?.message ?? `HTTP ${res.status}`,
         body as Record<string, unknown>,
+        res.headers.has('retry-after') ? Number(res.headers.get('retry-after')) : undefined,
       );
     }
     return res;

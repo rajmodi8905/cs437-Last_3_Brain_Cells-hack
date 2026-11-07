@@ -38,6 +38,7 @@ async function openApp(browser: Browser, path = '/#/library') {
 async function signInAndInclude(page: Page, email: string) {
   await page.goto('/#/settings');
   const sync = page.getByRole('region', { name: 'Auto-sync' });
+  await sync.getByRole('button', { name: 'Set up Auto-sync' }).click();
   await sync.getByLabel('IITGN email').fill(email);
   await sync.getByRole('button', { name: 'Sign in (development)' }).click();
   await expect(sync).toContainText(`Signed in as ${email}`);
@@ -70,7 +71,7 @@ test('an INSIIT link opens the site, drops any token from the address and never 
   await expect(sync).toContainText('You opened Campus Recall from INSIIT');
   await expect(sync).toContainText('Local only');
   expect(sent[0]).toBe('opened');
-  expect(sent.filter((line) => line.includes('/api/v1/')).length).toBeGreaterThan(0);
+  expect(sent.filter((line) => line.includes('/api/v1/'))).toEqual([]);
   expect(sent.filter((line) => line.includes('/api/v1/') && line.includes('leak'))).toEqual([]);
   expect(sent.filter((line) => line.includes('/api/v1/session') && line.includes('POST'))).toEqual(
     [],

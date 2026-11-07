@@ -42,7 +42,7 @@ export function LibrarySearchScreen({ model }: { model: CampusRecallModel }) {
       {!ready && (
         <div className="setup-banner">
           <div>
-            <strong>Your files stay here. Search runs here, too.</strong>
+            <strong>Processing and search run on this device.</strong>
             <p>Set up the local models once to search by meaning, images and speech.</p>
           </div>
           <a href="#/settings" className="text-link">
@@ -108,7 +108,9 @@ export function LibrarySearchScreen({ model }: { model: CampusRecallModel }) {
               <a className="button primary" href="#/add">
                 Add your first item
               </a>
-              <span className="small muted">No account. A separate library on each device.</span>
+              <span className="small muted">
+                Local only needs no account. Auto-sync is optional.
+              </span>
             </div>
           )}
           <div className="library-footer">

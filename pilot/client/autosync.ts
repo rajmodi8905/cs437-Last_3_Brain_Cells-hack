@@ -16,7 +16,7 @@ import { SyncEngine } from './sync';
 import type { SyncSnapshot } from './types';
 
 export interface AutoSyncView {
-  status: 'loading' | 'unavailable' | 'signed-out' | 'signed-in';
+  status: 'local-only' | 'loading' | 'unavailable' | 'signed-out' | 'signed-in';
   signInMode?: 'google' | 'dev';
   /** Google sign-in is configured on this server. */
   googleReady: boolean;
@@ -67,11 +67,12 @@ export function getAutoSync(services: CampusRecallServices) {
   return controller;
 }
 const LIBRARY_ID_KEY = 'pilot-library-id';
+const ACTIVATED_KEY = 'pilot-auto-sync-activated';
 
 export class AutoSyncController {
   private api: ApiClient;
   private view: AutoSyncView = {
-    status: 'loading',
+    status: 'local-only',
     googleReady: false,
     included: false,
     syncing: false,
@@ -112,15 +113,27 @@ export class AutoSyncController {
 
   /** Safe to call more than once; the first call does the work. */
   start() {
-    this.started ??= this.begin();
+    this.started ??= this.resumeActivated();
     return this.started;
   }
 
-  private async begin() {
+  private async resumeActivated() {
     // Drops entry and credential-like parameters from the address before anything else runs.
     const entry = typeof location !== 'undefined' ? applyEntry() : undefined;
     if (entry?.from === 'insiit') this.set({ entry: 'insiit' });
     if (entry?.signIn) this.set({ error: SIGN_IN_MESSAGES[entry.signIn] });
+    if (await this.services.preferences.get<boolean>(ACTIVATED_KEY)) await this.begin();
+  }
+
+  /** Explicit permission to contact the sync service; library inclusion is a separate choice. */
+  async activate() {
+    await this.start();
+    await this.services.preferences.set(ACTIVATED_KEY, true);
+    await this.begin();
+  }
+
+  private async begin() {
+    this.set({ status: 'loading' });
     try {
       const config = await this.api.config();
       this.set({ signInMode: config.signIn, googleReady: config.signIn === 'google' });
@@ -131,6 +144,13 @@ export class AutoSyncController {
     const session = await this.api.restoreSession().catch(() => undefined);
     if (session) await this.attach(session);
     else this.set({ status: 'signed-out' });
+  }
+
+  /** Leave setup without contacting sign-in or polling again on the next reload. */
+  async useLocalOnly() {
+    await this.services.preferences.set(ACTIVATED_KEY, false);
+    this.detach();
+    this.set({ status: 'local-only', error: undefined });
   }
 
   /** Leaves for Google; the server finishes sign-in and brings the user back to Settings. */
@@ -240,6 +260,21 @@ export class AutoSyncController {
     };
   }
 
+  /** Export includes every account original, including items already on this device. */
+  async exportCloudLibrary(): Promise<Blob[]> {
+    const session = this.session;
+    if (!session) throw new Error('Sign in first.');
+    const { exportCloudVault } = await import('./export');
+    return exportCloudVault({
+      api: this.api,
+      epoch: session.vault.epoch,
+      assertAccount: () => {
+        if (this.session !== session)
+          throw new Error('Your account changed. Start the export again.');
+      },
+    });
+  }
+
   /** Opens a cloud item in the viewer, at a page or time when search found one. */
   open(globalId: string, location?: SourceLocation) {
     this.set({ opened: { globalId, location } });
@@ -290,12 +325,13 @@ export class AutoSyncController {
 
   /** `removeLocalCopies` also deletes this account's sync state and offline copies here. */
   async signOut(removeLocalCopies = false) {
+    await this.services.preferences.set(ACTIVATED_KEY, false);
     await this.api.signOut().catch(() => undefined);
     const state = this.state;
     this.detach();
     if (removeLocalCopies) await state?.destroy();
     this.set({
-      status: 'signed-out',
+      status: 'local-only',
       email: undefined,
       opened: undefined,
       included: false,

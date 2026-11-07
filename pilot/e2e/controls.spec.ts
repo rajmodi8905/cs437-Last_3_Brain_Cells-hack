@@ -26,6 +26,7 @@ async function savePdf(page: Page, title: string, bytes: Buffer) {
 async function signInAndInclude(page: Page, email: string) {
   await page.goto('/#/settings');
   const sync = page.getByRole('region', { name: 'Auto-sync' });
+  await sync.getByRole('button', { name: 'Set up Auto-sync' }).click();
   await sync.getByLabel('IITGN email').fill(email);
   await sync.getByRole('button', { name: 'Sign in (development)' }).click();
   await expect(sync).toContainText(`Signed in as ${email}`);

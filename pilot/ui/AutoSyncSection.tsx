@@ -21,6 +21,7 @@ export function AutoSyncSection({ services }: { services: CampusRecallServices }
   const [email, setEmail] = useState('');
   const [busy, setBusy] = useState(false);
   const [actionError, setActionError] = useState('');
+  const [exportStatus, setExportStatus] = useState('');
   const [confirming, setConfirming] = useState<string>();
   const [removeLocalCopies, setRemoveLocalCopies] = useState(false);
   useEffect(() => {
@@ -49,9 +50,42 @@ export function AutoSyncSection({ services }: { services: CampusRecallServices }
           <p>Pilot. Keep your library on every device you sign in to.</p>
         </div>
         <span className={`status ${on ? 'ready' : 'queued'}`}>
-          {on ? 'On' : view.paused && signedIn ? 'Paused' : 'Local only'}
+          {on
+            ? 'On'
+            : view.paused && signedIn
+              ? 'Paused'
+              : view.status === 'local-only'
+                ? 'Local only'
+                : 'Not syncing'}
         </span>
       </div>
+
+      <p>
+        Cloud access and export end on 6 December 2026 at 17:47 IST (12:17 UTC). Download your cloud
+        export before then.
+      </p>
+
+      {view.entry === 'insiit' && (
+        <p className="notice" role="status">
+          You opened Campus Recall from INSIIT. INSIIT does not sign you in here. Set up Auto-sync
+          to sign in with your IITGN Google account.
+        </p>
+      )}
+      {view.status === 'local-only' && (
+        <>
+          <p>
+            Local only. Your library stays on this device. Set up Auto-sync to contact the pilot
+            service and sign in. Nothing uploads until you include your library.
+          </p>
+          <button
+            className="button secondary"
+            disabled={busy}
+            onClick={act(() => controller.activate())}
+          >
+            Set up Auto-sync
+          </button>
+        </>
+      )}
 
       {view.status === 'loading' && <p>Checking Auto-sync…</p>}
 
@@ -59,17 +93,21 @@ export function AutoSyncSection({ services }: { services: CampusRecallServices }
         <p>Local only. Your library stays on this device. Auto-sync is not available here.</p>
       )}
 
+      {(view.status === 'signed-out' || view.status === 'unavailable') && (
+        <button
+          className="button secondary"
+          disabled={busy}
+          onClick={act(() => controller.useLocalOnly())}
+        >
+          Use Local only
+        </button>
+      )}
+
       {view.status === 'signed-out' && (
         <>
-          {view.entry === 'insiit' && (
-            <p className="notice" role="status">
-              You opened Campus Recall from INSIIT. INSIIT does not sign you in here: sign in below
-              with your IITGN Google account.
-            </p>
-          )}
           <p>
-            Local only. Your library stays on this device. Sign in with your IITGN account to keep a
-            private copy in the cloud and open it on your other devices.
+            Your library stays on this device until you include it. Sign in with your IITGN account
+            to keep a private copy in the cloud and open it on your other devices.
           </p>
           {view.signInMode === 'dev' ? (
             <form
@@ -135,9 +173,11 @@ export function AutoSyncSection({ services }: { services: CampusRecallServices }
           ) : !view.included ? (
             <>
               <p>
-                Nothing is uploaded until you include this device&apos;s library. Your saved
-                originals then go to your private cloud library. Processing and search stay on your
-                devices.
+                Nothing is uploaded until you include this device&apos;s library. Originals, titles,
+                extracted text and embeddings then go to your private Azure cloud library.
+                Processing and search stay on your devices. Authorized project operators can access
+                cloud content. Read the <a href="#/privacy">Privacy Policy</a> and{' '}
+                <a href="#/terms">Terms and Conditions</a> before including your library.
               </p>
               <button
                 className="button primary"
@@ -234,7 +274,33 @@ export function AutoSyncSection({ services }: { services: CampusRecallServices }
               </ul>
             </>
           )}
+          <p>
+            Export downloads every cloud original and its metadata in an unencrypted ZIP. Large
+            libraries use several ZIPs; allow multiple downloads if your browser asks. Restore each
+            ZIP through the local library&apos;s import control in Settings.
+          </p>
           <div className="button-row">
+            <button
+              className="button secondary"
+              disabled={busy}
+              onClick={act(async () => {
+                setExportStatus('Preparing your cloud export…');
+                try {
+                  const archives = await controller.exportCloudLibrary();
+                  for (const [index, archive] of archives.entries()) {
+                    downloadBlob(archive, `campus-recall-cloud-${index + 1}.zip`);
+                  }
+                  setExportStatus(
+                    `${archives.length} export ZIP${archives.length === 1 ? '' : 's'} ready. Check your downloads.`,
+                  );
+                } catch (cause) {
+                  setExportStatus('');
+                  throw cause;
+                }
+              })}
+            >
+              Export cloud library
+            </button>
             {view.included && !view.needsResync && (
               <>
                 {!view.paused && (
@@ -263,6 +329,7 @@ export function AutoSyncSection({ services }: { services: CampusRecallServices }
               Sign out
             </button>
           </div>
+          {exportStatus && <p role="status">{exportStatus}</p>}
           <label>
             <input
               type="checkbox"

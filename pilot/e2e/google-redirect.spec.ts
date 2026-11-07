@@ -30,6 +30,7 @@ test('Sign in with Google goes to Google with PKCE, and a cancelled return is re
   await page.getByRole('link', { name: 'Settings' }).first().click();
   const sync = page.getByRole('region', { name: 'Auto-sync' });
   await expect(sync.getByLabel('IITGN email')).toHaveCount(0);
+  await sync.getByRole('button', { name: 'Set up Auto-sync' }).click();
   await sync.getByRole('button', { name: 'Sign in with Google' }).click();
   await expect(page.getByText('Google stand-in')).toBeVisible();
 

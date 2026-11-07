@@ -92,10 +92,47 @@ jobs:
           if-no-files-found: warn
           retention-days: 14
 
+  pilot:
+    name: Pilot storage, browser and model tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      # Docker containers and development identities are isolated to this runner.
+      # No Azure or Google production credentials are used by these tests.
+      - run: npm run test:pilot:storage
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:pilot:e2e
+        env:
+          PILOT_QA_DIR: test-evidence/pilot-browser/screenshots
+      - uses: actions/cache@v4
+        with:
+          path: .models
+          key: public-models-${{ hashFiles('scripts/model-assets.json') }}
+      - run: npm run models:download
+      - run: npm run test:pilot:models
+        env:
+          CR_PILOT_MODEL_EVIDENCE_DIR: test-evidence/pilot-model
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: pilot-validation-attempt-${{ github.run_attempt }}
+          path: |
+            test-results/pilot-e2e/
+            test-evidence/pilot-browser/
+            test-evidence/pilot-model/
+          if-no-files-found: warn
+          retention-days: 14
+
   checks:
     name: checks
     if: always()
-    needs: [static, browser, acceptance]
+    needs: [static, browser, acceptance, pilot]
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -120,11 +157,12 @@ jobs:
           STATIC: ${{ needs.static.result }}
           BROWSER: ${{ needs.browser.result }}
           ACCEPTANCE: ${{ needs.acceptance.result }}
+          PILOT: ${{ needs.pilot.result }}
         run: |
           status=0
           {
             echo '### Suite jobs'
-            for pair in "Static and fast checks=$STATIC" "Production browser tests=$BROWSER" "Actual-model acceptance=$ACCEPTANCE"; do
+            for pair in "Static and fast checks=$STATIC" "Production browser tests=$BROWSER" "Actual-model acceptance=$ACCEPTANCE" "Pilot storage, browser and model tests=$PILOT"; do
               echo "- ${pair%%=*}: ${pair#*=}"
               [ "${pair#*=}" = success ] || status=1
             done

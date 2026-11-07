@@ -145,12 +145,20 @@ const errorBody = (code: PilotErrorCode, message: string) => ({
   error: { code, message, retryable: RETRYABLE.has(code) },
 });
 
+// Mutating responses are held until the durable owner transaction has committed.
+const pendingResponses = new WeakMap<ServerResponse, { flush?: () => void }>();
+
 function send(
   res: ServerResponse,
   status: number,
   body?: unknown,
   headers: Record<string, string | string[]> = {},
 ) {
+  const pending = pendingResponses.get(res);
+  if (pending) {
+    pending.flush = () => send(res, status, body, headers);
+    return;
+  }
   res.setHeader('cache-control', 'no-store');
   res.setHeader('x-content-type-options', 'nosniff');
   for (const [name, value] of Object.entries(headers)) res.setHeader(name, value);
@@ -691,8 +699,24 @@ export function createPilotHandler(options: PilotServerOptions): RequestListener
     throw new ApiError('NOT_FOUND', 'No such endpoint.');
   }
 
+  async function dispatch(req: IncomingMessage, res: ServerResponse) {
+    const method = req.method ?? 'GET';
+    if (method === 'GET' || method === 'HEAD') return route(req, res);
+    const sessionId = cookieValue(req, COOKIE);
+    const session = sessionId ? await store.getSession(sessionId) : undefined;
+    if (!session || session.expiresAt <= now()) return route(req, res);
+    const pending: { flush?: () => void } = {};
+    pendingResponses.set(res, pending);
+    try {
+      await store.withOwnerLock(session.ownerKey, () => route(req, res));
+    } finally {
+      pendingResponses.delete(res);
+    }
+    pending.flush?.();
+  }
+
   return (req, res) => {
-    route(req, res).catch((caught: unknown) => {
+    dispatch(req, res).catch((caught: unknown) => {
       if (res.headersSent) return res.destroy();
       // A reset between the epoch check and the write is reported like an old epoch.
       const cause =

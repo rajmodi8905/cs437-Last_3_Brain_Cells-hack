@@ -1,6 +1,7 @@
 /// <reference types="node" />
 // PilotStore on PostgreSQL. Every multi-row change runs in one transaction; change cursors are
 // allocated under a row lock on the account's vault, so they commit in order.
+import { AsyncLocalStorage } from 'node:async_hooks';
 import pg from 'pg';
 import type { CloudItem } from '../contract';
 import {
@@ -106,6 +107,23 @@ export const DATABASE_VERSION = MIGRATIONS.length;
 type Query = Pick<pg.PoolClient, 'query'>;
 
 export class PostgresPilotStore implements PilotStore {
+  // Each API mutation reuses one connection through all nested store calls.
+  private transactionScope = new AsyncLocalStorage<pg.PoolClient>();
+
+  private get database() {
+    return this.transactionScope.getStore() ?? this.pool;
+  }
+
+  async withOwnerLock<T>(ownerKey: string, run: () => Promise<T>): Promise<T> {
+    return this.transaction(async (db) => {
+      // Namespace by schema as tests and restore rehearsals can share one database.
+      await db.query('SELECT pg_advisory_xact_lock(hashtextextended($1, 0))', [
+        `pilot-owner:${this.schema}:${ownerKey}`,
+      ]);
+      return run();
+    });
+  }
+
   private constructor(
     private pool: pg.Pool,
     private schema: string,
@@ -158,12 +176,16 @@ export class PostgresPilotStore implements PilotStore {
   }
 
   private async transaction<T>(run: (db: pg.PoolClient) => Promise<T>): Promise<T> {
+    const active = this.transactionScope.getStore();
+    if (active) return run(active);
     const db = await this.pool.connect();
     try {
       await db.query('BEGIN');
-      const result = await run(db);
-      await db.query('COMMIT');
-      return result;
+      return await this.transactionScope.run(db, async () => {
+        const result = await run(db);
+        await db.query('COMMIT');
+        return result;
+      });
     } catch (cause) {
       await db.query('ROLLBACK').catch(() => undefined);
       throw cause;
@@ -193,7 +215,7 @@ export class PostgresPilotStore implements PilotStore {
   /** True when no table holds a row. */
   async isEmpty() {
     for (const table of BACKUP_TABLES) {
-      const { rows } = await this.pool.query(`SELECT 1 FROM ${table} LIMIT 1`);
+      const { rows } = await this.database.query(`SELECT 1 FROM ${table} LIMIT 1`);
       if (rows.length) return false;
     }
     return true;
@@ -238,7 +260,7 @@ export class PostgresPilotStore implements PilotStore {
 
   /** Live items' stored object keys, for checking object storage after a restore. */
   async liveObjectKeys() {
-    const { rows } = await this.pool.query<{ key: string }>(
+    const { rows } = await this.database.query<{ key: string }>(
       `SELECT data->>'objectKey' AS key FROM items WHERE NOT deleted AND data ? 'objectKey'
        UNION ALL
        SELECT data->>'indexObjectKey' FROM items WHERE NOT deleted AND data ? 'indexObjectKey'
@@ -249,29 +271,29 @@ export class PostgresPilotStore implements PilotStore {
 
   /** Tests only: removes everything this store created. */
   async dropSchemaForTests() {
-    await this.pool.query(`DROP SCHEMA IF EXISTS ${this.schema} CASCADE`);
+    await this.database.query(`DROP SCHEMA IF EXISTS ${this.schema} CASCADE`);
   }
 
   async vault(ownerKey: string): Promise<{ epoch: number }> {
-    const { rows } = await this.pool.query<{ epoch: number }>(
+    const { rows } = await this.database.query<{ epoch: number }>(
       'SELECT epoch FROM vaults WHERE owner_key = $1',
       [ownerKey],
     );
     if (rows[0]) return { epoch: rows[0].epoch };
-    await this.pool.query('INSERT INTO vaults (owner_key) VALUES ($1) ON CONFLICT DO NOTHING', [
+    await this.database.query('INSERT INTO vaults (owner_key) VALUES ($1) ON CONFLICT DO NOTHING', [
       ownerKey,
     ]);
     return this.vault(ownerKey);
   }
 
   async createSession(session: Session) {
-    await this.pool.query(
+    await this.database.query(
       'INSERT INTO sessions (id, csrf, owner_key, email, expires_at) VALUES ($1, $2, $3, $4, $5)',
       [session.id, session.csrf, session.ownerKey, session.email, session.expiresAt],
     );
   }
   async getSession(id: string) {
-    const { rows } = await this.pool.query(
+    const { rows } = await this.database.query(
       'SELECT id, csrf, owner_key, email, expires_at FROM sessions WHERE id = $1',
       [id],
     );
@@ -287,17 +309,17 @@ export class PostgresPilotStore implements PilotStore {
       : undefined;
   }
   async deleteSession(id: string) {
-    await this.pool.query('DELETE FROM sessions WHERE id = $1', [id]);
+    await this.database.query('DELETE FROM sessions WHERE id = $1', [id]);
   }
 
   async createLoginAttempt(attempt: LoginAttempt) {
-    await this.pool.query(
+    await this.database.query(
       'INSERT INTO login_attempts (id, state, nonce, code_verifier, expires_at) VALUES ($1, $2, $3, $4, $5)',
       [attempt.id, attempt.state, attempt.nonce, attempt.codeVerifier, attempt.expiresAt],
     );
   }
   async takeLoginAttempt(id: string) {
-    const { rows } = await this.pool.query(
+    const { rows } = await this.database.query(
       'DELETE FROM login_attempts WHERE id = $1 RETURNING id, state, nonce, code_verifier, expires_at',
       [id],
     );
@@ -314,7 +336,7 @@ export class PostgresPilotStore implements PilotStore {
   }
 
   async getItem(ownerKey: string, globalId: string) {
-    const { rows } = await this.pool.query<{ data: StoredItem }>(
+    const { rows } = await this.database.query<{ data: StoredItem }>(
       'SELECT data FROM items WHERE owner_key = $1 AND global_id = $2',
       [ownerKey, globalId],
     );
@@ -322,7 +344,7 @@ export class PostgresPilotStore implements PilotStore {
   }
 
   async committedBytes(ownerKey: string) {
-    const { rows } = await this.pool.query<{ bytes: string }>(
+    const { rows } = await this.database.query<{ bytes: string }>(
       `SELECT
          (SELECT COALESCE(SUM(byte_length), 0) FROM items WHERE owner_key = $1 AND NOT deleted) +
          (SELECT COALESCE(SUM((item->>'byteLength')::bigint), 0)
@@ -333,7 +355,7 @@ export class PostgresPilotStore implements PilotStore {
   }
 
   async savedResponse(ownerKey: string, opId: string) {
-    const { rows } = await this.pool.query<SavedResponse>(
+    const { rows } = await this.database.query<SavedResponse>(
       'SELECT status, body FROM responses WHERE owner_key = $1 AND op_id = $2',
       [ownerKey, opId],
     );
@@ -345,7 +367,7 @@ export class PostgresPilotStore implements PilotStore {
     response: SavedResponse,
     savedAt = Math.floor(Date.now() / 1000),
   ) {
-    await this.pool.query(
+    await this.database.query(
       `INSERT INTO responses (owner_key, op_id, status, body, saved_at) VALUES ($1, $2, $3, $4, $5)
        ON CONFLICT DO NOTHING`,
       [ownerKey, opId, response.status, JSON.stringify(response.body), savedAt],
@@ -353,7 +375,7 @@ export class PostgresPilotStore implements PilotStore {
   }
 
   async createUpload(upload: UploadRecord) {
-    await this.pool.query(
+    await this.database.query(
       `INSERT INTO uploads (upload_id, owner_key, epoch, global_id, item, created_seconds)
        VALUES ($1, $2, $3, $4, $5, $6)`,
       [
@@ -367,7 +389,7 @@ export class PostgresPilotStore implements PilotStore {
     );
   }
   async getUpload(uploadId: string): Promise<UploadRecord | undefined> {
-    const { rows } = await this.pool.query(
+    const { rows } = await this.database.query(
       `SELECT upload_id, owner_key, epoch, global_id, item, result, created_seconds
          FROM uploads WHERE upload_id = $1`,
       [uploadId],
@@ -385,13 +407,13 @@ export class PostgresPilotStore implements PilotStore {
     };
   }
   async recordChunk(uploadId: string, n: number) {
-    await this.pool.query(
+    await this.database.query(
       'INSERT INTO upload_chunks (upload_id, n) VALUES ($1, $2) ON CONFLICT DO NOTHING',
       [uploadId, n],
     );
   }
   async receivedChunks(uploadId: string) {
-    const { rows } = await this.pool.query<{ n: number }>(
+    const { rows } = await this.database.query<{ n: number }>(
       'SELECT n FROM upload_chunks WHERE upload_id = $1 ORDER BY n',
       [uploadId],
     );
@@ -431,7 +453,7 @@ export class PostgresPilotStore implements PilotStore {
   }
 
   async changesAfter(ownerKey: string, after: number) {
-    const { rows } = await this.pool.query<{ cursor: string; item: Change['item'] }>(
+    const { rows } = await this.database.query<{ cursor: string; item: Change['item'] }>(
       'SELECT cursor, item FROM changes WHERE owner_key = $1 AND cursor > $2 ORDER BY cursor',
       [ownerKey, after],
     );

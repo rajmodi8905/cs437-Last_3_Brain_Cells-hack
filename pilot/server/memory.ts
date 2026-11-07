@@ -22,11 +22,28 @@ interface Vault {
 }
 
 export class MemoryPilotStore implements PilotStore {
+  private ownerLocks = new Map<string, Promise<void>>();
   private vaults = new Map<string, Vault>();
   private sessions = new Map<string, Session>();
   private uploads = new Map<string, UploadRecord>();
   private attempts = new Map<string, LoginAttempt>();
   private received = new Map<string, Set<number>>();
+
+  async withOwnerLock<T>(ownerKey: string, run: () => Promise<T>): Promise<T> {
+    const previous = this.ownerLocks.get(ownerKey) ?? Promise.resolve();
+    let release!: () => void;
+    const current = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    this.ownerLocks.set(ownerKey, current);
+    await previous;
+    try {
+      return await run();
+    } finally {
+      release();
+      if (this.ownerLocks.get(ownerKey) === current) this.ownerLocks.delete(ownerKey);
+    }
+  }
 
   private vaultOf(ownerKey: string): Vault {
     let vault = this.vaults.get(ownerKey);
