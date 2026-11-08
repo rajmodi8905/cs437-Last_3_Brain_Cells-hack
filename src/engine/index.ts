@@ -5,6 +5,7 @@ import {
   type IndexedSegment,
   type ItemKind,
   type ProgressListener,
+  type SearchableSegment,
   type SourceLocation,
 } from '../shared';
 import { DexieLibraryRepository } from '../storage';
@@ -31,6 +32,8 @@ export class LocalEngine implements EngineClient {
   private wakeTimer?: ReturnType<typeof setInterval>;
   private active?: { id: string; cancelled: boolean };
   ready = false;
+  /** Pilot Auto-sync: cloud items' segments, searched on this device with the local ones. */
+  extraSegments?: (kind?: ItemKind) => Promise<SearchableSegment[]>;
   constructor(readonly repository: DexieLibraryRepository) {}
   emit(event: EngineProgress) {
     for (const listener of this.listeners) listener(event);
@@ -269,11 +272,11 @@ export class LocalEngine implements EngineClient {
     if (Array.from(query).length > 1000)
       throw new Error('Keep your search under 1,000 characters.');
     const vector = await this.models.query(query.trim());
-    return rankSegments(
-      vector,
-      await this.repository.listSearchableSegments(INDEX_VERSION, kind),
-      query,
-    );
+    const local = await this.repository.listSearchableSegments(INDEX_VERSION, kind);
+    // A failing cloud source never blocks local search.
+    const extra = (await this.extraSegments?.(kind).catch(() => [])) ?? [];
+    const cloud = extra.filter((segment) => segment.indexVersion === INDEX_VERSION);
+    return rankSegments(vector, [...local, ...cloud], query);
   }
   async cancelItem(id: string) {
     if (this.active?.id === id) this.active.cancelled = true;

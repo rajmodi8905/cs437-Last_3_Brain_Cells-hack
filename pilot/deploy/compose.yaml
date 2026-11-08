@@ -1,0 +1,96 @@
+name: campus-recall-pilot
+
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: '10m'
+    max-file: '3'
+
+services:
+  app:
+    image: ${PILOT_IMAGE:?Set PILOT_IMAGE to the reviewed release image tag or digest}
+    restart: unless-stopped
+    init: true
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    tmpfs: ['/tmp:size=16m,mode=1777']
+    mem_limit: 768m
+    pids_limit: 128
+    environment:
+      PILOT_ORIGIN: https://${PILOT_DOMAIN:?Set PILOT_DOMAIN to the selected hostname}
+      PILOT_TRUST_PROXY: '1'
+      PILOT_GOOGLE_CLIENT_ID: ${PILOT_GOOGLE_CLIENT_ID:?Set the web OAuth client ID}
+      PILOT_GOOGLE_CLIENT_SECRET_FILE: /run/secrets/google_client_secret
+      PILOT_DATABASE_PASSWORD_FILE: /run/secrets/database_password
+      PILOT_DATABASE_SCHEMA: ${PILOT_DATABASE_SCHEMA:-pilot}
+      PILOT_BLOB_ACCOUNT_URL: ${PILOT_BLOB_ACCOUNT_URL:?Set the Azure Blob HTTPS account endpoint}
+      PILOT_BLOB_CONTAINER: ${PILOT_BLOB_CONTAINER:-pilot}
+      PILOT_MANAGED_IDENTITY_CLIENT_ID: ${PILOT_MANAGED_IDENTITY_CLIENT_ID:-}
+      PILOT_BACKUP_CONTAINER: ${PILOT_BACKUP_CONTAINER:-pilot-backups}
+      PILOT_BACKUP_EVERY_HOURS: '24'
+      PILOT_BACKUP_KEEP: '14'
+      PILOT_QUOTA_BYTES: ${PILOT_QUOTA_BYTES:-200000000}
+    secrets: [google_client_secret, database_password]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks: [frontend, database]
+    logging: *logging
+
+  postgres:
+    image: ${PILOT_POSTGRES_IMAGE:-postgres:17.11-alpine@sha256:3540c0362c809df084ffac0ae69fe794515f9de92692f02178bcdce0ef0302ac}
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: pilot
+      POSTGRES_DB: pilot
+      POSTGRES_PASSWORD_FILE: /run/secrets/database_password
+      POSTGRES_INITDB_ARGS: --auth-host=scram-sha-256
+    secrets: [database_password]
+    volumes:
+      - ${PILOT_DATA_DIR:-/srv/campus-recall}/postgres:/var/lib/postgresql/data
+    shm_size: 128m
+    mem_limit: 512m
+    pids_limit: 128
+    security_opt: [no-new-privileges:true]
+    healthcheck:
+      test: [CMD-SHELL, 'pg_isready -U pilot -d pilot']
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    networks: [database]
+    logging: *logging
+
+  caddy:
+    image: ${PILOT_CADDY_IMAGE:-caddy:2.11.9-alpine@sha256:0bbb055bda6793c999bde78b1b5ce3e89f829fb031af2cf50056ea1246559fee}
+    restart: unless-stopped
+    cap_drop: [ALL]
+    cap_add: [NET_BIND_SERVICE]
+    security_opt: [no-new-privileges:true]
+    read_only: true
+    tmpfs: ['/tmp:size=16m,mode=1777']
+    mem_limit: 128m
+    pids_limit: 128
+    ports: ['80:80', '443:443']
+    environment:
+      PILOT_DOMAIN: ${PILOT_DOMAIN:?Set PILOT_DOMAIN}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - ${PILOT_DATA_DIR:-/srv/campus-recall}/caddy/data:/data
+      - ${PILOT_DATA_DIR:-/srv/campus-recall}/caddy/config:/config
+    depends_on:
+      app:
+        condition: service_healthy
+    networks: [frontend]
+    logging: *logging
+
+networks:
+  frontend:
+  database:
+    internal: true
+
+secrets:
+  google_client_secret:
+    file: ${PILOT_SECRETS_DIR:-/etc/campus-recall/secrets}/google_client_secret
+  database_password:
+    file: ${PILOT_SECRETS_DIR:-/etc/campus-recall/secrets}/database_password

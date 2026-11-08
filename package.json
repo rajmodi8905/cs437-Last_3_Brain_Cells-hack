@@ -11,7 +11,7 @@
     "test": "npm run test:fast && npm run test:browser && npm run test:acceptance",
     "test:fast": "node scripts/run-suite.mjs fast",
     "build": "tsc --noEmit && vite build",
-    "check": "tsc --noEmit && eslint src tests && node scripts/check-product.mjs && node scripts/check-spec-coverage.mjs",
+    "check": "tsc --noEmit && eslint src tests pilot && node scripts/check-product.mjs && node scripts/check-spec-coverage.mjs",
     "predev": "node scripts/prepare-assets.mjs",
     "prebuild": "node scripts/prepare-assets.mjs",
     "test:browser": "node scripts/run-suite.mjs browser",
@@ -25,12 +25,18 @@
     "qa:device:prepare": "node scripts/device-session.mjs prepare",
     "qa:device:serve": "node scripts/device-session.mjs serve",
     "models:download": "node scripts/download-assets.mjs",
-    "format:check": "prettier --check src/ui src/app src/engine src/shared/browser-assets.ts src/main.tsx scripts tests/app tests/acceptance tests/e2e tests/engine tests/storage/integration.test.ts tests/spec tests/tooling vite.config.ts playwright.config.ts playwright.webkit.config.ts eslint.config.js src/sw.ts",
+    "format:check": "prettier --check src/ui src/app src/engine src/shared/browser-assets.ts src/main.tsx scripts tests/app tests/acceptance tests/e2e tests/engine tests/storage/integration.test.ts tests/spec tests/tooling vite.config.ts playwright.config.ts playwright.webkit.config.ts eslint.config.js src/sw.ts pilot",
     "premodels:download": "node scripts/prepare-assets.mjs",
     "release:check": "node scripts/check-release.mjs",
-    "test:webkit": "playwright test --config playwright.webkit.config.ts"
+    "test:webkit": "playwright test --config playwright.webkit.config.ts",
+    "test:pilot": "vitest run --config pilot/vitest.config.ts",
+    "test:pilot:storage": "node pilot/scripts/test-storage.mjs",
+    "pilot:server": "node pilot/scripts/build-server.mjs && node .cache/pilot-server/main.mjs",
+    "test:pilot:e2e": "playwright test --config pilot/playwright.config.ts",
+    "test:pilot:models": "playwright test --config pilot/real-model.config.ts"
   },
   "dependencies": {
+    "@azure/storage-blob": "12.34.0",
     "@ffmpeg/core": "0.12.10",
     "@ffmpeg/ffmpeg": "0.12.15",
     "@huggingface/transformers": "4.3.1",
@@ -38,6 +44,7 @@
     "fflate": "0.8.3",
     "lucide-react": "1.61.0",
     "pdfjs-dist": "6.4.299",
+    "pg": "8.23.1",
     "react": "19.2.0",
     "react-dom": "19.2.0",
     "tesseract.js": "7.0.0"
@@ -49,9 +56,11 @@
     "@testing-library/react": "16.3.2",
     "@testing-library/user-event": "14.6.1",
     "@types/node": "24.10.0",
+    "@types/pg": "8.23.1",
     "@types/react": "19.2.2",
     "@types/react-dom": "19.2.2",
     "@vitejs/plugin-react": "5.0.4",
+    "deepmerge": "file:vendor/deepmerge",
     "eslint": "10.13.0",
     "eslint-plugin-react-hooks": "7.1.1",
     "fake-indexeddb": "6.2.4",
@@ -61,8 +70,7 @@
     "typescript-eslint": "8.72.0",
     "vite": "7.3.7",
     "vite-plugin-pwa": "2.0.0",
-    "vitest": "4.1.12",
-    "deepmerge": "file:vendor/deepmerge"
+    "vitest": "4.1.12"
   },
   "overrides": {
     "glob": "14.0.3",

@@ -1,0 +1,43 @@
+# Privacy Policy
+
+Pilot version 2.0 · Updated 6 November 2026
+
+Campus Recall is a student project by Raj Modi, Chaitanya and Nakshatra. This policy covers the separate Auto-sync pilot. It does not change the earlier local-only submission. Public launch follows hosted verification. Cloud access and cloud export end on 6 December 2026 at 17:47 IST (12:17 UTC); export your cloud library through Settings before then. This conservative 30-day window starts with Azure VM creation on 6 November 2026, not a claim that public launch has already happened. Do not rely on this experimental service as your only copy of important material.
+
+## Local only
+
+Local only is the default. No account is needed to save, process, search or open a local library. Originals, titles, source URLs, extracted text, transcripts, embeddings and processing records stay in this browser's IndexedDB. Models and runtimes are stored in browser Cache Storage. Local only does not contact the pilot API or initialize sign-in. Set up Auto-sync explicitly contacts the sync service; this choice is remembered here so a previously enabled account can reconnect after a reload. Sign-out clears that choice. Nothing from a local library is uploaded unless you sign in and explicitly include it.
+
+## Optional Auto-sync on Azure
+
+Auto-sync requires a verified IITGN Google Workspace account (@iitgn.ac.in). Google handles sign-in and supplies the pilot server with identity information, including a stable account identifier and email. The server uses a secure session cookie for access; it does not receive your Google password. INSIIT may link to the app but does not sign you in.
+
+Signing in alone does not upload a library. Including this device's library uploads its originals and metadata, including titles, capture times and source URLs, to your account's private vault on Microsoft Azure. Compatible embeddings, extracted text and source locations such as PDF pages or media times also sync, so other signed-in devices can search locally without first downloading originals.
+
+Processing, query embedding and ranking run on your devices. Search queries are not sent to the pilot server. There is no cloud inference. Cloud access is authenticated and uses HTTPS. Azure encrypts stored data at rest, but this is not end-to-end encryption: authorized project operators and the cloud provider can technically access stored content. Someone with access to your browser profile may also access its local library and retained account data.
+
+## Requests and technical records
+
+Opening the hosted app sends ordinary requests to Azure infrastructure. Technical operational records can include IP addresses, request times and errors. No advertising or behavioral analytics is implemented, and the application does not record document titles, extracted content or queries as usage metrics. Counts displayed in Settings describe your library, not a claim about overall adoption.
+
+Explicit offline setup downloads pinned model files from Hugging Face, English OCR data from jsDelivr, and runtime files from the app host. Those providers receive download requests, without your library content or queries. Model downloads are a setup step; inference runs locally.
+
+Capturing a public webpage requests the URL you enter. The destination receives ordinary network information, such as your IP address. Browser rules may block capture; you can paste text or import an inert snapshot instead. Imported HTML never executes. Opening an external source, Google sign-in, the repository or the issue tracker contacts that service under its own policy.
+
+## Pause, downloads and deletion
+
+Pause stops new background sync transfers on this device. It does not delete cloud copies. Sign-out ends this device's cloud session. The sign-out checkbox can additionally remove this account's downloaded originals and sync data here; local library originals remain unless you delete them separately.
+
+Keep offline downloads a verified original into this account's device storage. Remove download deletes that local offline copy, while retaining the cloud item and its searchable catalogue. Deleting a cloud item deletes its active cloud original and index and sends a tombstone to other syncing devices. Removing the cloud library removes its active cloud data and resets the vault so old devices cannot upload without starting again. Earlier manual exports and other independent copies are outside these deletion controls.
+
+Database backups are scheduled daily, keeping the newest 14 backups. Azure Blob soft delete and versioning are part of the deployment configuration: recoverable deleted blobs are retained for 14 days, and old versions are scheduled for removal after 14 days. A previous version can therefore remain recoverable for up to 28 days after replacement, plus lifecycle processing delay. Deletion removes active access before all backup and recovery copies expire. Operators must apply these settings before public launch and remove the pilot resources after the announced shutdown and retention window.
+
+## Export, storage and pilot end
+
+Export cloud library downloads every current cloud original and its metadata in unencrypted ZIP files, with length and SHA-256 verification. Embeddings, model weights and session credentials are excluded. Large libraries are split into archives within local restore limits. Allow multiple downloads when prompted and keep the ZIPs private. Settings can restore each archive into a local library for re-indexing. Export needs a working signed-in connection; a library that changes during export requires a retry.
+
+Browser storage can be cleared or evicted. Persistent storage requests are best-effort; the browser and operating system control backups and permissions. Download and back up important originals before 6 December 2026 at 17:47 IST (12:17 UTC). The service ends then even if public launch occurs later than VM creation. No indefinite cloud availability is promised.
+
+## Contact
+
+Report problems at https://github.com/rajmodi8905/cs437-Last_3_Brain_Cells-hack/issues . Do not attach private documents, credentials or identifying content to public issues. Changes to data handling require an updated policy.

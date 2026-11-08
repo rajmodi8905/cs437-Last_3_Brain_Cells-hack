@@ -21,7 +21,9 @@ export function Viewer({
 }: {
   item: LibraryItem;
   location?: SourceLocation;
-  repository: Pick<LibraryRepository, 'getOriginal' | 'exportItems'>;
+  /** Without `exportItems` (a cloud item not saved here), the backup export is not offered. */
+  repository: Pick<LibraryRepository, 'getOriginal'> &
+    Partial<Pick<LibraryRepository, 'exportItems'>>;
   onClose: () => void;
 }) {
   const [zoom, setZoom] = useState(false);
@@ -247,17 +249,18 @@ export function Viewer({
           <ArrowDownToLine size={16} /> Download original
         </button>
       )}
-      <button
-        className="text-button"
-        onClick={() =>
-          void repository
-            .exportItems([item.id])
-            .then((archive) => downloadBlob(archive, `campus-recall-${item.id}.zip`))
-            .catch((cause) => setError(cause.message))
-        }
-      >
-        Export this item as backup
-      </button>
+      {repository.exportItems && (
+        <button
+          className="text-button"
+          onClick={() =>
+            void repository.exportItems!([item.id])
+              .then((archive) => downloadBlob(archive, `campus-recall-${item.id}.zip`))
+              .catch((cause) => setError(cause.message))
+          }
+        >
+          Export this item as backup
+        </button>
+      )}
     </section>
   );
 }

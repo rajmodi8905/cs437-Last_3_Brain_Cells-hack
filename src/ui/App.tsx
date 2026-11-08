@@ -1,4 +1,4 @@
-import { lazy, Suspense } from 'react';
+import { lazy, Suspense, useEffect } from 'react';
 import { ArrowUpRight, Search, ShieldCheck, WifiOff, X } from 'lucide-react';
 import type { CampusRecallServices } from '../app/services';
 import { useCampusRecall } from '../app/useCampusRecall';
@@ -9,9 +9,29 @@ import { Landing } from './Landing';
 import { LibrarySearchScreen } from './screens/LibrarySearchScreen';
 import { SettingsScreen } from './screens/SettingsScreen';
 import { useModalFocus } from './useModalFocus';
+import { getAutoSync } from '../../pilot/client/autosync';
+import { CloudViewer } from '../../pilot/ui/CloudViewer';
 const Policy = lazy(() => import('./Policy').then((m) => ({ default: m.Policy })));
 export function App({ services }: { services: CampusRecallServices }) {
   const model = useCampusRecall(services);
+  // Pilot Auto-sync runs app-wide once signed in and opted in.
+  useEffect(() => {
+    void getAutoSync(services).start();
+  }, [services]);
+  // One viewer at a time: opening a cloud item closes a local one, and the other way round.
+  const { selected: openLocal, setSelected: setOpenLocal } = model;
+  useEffect(() => {
+    const controller = getAutoSync(services);
+    const unsubscribe = controller.subscribe(() => {
+      if (controller.getView().opened) setOpenLocal(undefined);
+    });
+    return () => {
+      unsubscribe();
+    };
+  }, [services, setOpenLocal]);
+  useEffect(() => {
+    if (openLocal) getAutoSync(services).closeViewer();
+  }, [openLocal, services]);
   useModalFocus(model);
   const {
     selected,
@@ -163,7 +183,7 @@ export function App({ services }: { services: CampusRecallServices }) {
           )}
         </main>
       </div>
-      {item && selected && (
+      {item && selected ? (
         <div className="preview-panel">
           <Viewer
             key={item.id}
@@ -173,6 +193,8 @@ export function App({ services }: { services: CampusRecallServices }) {
             onClose={() => setSelected(undefined)}
           />
         </div>
+      ) : (
+        <CloudViewer services={services} />
       )}
       <nav className="mobile-nav" aria-label="Mobile navigation">
         {[

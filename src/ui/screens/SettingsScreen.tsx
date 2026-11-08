@@ -1,6 +1,7 @@
 import { ArrowUpRight, ChevronRight, LoaderCircle } from 'lucide-react';
 import type { CampusRecallModel } from '../../app/useCampusRecall';
 import { bytes } from '../hooks';
+import { AutoSyncSection } from '../../../pilot/ui/AutoSyncSection';
 export function SettingsScreen({ model }: { model: CampusRecallModel }) {
   const {
     ready,
@@ -29,6 +30,7 @@ export function SettingsScreen({ model }: { model: CampusRecallModel }) {
         </div>
       </div>
       <div className="settings-grid">
+        <AutoSyncSection services={model.services} />
         <section className="surface settings-section">
           <div className="section-title">
             <div>
@@ -42,7 +44,7 @@ export function SettingsScreen({ model }: { model: CampusRecallModel }) {
           <p>
             Text and vision embeddings, English speech, OCR and media tools.{' '}
             {downloadBytes ? `${bytes(downloadBytes)} of assets.` : 'Asset size is loading.'} Model
-            inference uses this device, without API keys or content uploads.
+            inference uses this device, without inference API keys or uploads for processing.
           </p>
           {progress?.stage === 'setup' && (
             <div className="setup-progress">
@@ -179,7 +181,8 @@ export function SettingsScreen({ model }: { model: CampusRecallModel }) {
           </p>
           <p>
             Campus Recall is a student project by Raj, Chaitanya and Nakshatra. It is not an
-            official IITGN service. Libraries do not sync between devices.
+            official IITGN service. Local only keeps a separate library on each device. Optional
+            Auto-sync shares included content through your private Azure cloud library.
           </p>
           <a className="settings-policy" href="#/privacy">
             Privacy Policy <ChevronRight size={17} />

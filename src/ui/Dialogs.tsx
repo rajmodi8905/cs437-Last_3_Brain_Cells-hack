@@ -33,8 +33,8 @@ export function Dialogs({ model }: { model: CampusRecallModel }) {
             </p>
             <div className="intro-detail">
               <span>
-                No account or cloud inference. Model downloads and explicit website requests need
-                internet.
+                Local only needs no account. Optional Auto-sync uses your IITGN account and stores
+                included content on Azure. Processing and search run on your device.
               </span>
             </div>
             <div className="intro-detail">

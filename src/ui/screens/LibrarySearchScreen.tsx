@@ -2,6 +2,7 @@ import { ArrowUpRight, ChevronRight, LoaderCircle } from 'lucide-react';
 import type { CampusRecallModel } from '../../app/useCampusRecall';
 import { kinds, kindLabels } from '../presentation';
 import { ItemRow } from '../ItemRow';
+import { CloudResultRow } from '../../../pilot/ui/CloudResultRow';
 export function LibrarySearchScreen({ model }: { model: CampusRecallModel }) {
   const {
     screen,
@@ -41,7 +42,7 @@ export function LibrarySearchScreen({ model }: { model: CampusRecallModel }) {
       {!ready && (
         <div className="setup-banner">
           <div>
-            <strong>Your files stay here. Search runs here, too.</strong>
+            <strong>Processing and search run on this device.</strong>
             <p>Set up the local models once to search by meaning, images and speech.</p>
           </div>
           <a href="#/settings" className="text-link">
@@ -107,7 +108,9 @@ export function LibrarySearchScreen({ model }: { model: CampusRecallModel }) {
               <a className="button primary" href="#/add">
                 Add your first item
               </a>
-              <span className="small muted">No account. A separate library on each device.</span>
+              <span className="small muted">
+                Local only needs no account. Auto-sync is optional.
+              </span>
             </div>
           )}
           <div className="library-footer">
@@ -138,8 +141,15 @@ export function LibrarySearchScreen({ model }: { model: CampusRecallModel }) {
                 <div className="item-list">
                   {results.map((result) => {
                     const found = items.find((i) => i.id === result.itemId);
-                    return found ? (
-                      <ItemRow key={found.id} value={found} result={result} model={model} />
+                    if (found)
+                      return <ItemRow key={found.id} value={found} result={result} model={model} />;
+                    // Pilot: items saved on another device, found through their synced index.
+                    return result.itemId.startsWith('cloud:') ? (
+                      <CloudResultRow
+                        key={result.segmentId}
+                        result={result}
+                        services={model.services}
+                      />
                     ) : null;
                   })}
                 </div>

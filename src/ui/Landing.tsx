@@ -7,14 +7,17 @@ const formats: [string, string][] = [
   ['Video', 'H.264 MP4 / 2 min / 100 MB'],
 ];
 const claims: [string, string][] = [
-  ['No account', 'There is nothing to sign up for. Each device keeps its own separate library.'],
+  [
+    'Local only by default',
+    'Save and search without an account. Optional Auto-sync uses your IITGN Google account after you choose to include a library.',
+  ],
   [
     'Search runs locally',
     'A one-time setup of about 445 MB downloads the models. After that, processing and search happen on this device.',
   ],
   [
-    'Few network requests',
-    'Only the model download, the app itself and webpages you ask it to capture use the network.',
+    'You choose what syncs',
+    'Local only keeps your library in this browser. Auto-sync sends included originals, extracted content and embeddings to private Azure storage. Search queries stay on your device.',
   ],
   [
     'You hold the backup',
@@ -324,7 +327,9 @@ export function Landing() {
                   See how it works
                 </a>
               </div>
-              <p className="note">No account. No cloud inference. Works offline after one setup.</p>
+              <p className="note">
+                Local only without an account. Optional Auto-sync. No cloud inference.
+              </p>
             </div>
             <SearchDemo />
           </div>
@@ -389,7 +394,7 @@ export function Landing() {
               <span id="lp-d-h">On your device</span>
               <span>Privacy by design</span>
             </div>
-            <h2 className="huge rv">Your library never leaves your browser.</h2>
+            <h2 className="huge rv">Local first. Sync when you choose.</h2>
             <div className="claims">
               {claims.map(([title, text], i) => (
                 <div className="rv" key={title} style={{ '--d': i % 2 } as React.CSSProperties}>

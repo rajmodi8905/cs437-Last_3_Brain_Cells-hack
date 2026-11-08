@@ -1,5 +1,5 @@
-import privacy from '../../docs/product/privacy-policy.md?raw';
-import terms from '../../docs/product/terms-and-conditions.md?raw';
+import privacy from '../../docs/pilot/privacy-policy.md?raw';
+import terms from '../../docs/pilot/terms-and-conditions.md?raw';
 // Markdown is rendered as React text nodes. Imported HTML is never executed.
 export function Policy({ kind }: { kind: 'privacy' | 'terms' }) {
   const content = kind === 'privacy' ? privacy : terms;
