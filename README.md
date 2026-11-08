@@ -1,193 +1,152 @@
 # Campus Recall
 
-A free personal library for screenshots, PDFs, notes, webpages and short recordings. Save an original, describe what you remember, and open the matching file, PDF page or media interval. Processing and search run on your device. Local only needs no account; this separate pilot branch also offers optional Google sign-in and private Azure Auto-sync. There are no cloud inference calls, generated answers or personal inference API keys.
+**Find what you saved, from what you remember.**
 
-**Auto-sync pilot, 6 November 2026:** The [Azure deployment](https://campusrecall.indiasouthcentral.cloudapp.azure.com) is live. Google sign-in with the owner’s IITGN account, hosted storage/recovery and browser PWA checks passed; see the [release record](docs/pilot/2026-11-06-release.md). The export deadline and compute cutoff are **6 December 2026 at 17:47 IST (12:17 UTC)**. Export cloud originals through Settings before then. See the [pilot specification](docs/pilot/SPEC.md), [deployment runbook](docs/pilot/deployment.md), [privacy policy](docs/pilot/privacy-policy.md) and [terms](docs/pilot/terms-and-conditions.md). The completed local-only submission, root S1–S15 specification and historical evidence remain a separate baseline. [7 November phone/publication checkpoint](docs/pilot/2026-11-07-phone-check.md).
-
-
+Campus Recall turns your screenshots, PDFs, notes, saved webpages and short recordings into a personal library you can search by meaning. Find a matching original, jump to the right PDF page or media interval, and keep processing on your own device.
 
 https://github.com/user-attachments/assets/2947f113-1e72-4074-8d47-2b43daa21dfe
 
+[Try Campus Recall](https://campusrecall.indiasouthcentral.cloudapp.azure.com) · [Install on your phone](#use-on-your-phone) · [Run locally](#run-locally)
 
+- **Save the original.** Keep supported files and notes together, with a visible save confirmation and recent-saves library.
+- **Search from memory.** Describe the topic or visual appearance; results lead back to the saved source.
+- **Work offline.** After the one-time search setup, processing and retrieval run locally without inference API keys.
+- **Choose how to store it.** Local only needs no account. Optional IITGN Google sign-in enables account Auto-sync through Azure.
 
-Built by Raj Modi, Chaitanya and Nakshatra for CS437 at IIT Gandhinagar. A student project, not an official IITGN service. Interview evidence and testable requirements are in [SPEC.md](SPEC.md).
+Built by **Raj Modi, Chaitanya and Nakshatra**. A student project, not an official IIT Gandhinagar service. The hosted pilot runs until **6 December 2026, 17:47 IST**; export cloud originals before then.
 
-For reviewers: [run locally](#run-locally) with `npm run dev` after installation; [run the full suite](#test) with `npm test` after its one-time browser/model/build setup. See [completed S1–S15 verification](docs/verification/README.md), [dependency validation](docs/verification/2026-11-02-dependency-remediation.md) and [AI-use notes](docs/ai-use.md).
+---
 
-## Implementation and verification: complete
+## Course requirements and reproducibility
 
-All fifteen specification statements, S1–S15, are implemented and their acceptance checks pass. The required `npm test` suite passes without failures or skips. Policy/source fact review, dependency remediation, root/subdirectory builds and local offline verification are complete. **Deployment is the remaining release phase.**
+Developed for the **CS437 Vibe Coding Hackathon, IIT Gandhinagar, 2026–27 Semester 1**. The [course rules](https://anup.github.io/courses/cs437-2026-27-sem1/hackathon/) require a named real user, a testable specification, reviewed contributions and reproducible run/test commands.
 
-| Verification | Recorded result |
-| --- | --- |
-| Specification acceptance | S1–S15 passed; [statement-by-statement evidence](docs/verification/README.md#specification-results) |
-| Fast tests | 90 passed across 20 files |
-| Production Chromium tests | 27 passed |
-| Actual-model acceptance | 11 passed |
-| TypeScript, ESLint, product checks and formatting | Passed |
-| Full and production-only dependency audits | Zero findings |
-| Root and repository-subdirectory artifacts | Passed; output unchanged by dependency remediation |
-| Offline processing, retrieval, saved originals and policy routes | Passed |
-| Policy/source fact review | Complete under Raj's delegated technical review |
+| Requirement                                 | Project evidence                                                                                                                                                                                           |
+| ------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Real users and interview-based requirements | [SPEC.md](SPEC.md), [Suhani's interview](docs/user/U01.md), [Bhavya's interview](docs/user/U02.md)                                                                                                         |
+| Independently testable behavior             | Frozen local-only **S1–S15** specification and [test coverage registry](tests/spec/coverage.json)                                                                                                          |
+| One command to run, one to test             | Docker commands below; no host Node/npm or cloud credentials needed                                                                                                                                        |
+| Reviewed integration                        | [Original integration PR #6](https://github.com/rajmodi8905/cs437-Last_3_Brain_Cells-hack/pull/6), [pilot PR #35](https://github.com/rajmodi8905/cs437-Last_3_Brain_Cells-hack/pull/35), merged 8 November |
+| Recorded AI assistance                      | [Project AI-use notes](docs/ai-use.md); members also keep their course lab notes                                                                                                                           |
+| Deployed usability and user evidence        | [Azure release](docs/pilot/2026-11-06-release.md), [owner phone report and limits](docs/pilot/2026-11-07-phone-check.md)                                                                                   |
 
-[PR #26 CI run 41529035494](https://github.com/rajmodi8905/cs437-Last_3_Brain_Cells-hack/actions/runs/41529035494) passed at `5420b374785b3cf7418372dbd2495178db5fce4e`. Its application baseline includes merged PRs [#24](https://github.com/rajmodi8905/cs437-Last_3_Brain_Cells-hack/pull/24) and [#25](https://github.com/rajmodi8905/cs437-Last_3_Brain_Cells-hack/pull/25). The [dependency summary](docs/verification/2026-11-02-dependency-summary.json) records the tested input fingerprint and artifact hashes. Dated reports retain their execution dates and source identities.
+The optional account-sync extension has its own [P01–P15 pilot specification](docs/pilot/SPEC.md). The original coursework specification, model pins, fixtures and acceptance assertions retain their scope. Local development identities and automated browser tests do not count as real Google sign-ins or outside-group users.
 
-### Device and transfer evidence
+### Run locally
 
-| Device or flow | Recorded evidence |
-| --- | --- |
-| iPhone 17, iOS 27.0.1 | Measured Safari processing/original/offline checks and owner-confirmed installed-app playback, seeking, keyboard, rotation and zoom. [Measured session](docs/verification/2026-10-28-device-preparation.md); [installed-app follow-up](docs/verification/2026-10-29-release-preparation.md#physical-installed-iphone-app-owner-confirmed-checks). |
-| iQOO Neo9 Pro / I2304, Android 16, Chrome 156.0.8078.49 | Owner-confirmed setup, note/PDF retrieval and page mapping, negative rejection, images/media, playback/seeking, installed controls and offline fresh processing. Each agreed small image/PDF fixture was reported under 120 seconds. |
-| Library transfer, S6 | Automated byte/hash/metadata round trips and export/restore into an independent browser profile passed. |
+**Prerequisites:** Git and a running Docker Desktop, or Docker Engine with Compose v2.24 or newer. Initial builds need internet access and several GB of free disk space. The full test command additionally needs **10 GB allocated to Docker**; this is a test-browser requirement, not a phone/PWA requirement.
 
-Device reports preserve measured versus owner-confirmed evidence and their original build identities. The Android offline round followed removal of the USB network route and owner-controlled disabling of Wi-Fi/mobile data. Retrieval tests use a consumed synthetic regression corpus; their results are not a general accuracy estimate. The local deepmerge security fork is documented and regression-tested; its source review supplies evidence beyond the package audit.
-
-## Deployment: remaining release phase
-
-The separate Auto-sync pilot is live on Azure. Real Google sign-in with the owner’s IITGN account and the hosted storage/recovery/PWA checks are recorded in the [6 November release](docs/pilot/2026-11-06-release.md). Physical-device pilot installation and outside-group usage are not claimed. Its [deployment runbook](docs/pilot/deployment.md) covers the API, durable storage, backups and compute cutoff. The [original static release runbook](docs/implementation/deployment.md) and verification below describe the preserved local-only baseline. No outside-group user count or physical-device pilot result is claimed.
-
-## Course check-in: 3 November 2026
-
-References: [hackathon rules and dates](https://anup.github.io/courses/cs437-2026-27-sem1/hackathon/), [Class 15 user/specification instructions](https://anup.github.io/courses/cs437-2026-27-sem1/classes/class-15/) and [Class 19 deployment/usability instructions](https://anup.github.io/courses/cs437-2026-27-sem1/classes/class-19/).
-
-- **Specification:** S1–S15 implementation and acceptance verification are complete. The current release phase is deployment, as described above.
-- **Member work merged since 26 October:** Raj's [PR #25](https://github.com/rajmodi8905/cs437-Last_3_Brain_Cells-hack/pull/25) (1 November), Chaitanya's [PR #19](https://github.com/rajmodi8905/cs437-Last_3_Brain_Cells-hack/pull/19) (29 October) and Nakshatra's [PR #24](https://github.com/rajmodi8905/cs437-Last_3_Brain_Cells-hack/pull/24) (31 October).
-- **Repository process:** both instructors are collaborators. The active `main` ruleset requires a PR and two approving reviews and blocks deletion/force pushes. These settings were checked on 3 November. Review/merge follows that process.
-- **AI records:** each member records tool use and their work in `lab-notes/class-NN.md` in their own course repository. This project's [AI-use summary](docs/ai-use.md) provides the project-level record.
-
-| Course calendar | Activity |
-| --- | --- |
-| 3 November | Completed S1–S15 acceptance baseline and specification checkpoint |
-| 2–10 November | Cross-group PR reviews and improvements, with actual review links and regression evidence |
-| 16 November | External unseen feature request: extend `SPEC.md`, write tests, implement, then run acceptance |
-| 17 November | Demonstrate the real user workflow and accepted change |
-
-Later course exercises describe future requests and review activity, not unfinished v1 specification items. The [October milestone audit](docs/verification/milestones-2026-10.md) preserves the original checkpoint history.
-
-## Run locally
-
-Use Node 24 and npm. The lockfile pins dependencies. Start from a fresh clone:
+Clone once:
 
 ```bash
 git clone https://github.com/rajmodi8905/cs437-Last_3_Brain_Cells-hack.git
 cd cs437-Last_3_Brain_Cells-hack
-node --version  # v24.x
 ```
 
-If using nvm, `nvm install` followed by `nvm use` reads the pinned `.nvmrc`. Then install and run:
+**One command to run:**
 
 ```bash
-npm ci
-npm run dev
+docker compose up --build --wait
 ```
 
-Open the localhost URL printed by Vite. Save files immediately, even before model setup. In Settings, choose **Download offline search**. The app displays the manifest's actual size and progress, verifies SHA-256 hashes, and then processes queued items. Keep the app open while processing. Completed downloads are reused after interruption; an incomplete current asset downloads again.
+Open **http://localhost:4600**. Docker builds the app and starts its API, PostgreSQL database and Azurite storage emulator. No `.env`, Azure account, Google secret or domain configuration is required.
 
-Initial setup needs about 445 MB plus application files. Allow additional browser storage for originals, extracted data and inference memory. No model weights are checked into Git. `predev` and `prebuild` copy local runtimes from installed packages and generate the asset manifest. Pinned public model metadata is in `scripts/model-assets.json`.
+For a quick check:
 
-## Build and preview the PWA
+1. Save a note or supported file in the local library; reopen its original.
+2. For semantic search, choose **Settings → Download offline search** and finish the accepted one-time download (about 445 MB per browser). Keep the app open while processing.
+3. To try sync, choose **Set up Auto-sync**, use a synthetic address such as `checker@iitgn.ac.in` under **Sign in (development)**, then **Include this device's library**.
+4. Open a second browser profile and use the same development address to check shared files, or another address to check isolation.
+
+This local stack is bound to `127.0.0.1` and uses development authentication. It does not contact or change the deployed Azure pilot. Real Google sign-in, HTTPS and managed-identity storage are configured separately through the [production deployment runbook](docs/pilot/deployment.md).
+
+Stop with `docker compose down`. Named volumes preserve server data and the signing key for the next start. A deliberate `docker compose down --volumes` resets the checker server and test-model cache; it does not clear a browser's local library. If port 4600 is busy, use `CAMPUS_RECALL_PORT=4601 docker compose up --build --wait` and open http://localhost:4601. Inspect startup failures with `docker compose logs`.
+
+### Test
+
+**One command to test:**
 
 ```bash
-npm run build
-npm run preview
+./test.sh
 ```
 
-For artifact validation, the prepared manual release workflow, hosting facts and rollback steps, see [deployment preparation](docs/implementation/deployment.md). No publication is performed automatically.
+Run this from the clone; starting the app first is unnecessary. Use a POSIX shell on macOS/Linux, or Git Bash/WSL on Windows. Docker Desktop users should allocate **10 GB of memory** under **Settings → Resources** before the full test run. The script checks this requirement and gives a clear error if it is unmet. Chromium's isolated test profiles need enough storage budget to cache the unchanged model assets; no storage-quota bypass is enabled.
 
-The static output is `dist/`. Serve it over HTTPS for installation and secure browser capabilities. Localhost works for desktop development; an ordinary HTTP LAN address is insufficient for phone PWA/WebGPU testing. No deployment is performed by these commands.
+The command builds the test image, installs Chromium and its Linux dependencies, downloads and verifies the pinned models, and runs:
 
-For a subdirectory deployment, set the complete base path at build time:
+- TypeScript, ESLint, formatting and specification mapping checks.
+- The existing **`npm test`** suites: fast, production browser and real-model acceptance.
+- All pilot unit/storage tests against real local PostgreSQL and Azurite.
+- Pilot browser flows and real-model cross-device retrieval.
+- Production artifact validation.
 
-```bash
-APP_BASE=/campus-recall/ npm run build
-```
+Failures exit nonzero; skipped or flaky suite results are rejected. Repeated runs reuse the model download cache. Reports, screenshots, earlier-run history and a source snapshot manifest go to ignored **`test-evidence/docker/`**. The wrapper supplies only the clone's actual shallow HEAD metadata and a fresh index to existing provenance checks; it excludes personal Git configuration, hooks and earlier history. Modified container files remain recorded as dirty. CI retains the existing commit-specific S1–S15 gate.
 
-Routes use hashes, such as `#/library`, `#/settings`, `#/privacy` and `#/terms`. Install using Chrome's app menu, or Safari's Share menu and Add to Home Screen. Cache the production app by opening it online once, finish model setup, then test an offline reopen. Updates show a reload notification; finish processing and back up first.
+The wrapper needs no host Node, browser installation or Docker socket. Stop its database/emulator afterward with `docker compose down`.
 
-## Supported inputs
+### Recorded verification
 
-| Type | Limit | Indexed content |
-| --- | --- | --- |
-| JPEG / PNG / WebP | 20 MB | OCR text and visual embedding |
-| Unencrypted PDF | 20 MB, 50 pages | Page text or scanned-page OCR |
-| Note | 20,000 Unicode characters | Saved text |
-| Public webpage | 20,000 extracted characters | Captured or pasted plain text |
-| MP3 / WAV / M4A | 50 MB, five minutes | English speech with timestamps |
-| H.264 MP4, optional AAC | 100 MB, two minutes | English speech and a visual frame every five seconds |
+The [8 November Docker checker run](docs/verification/2026-11-08-checker.md) passed on Linux ARM64 in Docker Desktop, with **zero skips and flaky retries**:
 
-Convert HEIC, HEVC and MOV before importing. A failed extraction preserves the original and exposes Retry. A blocked webpage capture offers pasted text or inert HTML/PDF import; there is no proxy. No-result search does not mean the item was never saved. Video search cannot cover every brief frame. Results are sources and extracted excerpts, not generated factual answers or confidence percentages.
+| Suite                                | Passed |
+| ------------------------------------ | -----: |
+| Root fast tests                      |    107 |
+| Root Chromium browser tests          |     37 |
+| Root actual-model acceptance         |     11 |
+| Pilot unit/storage tests             |    216 |
+| Pilot Chromium browser tests         |     13 |
+| Pilot actual-model cross-device test |      1 |
+
+The [main CI run at `1fb5013`](https://github.com/rajmodi8905/cs437-Last_3_Brain_Cells-hack/actions/runs/42453897034) also passed all five jobs after PR #35 merged. The new checker work's local test results are identified separately from that earlier CI revision.
+
+The [verification index](docs/verification/README.md) retains the original S1–S15, dependency and device evidence. The [7 November phone checkpoint](docs/pilot/2026-11-07-phone-check.md) labels the owner's report separately from instrumented observations. Full installed-phone pilot checks, a second genuine IITGN account and outside-group usage still need specific evidence. Retrieval fixtures are consumed regression data, not a general accuracy estimate.
+
+## Use on your phone
+
+Open the [live app](https://campusrecall.indiasouthcentral.cloudapp.azure.com), then install it from the browser:
+
+- **iPhone:** Safari → Share → Add to Home Screen → enable **Open as Web App** if shown → Add. [Apple's instructions](https://support.apple.com/guide/iphone/open-as-web-app-iphea86e5236/ios).
+- **Android:** Chrome → three-dot menu → Install app, or Install and create shortcut → Install. [Google's instructions](https://support.google.com/chrome/answer/9658361?co=GENIE.Platform%3DAndroid&hl=en).
+
+Open the installed icon before setup, then choose **Download offline search** in Settings. Saving and viewing originals work before setup. Optional sync requires IITGN Google sign-in and explicit inclusion of each device's library.
+
+Saved originals and completed model downloads normally survive reopening the same installed app. Interrupted processing may restart; complete setup files are reused, while an incomplete file downloads again. Processing and sync make progress while the app is open. Browser storage is best-effort: keep important originals backed up and confirm uploads show as synced.
+
+## Supported content
+
+| Input                       | Limit                       | Searchable content                                   |
+| --------------------------- | --------------------------- | ---------------------------------------------------- |
+| JPEG / PNG / WebP           | 20 MB                       | OCR text and visual embedding                        |
+| Unencrypted PDF             | 20 MB, 50 pages             | Page text or scanned-page OCR                        |
+| Note                        | 20,000 Unicode characters   | Saved text                                           |
+| Public webpage              | 20,000 extracted characters | Captured or pasted plain text                        |
+| MP3 / WAV / M4A             | 50 MB, five minutes         | English speech with timestamps                       |
+| H.264 MP4 with optional AAC | 100 MB, two minutes         | English speech and a visual frame every five seconds |
+
+Convert HEIC, HEVC and MOV before import. Failed processing keeps the saved original and exposes Retry. Web capture offers pasted text or inert HTML/PDF when direct fetch is blocked. Results are original sources and extracted excerpts; no generated answers or confidence percentages are presented. A missing match does not prove the item was never saved.
 
 ## Storage and privacy
 
-Each browser/device has its own IndexedDB library and model cache. Core inference and search use cached assets and local similarity calculations. Explicit setup, webpage capture and opening external links require ordinary network requests. There is no analytics or advertising.
+Local only is the default. Each browser/device keeps its own IndexedDB library and cached models. After explicit setup, core extraction, embeddings and search stay local. Webpage capture, external links, sign-in and opted-in sync use the network.
 
-Browser persistence is best-effort. Clearing site data, browser eviction or device failure can remove the library. Export a manual ZIP in Settings, or export an individual source from its viewer. ZIPs contain originals, metadata and hashes, without embeddings or models; they are **unencrypted**. Restore validates before writing, identifies content duplicates and queues fresh items. Import is limited to a 250 MB ZIP, 500 MB unpacked and 500 items; export smaller selections for larger libraries.
+Auto-sync stores included originals, metadata and compatible search indexes in private Azure account storage. It is not end-to-end encrypted; authorized operators can access stored content. Browser clearing, storage eviction or device failure can remove local data. Export important originals through Settings; ZIP backups are unencrypted and omit models/embeddings.
 
-The app does not claim encryption at rest or control over browser/OS backups. Read the rendered [Privacy Policy](docs/product/privacy-policy.md) and [Terms](docs/product/terms-and-conditions.md), and review [third-party licenses](THIRD_PARTY_NOTICES.md).
+The hosted pilot's export deadline is **6 December 2026, 17:47 IST (12:17 UTC)**. Automatic VM deallocation stops compute; final storage/disk/IP cleanup follows the disclosed retention process. Read the [pilot Privacy Policy](docs/pilot/privacy-policy.md), [Terms](docs/pilot/terms-and-conditions.md) and [third-party notices](THIRD_PARTY_NOTICES.md).
 
-## Test
+## Developer guide
 
-Fast tests use actual storage logic, controlled vector arithmetic and inert HTML extraction. Full acceptance tests use the real pinned models, OCR, PDF and media runtimes. Missing model assets fail setup explicitly.
+The production server stack has three containers: the built PWA/Node API, PostgreSQL and Caddy for HTTPS. Private Azure Blob storage and Google OAuth are external services. AI inference runs in the user's browser. The root Compose file substitutes local Azurite and development identities for checking.
 
-```bash
-npm audit --audit-level=low
-npm run check
-npm run format:check
-npx playwright install chromium
-npm run models:download
-npm run build
-npm run spec:mapping
-npm test
-npm run spec:summary
-npm run release:check
-```
+| Area                                             | Location              |
+| ------------------------------------------------ | --------------------- |
+| Local library, originals and queue               | `src/storage/`        |
+| Extraction, local inference and ranking          | `src/engine/`         |
+| Application services and UI                      | `src/app/`, `src/ui/` |
+| Account sync, API, durable stores and deployment | `pilot/`              |
+| PWA caching                                      | `src/sw.ts`           |
 
-On Linux, install browser system dependencies with `npx playwright install --with-deps chromium` instead of the browser-only install command.
+For frontend-only development with **Node 24**, run `npm ci` and `npm run dev`. This does not start the account API. `npm run build` produces `dist/`; `npm run preview` serves it locally. A subdirectory build uses `APP_BASE=/campus-recall/ npm run build`.
 
-`npm run models:download` first generates its manifest/runtime files, so it also works directly after a fresh `npm ci` without a previous dev server or build. It then verifies public assets into ignored `.models/` for reproducible testing. A localhost test-only server streams those checksum-addressed public files; it is not part of the app and receives no library data. Full tests redirect only setup downloads to this mirror, then reject unexpected external requests.
+Native test entrypoints remain `npm test`, `npm run test:pilot:storage` (requires Docker), `npm run test:pilot:e2e` and `npm run test:pilot:models`. Native browser/model runs need the existing Chromium install, `npm run models:download` and production build; `./test.sh` automates those prerequisites.
 
-```bash
-npm run test:browser       # production UI, responsive layouts and offline shell
-npm run test:acceptance    # actual extraction and retrieval
-```
-
-The required browser suite uses Playwright Chromium. Additional engine diagnostics and shipping-Safari comparisons are retained in the [dated engineering report](docs/verification/2026-10-29-release-preparation.md). Physical-device evidence is listed above. Each suite writes its own reports to ignored `test-evidence/<suite>/`: runner JSON results, a `run.json` with the tested commit and exit code, and, for browser and acceptance, a separate HTML report with failure screenshots and traces. A later run moves the earlier evidence to `test-evidence/history/` instead of overwriting it. `npm run spec:summary` turns that evidence into the S1–S15 table; see [test evidence and the S1–S15 gate](docs/implementation/test-evidence.md). Synthetic fixtures and calibration methodology are documented in [acceptance design](docs/implementation/acceptance.md).
-
-Fixture regeneration needs macOS `say`, local ffmpeg and npm dependencies:
-
-```bash
-node scripts/create-fixtures.mjs
-```
-
-## Statement coverage and milestone evidence
-
-All fifteen statements map to exact test identities (suite, file and title) in [the coverage registry](tests/spec/coverage.json). `npm run check` validates the registry contract, `npm run spec:mapping` rejects titles that no longer exist, and `npm run spec:summary` passes a statement only when its mapped tests actually ran and passed. Registry completeness alone is not a test pass. The current local, CI and device results are above; [the verification index](docs/verification/README.md) is the current S1–S15 status reference. See [the October milestone audit](docs/verification/milestones-2026-10.md) for historical checkpoint evidence and late earlier milestones. Older reports retain their original dates and builds rather than representing current status.
-
-## Reusable regression tools
-
-Follow [Nakshatra's quickstart](docs/implementation/nakshatra-quickstart.md) to prepare a production preview, an importable synthetic 30-item library, exact-source expectations, malformed inputs and an empty run ledger. `npm run qa:prepare` writes only to a new ignored `.cache/qa-kit/` directory and never overwrites an earlier run. No model download is needed to prepare the kit. Optional `npm run qa:https` uses user-supplied local certificate files for a phone session; it does not deploy a site or configure device trust. The quickstart links both testers' prompts and the GitHub bug-report form.
-
-[Chaitanya's quickstart](docs/implementation/chaitanya-quickstart.md) adds UI boundary/source-content fixtures, a C1–C15 run ledger and `npm run qa:webpages` for deterministic desktop capture/truncation/blocked-fetch tests. The helper is loopback-only, synthetic and separate from the deployed application.
-
-For the physical-phone session, follow [device preparation](docs/implementation/device-session.md). `qa:device:prepare` builds an isolated identified snapshot and public synthetic downloads under ignored `.cache/`; `qa:device:serve` verifies it before serving local HTTPS. Temporary certificate trust and physical tests require device-owner action and are never performed automatically.
-
-The [Android validation runbook](docs/implementation/android-validation.md) covers Chrome and installed-app setup, fixture timings, exact originals, offline operation and manual transfer. The completed 2 November owner-reported round is summarized above. This runbook documents how to reproduce a device session. When a USB development route is used, remove it as well as disabling phone networking before testing offline behavior.
-
-## Architecture
-
-- `src/shared/`: published contracts and limits from Nakshatra.
-- `src/storage/`: Dexie originals, metadata, atomic queue claims and ZIP transfer.
-- `src/engine/`: extraction, asset integrity, local worker inference and ranking.
-- `src/app/`: injected application services, headless React controller, worker bridge and fallback lifecycle.
-- `src/ui/`: replaceable shell, screens, rows, dialogs, exact-source viewers and policy pages; theme and feature styles are separate.
-- `src/sw.ts`: app-shell precache and explicit-setup runtime cache.
-
-The views receive service contracts instead of accessing database tables or model implementations. See [architecture and frontend replacement](docs/architecture.md) for module boundaries, local APIs, network requests and the redesign checklist.
-
-EmbeddingGemma 2 q4 text and vision share normalized 768-dimensional vectors. Whisper tiny.en transcribes speech separately. WASM uses a standard-operator lowering of the model's packed q4 embedding lookup because the distributed ORT WASM runtime lacks that kernel. The pinned weights and precision remain unchanged. See [retrieval notes](docs/verification/retrieval.md) for equivalence checks, prefixes, calibration and frozen versions.
-
-## Team workflow
-
-The [release implementation plan](docs/implementation/release-plan.md) records the earlier responsibility split and release gates. Later authorized teammate fix PRs, including Chaitanya's PR #19 and Nakshatra's PR #24, supersede its historical tester-only assignment for that work. The 2 November local readiness plan is complete within its documented scope. Deployment is the release phase described above. Course peer reviews and future enhancement work continue through independently reviewed PRs. Tester prompts and the repository bug-report form remain in [team instructions](docs/implementation/README.md).
-
-The original integration reached `main` through reviewed [PR #6](https://github.com/rajmodi8905/cs437-Last_3_Brain_Cells-hack/pull/6); the current merged fixes are summarized above. Readiness documentation and dependency remediation use `raj_all_fixes`; preserve historical `Raj_setup` and `raj_final` branches. Every main change requires a reviewed PR and the configured two human approvals. Ask before staging/committing unless the current request explicitly authorizes that particular checkpoint; pushes, PRs and merges require the applicable authorization. Keep private handovers, device certificates, generated sessions and unrelated drafts out of public changes. See [implementation instructions](docs/implementation/README.md) and [AI-assisted development notes](docs/ai-use.md).
+Further documentation: [architecture](docs/architecture.md), [pilot protocol](docs/pilot/protocol.md), [deployment](docs/pilot/deployment.md), [test evidence](docs/implementation/test-evidence.md), [team workflow](docs/implementation/README.md), [physical-device preparation](docs/implementation/device-session.md) and [milestone history](docs/verification/milestones-2026-10.md). Changes reach `main` through reviewed pull requests; preserve frozen assertions and record material assistance in [AI-use notes](docs/ai-use.md).
