@@ -8,3 +8,5 @@ public/asset-manifest.json
 playwright-report/
 test-results/
 test-evidence/
+.env
+.env.*

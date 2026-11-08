@@ -1,0 +1,99 @@
+# Local checker/development stack. Production uses pilot/deploy/compose.yaml.
+name: campus-recall-checker
+
+x-blob: &blob >-
+  DefaultEndpointsProtocol=http;AccountName=devstoreaccount1;AccountKey=Eby8vdM02xNOcqFlqUwJPLlmEtlCDXJ1OUzFT50uSRZ6IFsuFq2UVErCz4I6tq/K1SZFPTOtr/KBHBeksoGMGw==;BlobEndpoint=http://azurite:10000/devstoreaccount1;
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: pilot/deploy/Dockerfile
+      target: checker
+    init: true
+    ports: ['127.0.0.1:${CAMPUS_RECALL_PORT:-4600}:4600']
+    environment:
+      PILOT_ORIGIN: http://localhost:${CAMPUS_RECALL_PORT:-4600}
+      PILOT_DATABASE_URL: postgres://pilot:local-checker-only@postgres:5432/pilot
+      PILOT_BLOB_CONNECTION_STRING: *blob
+    volumes:
+      - checker-key:/app/checker-state
+    depends_on:
+      postgres:
+        condition: service_healthy
+      azurite:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          CMD,
+          node,
+          -e,
+          "fetch('http://127.0.0.1:4600/api/v1/config').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))",
+        ]
+      interval: 5s
+      timeout: 5s
+      start_period: 30s
+      retries: 30
+
+  postgres:
+    image: postgres:17.11-alpine@sha256:3540c0362c809df084ffac0ae69fe794515f9de92692f02178bcdce0ef0302ac
+    environment:
+      POSTGRES_DB: pilot
+      POSTGRES_USER: pilot
+      # Deliberately public local-emulator credential, never a production password.
+      POSTGRES_PASSWORD: local-checker-only
+    volumes:
+      - checker-postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: [CMD-SHELL, 'pg_isready -U pilot -d pilot']
+      interval: 3s
+      timeout: 5s
+      retries: 30
+
+  azurite:
+    image: mcr.microsoft.com/azure-storage/azurite:3.35.0
+    command: azurite-blob --blobHost 0.0.0.0 --location /data --skipApiVersionCheck --loose
+    volumes:
+      - checker-blobs:/data
+    healthcheck:
+      # An unauthenticated response still proves the emulator is listening.
+      test:
+        [
+          CMD,
+          node,
+          -e,
+          "fetch('http://127.0.0.1:10000/devstoreaccount1?comp=list').then(()=>process.exit(0)).catch(()=>process.exit(1))",
+        ]
+      interval: 3s
+      timeout: 5s
+      retries: 30
+
+  tests:
+    profiles: [test]
+    build:
+      context: .
+      dockerfile: pilot/deploy/Dockerfile
+      target: checker-tests
+    init: true
+    shm_size: 1gb
+    environment:
+      PILOT_TEST_DATABASE_URL: postgres://pilot:local-checker-only@postgres:5432/pilot
+      PILOT_TEST_BLOB_CONNECTION: *blob
+      CR_EVIDENCE_DIR: /evidence/root
+      CR_PILOT_MODEL_EVIDENCE_DIR: /evidence/pilot-model
+      PILOT_QA_DIR: /evidence/pilot-browser/screenshots
+    volumes:
+      - checker-models:/build/.models
+      - ./test-evidence/docker:/evidence
+    depends_on:
+      postgres:
+        condition: service_healthy
+      azurite:
+        condition: service_healthy
+
+volumes:
+  checker-key:
+  checker-postgres:
+  checker-blobs:
+  checker-models:

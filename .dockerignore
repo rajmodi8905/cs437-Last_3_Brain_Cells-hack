@@ -6,6 +6,16 @@
 !tsconfig.*.json
 !vite.config.ts
 !index.html
+!SPEC.md
+!eslint.config.js
+!playwright*.ts
+!.gitignore
+!.prettierrc.json
+!.cache/checker-git/HEAD
+!.cache/checker-git/index
+!.cache/checker-git/shallow
+!.cache/checker-git/objects/**
+!docs/verification/retrieval-freeze.json
 !src/**
 !public/**
 !scripts/**
