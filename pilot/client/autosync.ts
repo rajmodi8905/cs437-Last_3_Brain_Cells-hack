@@ -77,6 +77,8 @@ const LAST_ACCOUNT_KEY = 'pilot-last-account';
 const SIGN_OUT_PENDING_KEY = 'pilot-sign-out-pending';
 const SIGN_OUT_PENDING_MESSAGE =
   'Could not reach the sync service to sign out, so this device may still be signed in. Connect to the internet and sign out again.';
+const SIGN_OUT_PENDING_REMOVED_MESSAGE =
+  'Synced copies were removed from this device, but the sync service could not be reached to sign out, so this device may still be signed in. Connect to the internet and sign out again.';
 
 export class AutoSyncController {
   private api: ApiClient;
@@ -155,8 +157,8 @@ export class AutoSyncController {
     try {
       const config = await this.api.config();
       this.set({ signInMode: config.signIn, googleReady: config.signIn === 'google' });
-    } catch {
-      await this.openOffline();
+    } catch (cause) {
+      await this.unreachable(cause);
       return;
     }
     if (this.view.signOutPending && !(await this.finishSignOut())) {
@@ -166,12 +168,27 @@ export class AutoSyncController {
     let session: SessionInfo | undefined;
     try {
       session = await this.api.restoreSession();
-    } catch {
-      await this.openOffline();
+    } catch (cause) {
+      await this.unreachable(cause);
       return;
     }
-    if (session) await this.attach(session);
-    else this.set({ status: 'signed-out' });
+    if (session) {
+      await this.attach(session);
+      return;
+    }
+    // The session ended on the server (expired or signed out elsewhere): stop showing this
+    // account's kept items to whoever opens the app offline next.
+    await this.services.preferences.set(LAST_ACCOUNT_KEY, undefined);
+    this.set({ status: 'signed-out' });
+  }
+
+  /**
+   * Only a request that never got an answer means the device is offline. A server that answers
+   * with an error is reachable but failing, so it is reported as unavailable, not offline.
+   */
+  private async unreachable(cause: unknown) {
+    if (cause instanceof ApiFailure) this.set({ status: 'unavailable' });
+    else await this.openOffline();
   }
 
   /**
@@ -412,7 +429,11 @@ export class AutoSyncController {
     if (removeLocalCopies) await state?.destroy();
     this.set({
       signOutPending: !ended,
-      error: ended ? undefined : SIGN_OUT_PENDING_MESSAGE,
+      error: ended
+        ? undefined
+        : removeLocalCopies
+          ? SIGN_OUT_PENDING_REMOVED_MESSAGE
+          : SIGN_OUT_PENDING_MESSAGE,
       status: 'local-only',
       email: undefined,
       opened: undefined,

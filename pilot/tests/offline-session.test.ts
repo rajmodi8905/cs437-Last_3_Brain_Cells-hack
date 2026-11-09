@@ -178,4 +178,56 @@ describe('P07 kept-offline originals after restarting without a network', () => 
     expect(restarted.getView().email).toBeUndefined();
     restarted.dispose();
   });
+
+  it('does not open an account whose session expired on the server, even offline', async () => {
+    const server = fakeServer(unique());
+    const controller = new AutoSyncController(services());
+    await controller.activate();
+    controller.dispose();
+
+    // The session lapses without a sign-out; the next online start learns that.
+    server.sessionLive = false;
+    const online = new AutoSyncController(services());
+    await online.start();
+    expect(online.getView().status).toBe('signed-out');
+    online.dispose();
+
+    server.online = false;
+    const offline = new AutoSyncController(services());
+    await offline.start();
+    expect(offline.getView().status).toBe('unavailable');
+    expect(offline.getView().email).toBeUndefined();
+    offline.dispose();
+  });
+
+  it('reports a server that answers with an error as unavailable, not offline', async () => {
+    fakeServer(unique());
+    const controller = new AutoSyncController(services());
+    await controller.activate();
+    controller.dispose();
+
+    vi.spyOn(globalThis, 'fetch').mockImplementation(
+      async () => new Response('Service Unavailable', { status: 503 }),
+    );
+    const restarted = new AutoSyncController(services());
+    await restarted.start();
+    expect(restarted.getView().status).toBe('unavailable');
+    expect(restarted.getView().email).toBeUndefined();
+    restarted.dispose();
+  });
+});
+
+describe('P12 sign-out that removes local copies without a network', () => {
+  it('says the copies were removed but the device may still be signed in', async () => {
+    const server = fakeServer(unique());
+    const controller = new AutoSyncController(services());
+    await controller.activate();
+    server.online = false;
+    await controller.signOut(true);
+    const view = controller.getView();
+    expect(view.signOutPending).toBe(true);
+    expect(view.error).toMatch(/copies were removed/i);
+    expect(view.error).toMatch(/may still be signed in/i);
+    controller.dispose();
+  });
 });

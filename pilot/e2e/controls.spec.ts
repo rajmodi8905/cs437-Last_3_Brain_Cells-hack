@@ -82,6 +82,7 @@ test('a kept-offline copy still opens after the app restarts without the network
   await laptop.route('**/api/v1/**', (route) => route.abort('internetdisconnected'));
   await laptop.reload();
   await laptop.goto('/#/settings');
+  await laptop.waitForLoadState();
   const sync = laptop.getByRole('region', { name: 'Auto-sync' });
   await expect(sync).toContainText('Offline');
   const kept = sync.getByRole('list', { name: 'Kept offline' });
