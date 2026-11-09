@@ -70,7 +70,9 @@ export function AutoSyncSection({
               ? 'Paused'
               : view.status === 'local-only'
                 ? 'Local only'
-                : 'Not syncing'}
+                : view.status === 'offline'
+                  ? 'Offline'
+                  : 'Not syncing'}
         </span>
       </div>
 
@@ -114,7 +116,68 @@ export function AutoSyncSection({
         <p>Local only. Your library stays on this device. Auto-sync is not available here.</p>
       )}
 
-      {(view.status === 'signed-out' || view.status === 'unavailable') && (
+      {view.status === 'offline' && (
+        <>
+          <p role="status">
+            Offline. The sync service cannot be reached. Items you kept offline for {view.email}{' '}
+            still open on this device.
+          </p>
+          {view.cloudOnly.some((item) => view.offlineIds.includes(item.globalId)) && (
+            <>
+              <h3 id="kept-offline-title">Kept offline</h3>
+              <ul className="cloud-library" aria-labelledby="kept-offline-title">
+                {view.cloudOnly
+                  .filter((item) => view.offlineIds.includes(item.globalId))
+                  .map((item) => (
+                    <li key={item.globalId}>
+                      <div className="cloud-item-copy">
+                        <strong className="cloud-item-title">{item.title}</strong>
+                        <span className="item-meta">
+                          {kindNames[item.kind ?? ''] ?? 'Item'} · {bytes(item.byteLength ?? 0)}
+                        </span>
+                      </div>
+                      <div className="cloud-item-actions">
+                        <button
+                          className="button secondary"
+                          aria-label={`Open ${item.title}`}
+                          onClick={() => {
+                            enterViewer();
+                            controller.open(item.globalId);
+                          }}
+                        >
+                          Open
+                        </button>
+                        <button
+                          className="button secondary"
+                          aria-label={`Download ${item.title}`}
+                          disabled={busy}
+                          onClick={act(async () => {
+                            const { blob, name } = await controller.download(item.globalId);
+                            downloadBlob(blob, name);
+                            notify('Download started. Check your downloads.');
+                          })}
+                        >
+                          Download
+                        </button>
+                      </div>
+                    </li>
+                  ))}
+              </ul>
+            </>
+          )}
+          <button
+            className="button secondary"
+            disabled={busy}
+            onClick={act(() => controller.activate())}
+          >
+            Try again
+          </button>
+        </>
+      )}
+
+      {(view.status === 'signed-out' ||
+        view.status === 'unavailable' ||
+        view.status === 'offline') && (
         <div className="sync-choice">
           <button
             className="button secondary"
@@ -125,9 +188,9 @@ export function AutoSyncSection({
             Use Local only
           </button>
           <p className="field-help" id="local-only-help">
-            {view.status === 'unavailable'
-              ? 'Keep everything on this device.'
-              : 'Keep everything on this device. You can turn on Auto-sync later.'}
+            {view.status === 'signed-out'
+              ? 'Keep everything on this device. You can turn on Auto-sync later.'
+              : 'Keep everything on this device.'}
           </p>
         </div>
       )}
@@ -434,6 +497,15 @@ export function AutoSyncSection({
         <p className="notice error" role="alert">
           {error}
         </p>
+      )}
+      {view.signOutPending && (
+        <button
+          className="button secondary"
+          disabled={busy}
+          onClick={act(() => controller.finishSignOut())}
+        >
+          Sign out again
+        </button>
       )}
     </section>
   );
