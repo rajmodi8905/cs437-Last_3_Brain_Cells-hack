@@ -1,10 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import {
-  CampusRecallDatabase,
-  DexieLibraryRepository,
-  planArchiveParts,
-} from '../../src/storage/index.js';
-import { ARCHIVE_LIMITS, LIMITS } from '../../src/shared/index.js';
+import { CampusRecallDatabase, DexieLibraryRepository } from '../../src/storage/index.js';
+import { ARCHIVE_LIMITS, LIMITS, planArchiveParts } from '../../src/shared/index.js';
+import { exportLibrary } from '../../src/app/backup.js';
 
 async function freshRepository() {
   const repository = new DexieLibraryRepository(
@@ -24,9 +21,8 @@ describe('Backup export stays within the import limits', () => {
     const count = ARCHIVE_LIMITS.maxItems + 1;
     for (let n = 0; n < count; n++)
       await repository.save({ kind: 'note', text: `Backup note number ${n}`, title: `Note ${n}` });
-    const ids = (await repository.listItems()).map((item) => item.id);
-
-    const archives = await repository.exportBackup(ids);
+    // Export all's own path: the app splits the library, then exports each part.
+    const archives = await exportLibrary(repository, await repository.listItems());
     expect(archives.length).toBeGreaterThan(1);
     const restored = await freshRepository();
     let imported = 0;

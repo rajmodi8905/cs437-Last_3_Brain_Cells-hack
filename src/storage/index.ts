@@ -4,6 +4,7 @@ import {
   AppOperationError,
   ARCHIVE_LIMITS,
   LIMITS,
+  planArchiveParts,
   SUPPORTED_MIME_TYPES,
   type AppError,
   type ImportReport,
@@ -268,28 +269,6 @@ function validateArchiveEntry(
       throw error('INVALID_ARCHIVE', 'Archive webpage URL is invalid.');
   }
   return candidate as ArchiveManifest['items'][number];
-}
-
-/** Groups items, in order, into the fewest parts that each fit one importable ZIP. */
-export function planArchiveParts<T extends { byteLength: number }>(items: T[]): T[][] {
-  const parts: T[][] = [];
-  let current: T[] = [];
-  let bytes = 0;
-  for (const item of items) {
-    if (
-      current.length &&
-      (current.length >= ARCHIVE_LIMITS.maxItems ||
-        bytes + item.byteLength > ARCHIVE_LIMITS.partBytes)
-    ) {
-      parts.push(current);
-      current = [];
-      bytes = 0;
-    }
-    current.push(item);
-    bytes += item.byteLength;
-  }
-  if (current.length) parts.push(current);
-  return parts;
 }
 
 const fitsOneArchive = (items: LibraryItem[]) => planArchiveParts(items).length <= 1;
@@ -661,13 +640,6 @@ export class DexieLibraryRepository implements ProcessingRepository {
         `One backup ZIP holds at most ${ARCHIVE_LIMITS.maxItems} items and ${ARCHIVE_LIMITS.partBytes / 1_000_000} MB. Use Export all, which splits a large library into several ZIPs.`,
       );
     return this.buildArchive(items);
-  }
-
-  async exportBackup(ids: string[]): Promise<Blob[]> {
-    const parts = planArchiveParts(await this.itemsForExport(ids));
-    const archives: Blob[] = [];
-    for (const part of parts) archives.push(await this.buildArchive(part));
-    return archives;
   }
 
   private async itemsForExport(ids: string[]): Promise<LibraryItem[]> {
