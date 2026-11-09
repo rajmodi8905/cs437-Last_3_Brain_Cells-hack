@@ -293,7 +293,10 @@ export class SyncEngine {
       } satisfies Partial<Mapping>);
       return;
     }
-    // Conflicts saved before this field existed: start watching from the current title.
+    // Conflicts saved before this field existed do not record which title caused them, so a
+    // current title cannot be told apart from a rename the user already made. Watch from it
+    // rather than send it: sending would silently overwrite the other device's title. Such a
+    // conflict clears on the next rename here, or when the other device's title is chosen.
     mapping.conflictLocalTitle ??= item.title;
     if (item.title === mapping.conflictLocalTitle || renameQueued) return;
     snapshot.ops.push({

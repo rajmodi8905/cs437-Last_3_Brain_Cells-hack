@@ -264,6 +264,33 @@ describe('P09 changes from other devices', () => {
     });
   });
 
+  it('never overwrites the other title for a conflict saved before the fix, and clears on a rename', async () => {
+    const { phone, id, globalId, other } = await syncedPhone();
+    await other.api.rename(globalId, {
+      opId: randomUUID(),
+      epoch: other.epoch,
+      expectedRevision: 1,
+      title: 'Renamed on laptop',
+    });
+    phone.library.setTitle(id, 'Renamed on phone');
+    expect((await phone.engine.runOnce()).conflicts).toBe(1);
+    // A conflict saved by the old engine does not record the title that caused it.
+    const saved = await phone.state.load();
+    delete saved.mappings.find((m) => m.localId === id)!.conflictLocalTitle;
+    await phone.state.save(saved);
+
+    phone.net.controls.log.length = 0;
+    await phone.engine.runOnce();
+    expect(writes(phone.net.controls.log)).toEqual([]);
+    expect((await phone.state.load()).mappings.find((m) => m.localId === id)?.state).toBe(
+      'conflict',
+    );
+
+    phone.library.setTitle(id, 'Final title');
+    expect(await phone.engine.runOnce()).toMatchObject({ renamed: 1, conflicts: 0, failed: 0 });
+    expect((await phone.state.load()).mappings.find((m) => m.localId === id)?.state).toBe('synced');
+  });
+
   it('removes the local copy when the document was deleted elsewhere', async () => {
     const { phone, id, globalId, other } = await syncedPhone();
     await other.api.remove(globalId, {
