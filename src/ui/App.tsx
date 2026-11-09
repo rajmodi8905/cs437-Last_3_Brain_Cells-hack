@@ -14,6 +14,10 @@ import { CloudViewer } from '../../pilot/ui/CloudViewer';
 const Policy = lazy(() => import('./Policy').then((m) => ({ default: m.Policy })));
 export function App({ services }: { services: CampusRecallServices }) {
   const model = useCampusRecall(services);
+  // A new screen starts at its heading instead of inheriting a long Settings scroll.
+  useEffect(() => {
+    window.scrollTo(0, 0);
+  }, [model.screen]);
   // Pilot Auto-sync runs app-wide once signed in and opted in.
   useEffect(() => {
     void getAutoSync(services).start();

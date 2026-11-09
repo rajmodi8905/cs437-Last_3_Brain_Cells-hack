@@ -211,63 +211,66 @@ export function AutoSyncSection({ services }: { services: CampusRecallServices }
           {view.cloudOnly.length > 0 && (
             <>
               <h3 id="cloud-library-title">In your cloud library</h3>
-              <ul className="selected-files" aria-labelledby="cloud-library-title">
+              <ul className="cloud-library" aria-labelledby="cloud-library-title">
                 {view.cloudOnly.map((item) => {
                   const kept = view.offlineIds.includes(item.globalId);
                   const deleting = confirming === `delete:${item.globalId}`;
                   return (
                     <li key={item.globalId}>
-                      <span>{kindNames[item.kind ?? ''] ?? 'Item'}</span>
-                      <span>{item.title}</span>
-                      <span className="muted">
-                        {bytes(item.byteLength ?? 0)}
-                        {kept ? ' · Kept offline' : ''}
-                      </span>
-                      <button
-                        className="button secondary"
-                        aria-label={`Open ${item.title}`}
-                        onClick={() => controller.open(item.globalId)}
-                      >
-                        Open
-                      </button>
-                      <button
-                        className="button secondary"
-                        aria-label={`Download ${item.title}`}
-                        disabled={busy}
-                        onClick={act(async () => {
-                          const { blob, name } = await controller.download(item.globalId);
-                          downloadBlob(blob, name);
-                        })}
-                      >
-                        Download
-                      </button>
-                      <button
-                        className="button secondary"
-                        aria-label={`${kept ? 'Remove download of' : 'Keep offline'} ${item.title}`}
-                        disabled={busy}
-                        onClick={act(() =>
-                          kept
-                            ? controller.removeDownload(item.globalId)
-                            : controller.keepOffline(item.globalId),
-                        )}
-                      >
-                        {kept ? 'Remove download' : 'Keep offline'}
-                      </button>
-                      <button
-                        className="button secondary"
-                        aria-label={`${deleting ? 'Confirm deleting' : 'Delete'} ${item.title} from your cloud library`}
-                        disabled={busy}
-                        onClick={
-                          deleting
-                            ? act(async () => {
-                                setConfirming(undefined);
-                                await controller.deleteCloudItem(item.globalId);
-                              })
-                            : () => setConfirming(`delete:${item.globalId}`)
-                        }
-                      >
-                        {deleting ? 'Confirm delete' : 'Delete'}
-                      </button>
+                      <div className="cloud-item-copy">
+                        <strong className="cloud-item-title">{item.title}</strong>
+                        <span className="item-meta">
+                          {kindNames[item.kind ?? ''] ?? 'Item'} · {bytes(item.byteLength ?? 0)}
+                          {kept ? ' · Kept offline' : ''}
+                        </span>
+                      </div>
+                      <div className="cloud-item-actions">
+                        <button
+                          className="button secondary"
+                          aria-label={`Open ${item.title}`}
+                          onClick={() => controller.open(item.globalId)}
+                        >
+                          Open
+                        </button>
+                        <button
+                          className="button secondary"
+                          aria-label={`Download ${item.title}`}
+                          disabled={busy}
+                          onClick={act(async () => {
+                            const { blob, name } = await controller.download(item.globalId);
+                            downloadBlob(blob, name);
+                          })}
+                        >
+                          Download
+                        </button>
+                        <button
+                          className="button secondary"
+                          aria-label={`${kept ? 'Remove download of' : 'Keep offline'} ${item.title}`}
+                          disabled={busy}
+                          onClick={act(() =>
+                            kept
+                              ? controller.removeDownload(item.globalId)
+                              : controller.keepOffline(item.globalId),
+                          )}
+                        >
+                          {kept ? 'Remove download' : 'Keep offline'}
+                        </button>
+                        <button
+                          className="button secondary"
+                          aria-label={`${deleting ? 'Confirm deleting' : 'Delete'} ${item.title} from your cloud library`}
+                          disabled={busy}
+                          onClick={
+                            deleting
+                              ? act(async () => {
+                                  setConfirming(undefined);
+                                  await controller.deleteCloudItem(item.globalId);
+                                })
+                              : () => setConfirming(`delete:${item.globalId}`)
+                          }
+                        >
+                          {deleting ? 'Confirm delete' : 'Delete'}
+                        </button>
+                      </div>
                     </li>
                   );
                 })}
@@ -330,14 +333,16 @@ export function AutoSyncSection({ services }: { services: CampusRecallServices }
             </button>
           </div>
           {exportStatus && <p role="status">{exportStatus}</p>}
-          <label>
+          <label className="sync-signout-choice">
             <input
               type="checkbox"
               checked={removeLocalCopies}
               onChange={(e) => setRemoveLocalCopies(e.target.checked)}
-            />{' '}
-            When signing out, also remove this account&apos;s offline copies and sync data from this
-            device
+            />
+            <span>
+              When signing out, also remove this account&apos;s offline copies and sync data from
+              this device
+            </span>
           </label>
           {view.included && !view.needsResync && (
             <div className="notice error">

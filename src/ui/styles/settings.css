@@ -57,6 +57,64 @@
 .settings-section > .field-help {
   margin-top: 16px;
 }
+.settings-section > p,
+.section-title > div {
+  overflow-wrap: anywhere;
+  min-width: 0;
+}
+.cloud-library {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 24px;
+  border-top: 1px solid var(--ink);
+}
+.cloud-library li {
+  display: grid;
+  gap: 14px;
+  padding: 18px 0;
+  border-bottom: 1px solid var(--hair);
+}
+.cloud-item-copy {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+.cloud-item-title {
+  font-size: 18px;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+.cloud-item-actions {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 128px), 1fr));
+  gap: 10px;
+}
+.cloud-item-actions .button {
+  min-width: 0;
+  padding: 10px;
+  white-space: normal;
+}
+.sync-signout-choice {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  min-height: 44px;
+  padding: 12px 0;
+  margin: 18px 0;
+  font-size: 15px;
+  font-weight: 400;
+}
+.sync-signout-choice input {
+  flex: 0 0 20px;
+  width: 20px;
+  height: 20px;
+  margin: 2px 0 0;
+  padding: 0;
+  accent-color: var(--ink);
+}
+.sync-signout-choice span {
+  min-width: 0;
+}
 .setup-progress {
   margin: 18px 0;
 }

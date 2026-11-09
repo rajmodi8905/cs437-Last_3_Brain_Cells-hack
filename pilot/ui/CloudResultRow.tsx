@@ -27,7 +27,7 @@ export function CloudResultRow({
   const item = view.cloudOnly.find((candidate) => candidate.globalId === globalId);
   if (!item) return null;
   return (
-    <article className="item-row" data-cloud-item-id={globalId}>
+    <article className="item-row cloud-result" data-cloud-item-id={globalId}>
       <div className="item-open">
         <span className={`file-icon ${item.kind}`} aria-hidden="true">
           Cloud
@@ -39,28 +39,30 @@ export function CloudResultRow({
             <strong className="loc">{locationLabel(result)}</strong> · In your cloud library
           </span>
         </span>
-        <button
-          className="button secondary"
-          aria-label={`Open ${item.title} at ${locationLabel(result)}`}
-          onClick={() => controller.open(globalId, result.location)}
-        >
-          Open
-        </button>
-        <button
-          className="button secondary"
-          aria-label={`Download ${item.title}`}
-          onClick={async () => {
-            setError('');
-            try {
-              const { blob, name } = await controller.download(globalId);
-              downloadBlob(blob, name);
-            } catch (cause) {
-              setError(cause instanceof Error ? cause.message : String(cause));
-            }
-          }}
-        >
-          Download
-        </button>
+        <div className="cloud-result-actions">
+          <button
+            className="button secondary"
+            aria-label={`Open ${item.title} at ${locationLabel(result)}`}
+            onClick={() => controller.open(globalId, result.location)}
+          >
+            Open
+          </button>
+          <button
+            className="button secondary"
+            aria-label={`Download ${item.title}`}
+            onClick={async () => {
+              setError('');
+              try {
+                const { blob, name } = await controller.download(globalId);
+                downloadBlob(blob, name);
+              } catch (cause) {
+                setError(cause instanceof Error ? cause.message : String(cause));
+              }
+            }}
+          >
+            Download
+          </button>
+        </div>
       </div>
       {error && (
         <p className="row-message error-text" role="alert">

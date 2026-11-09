@@ -142,6 +142,30 @@ test('P05/P06: a second browser searches a synced real PDF index locally without
     }
   });
   expect(stored).toEqual({ items: 0, originals: 0 });
+  // A usable synced result also needs readable text and reachable actions on a phone.
+  for (const width of [320, 390, 1440]) {
+    await second.setViewportSize({ width, height: 900 });
+    const layout = await result.evaluate((element) => ({
+      titleWidth: element.querySelector('.item-title')!.getBoundingClientRect().width,
+      overflow: document.documentElement.scrollWidth - innerWidth,
+      actions: Array.from(element.querySelectorAll('button')).map((button) => {
+        const rect = button.getBoundingClientRect();
+        return { left: rect.left, right: rect.right, width: rect.width, height: rect.height };
+      }),
+    }));
+    expect(layout.titleWidth, `${width}px cloud search title`).toBeGreaterThan(160);
+    expect(layout.overflow).toBeLessThanOrEqual(1);
+    for (const action of layout.actions) {
+      expect(action.left).toBeGreaterThanOrEqual(0);
+      expect(action.right).toBeLessThanOrEqual(width);
+      expect(action.width).toBeGreaterThanOrEqual(44);
+      expect(action.height).toBeGreaterThanOrEqual(44);
+    }
+    await second.screenshot({
+      path: testInfo.outputPath(`cloud-search-${width}.png`),
+      fullPage: true,
+    });
+  }
   await second.screenshot({
     path: testInfo.outputPath('offline-cloud-search.png'),
     fullPage: true,
