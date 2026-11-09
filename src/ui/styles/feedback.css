@@ -18,6 +18,25 @@
   color: var(--bad);
   font-weight: 500;
 }
+/* The raw text behind a plain error, kept for a bug report. */
+.error-detail {
+  margin-top: 6px;
+  color: var(--muted);
+  font-weight: 400;
+}
+.error-detail summary {
+  padding: 12px 0;
+  cursor: pointer;
+  font-family: var(--mono);
+  font-size: 0.8125rem;
+}
+.error-detail code {
+  display: block;
+  font-family: var(--mono);
+  font-size: 0.8125rem;
+  overflow-wrap: anywhere;
+  user-select: text;
+}
 .modal-backdrop {
   position: fixed;
   inset: 0;
@@ -126,4 +145,12 @@
 }
 .toast .icon-button:focus-visible {
   outline-color: var(--paper);
+}
+/* The one install offer after a save (Chromium only). */
+.install-offer {
+  flex-wrap: wrap;
+}
+.install-offer .button-row {
+  align-items: center;
+  flex-shrink: 0;
 }

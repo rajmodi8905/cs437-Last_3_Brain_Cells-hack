@@ -2,6 +2,7 @@
 // UI-agnostic; the Settings section subscribes to its view.
 import type { CampusRecallServices } from '../../src/app/services';
 import type { IndexedSegment, ItemKind, SearchableSegment, SourceLocation } from '../../src/shared';
+import { plainMessage } from '../../src/app/plainError';
 import {
   ApiFailure,
   createApiClient,
@@ -12,7 +13,7 @@ import {
 import { applyEntry, type SignInResult } from './entry';
 import { IndexedDbSyncStateStore } from './idb';
 import { repositoryLibrary } from './library';
-import { SyncEngine } from './sync';
+import { SyncEngine, type SyncResult } from './sync';
 import type { SyncSnapshot } from './types';
 
 export interface AutoSyncView {
@@ -42,6 +43,8 @@ export interface AutoSyncView {
   /** Sign-out could not reach the server, so its session may still be valid. */
   signOutPending: boolean;
   error?: string;
+  /** How a Google sign-in that came back without a session ended. */
+  signInResult?: string;
 }
 
 const SYNC_EVERY_MS = 15_000;
@@ -103,7 +106,7 @@ export class AutoSyncController {
   private timer?: ReturnType<typeof setInterval>;
   private unsubscribeLibrary?: () => void;
   private debounce?: ReturnType<typeof setTimeout>;
-  private running?: Promise<void>;
+  private running?: Promise<SyncResult | undefined>;
   private started?: Promise<void>;
 
   constructor(
@@ -133,7 +136,7 @@ export class AutoSyncController {
     // Drops entry and credential-like parameters from the address before anything else runs.
     const entry = typeof location !== 'undefined' ? applyEntry() : undefined;
     if (entry?.from === 'insiit') this.set({ entry: 'insiit' });
-    if (entry?.signIn) this.set({ error: SIGN_IN_MESSAGES[entry.signIn] });
+    if (entry?.signIn) this.set({ signInResult: SIGN_IN_MESSAGES[entry.signIn] });
     if (await this.services.preferences.get<boolean>(SIGN_OUT_PENDING_KEY)) {
       this.set({ signOutPending: true, error: SIGN_OUT_PENDING_MESSAGE });
       // Finishing an earlier sign-out does not wait for the user to turn sync on again.
@@ -148,6 +151,7 @@ export class AutoSyncController {
   /** Explicit permission to contact the sync service; library inclusion is a separate choice. */
   async activate() {
     await this.start();
+    this.set({ signInResult: undefined });
     await this.services.preferences.set(ACTIVATED_KEY, true);
     await this.begin();
   }
@@ -228,12 +232,13 @@ export class AutoSyncController {
   async useLocalOnly() {
     await this.services.preferences.set(ACTIVATED_KEY, false);
     this.detach();
-    this.set({ status: 'local-only', error: undefined });
+    this.set({ status: 'local-only', error: undefined, signInResult: undefined });
   }
 
   /** Leaves for Google; the server finishes sign-in and brings the user back to Settings. */
   signInGoogle(go: (url: string) => void = (url) => location.assign(url)) {
     if (!this.view.googleReady) return;
+    this.set({ signInResult: undefined });
     go(`${this.apiBase}/auth/google/start`);
   }
 
@@ -242,7 +247,7 @@ export class AutoSyncController {
   }
 
   private async signIn(token: () => Promise<string>) {
-    this.set({ error: undefined });
+    this.set({ error: undefined, signInResult: undefined });
     try {
       await this.attach(await this.api.signIn(await token()));
     } catch (cause) {
@@ -297,27 +302,32 @@ export class AutoSyncController {
       (await engine.cloudSegments()).filter((segment) => !kind || segment.itemKind === kind);
   }
 
-  async include() {
-    if (!this.engine || !this.session) return;
+  /** Resolves true once the library is included and its first sync pass has run. */
+  async include(): Promise<boolean> {
+    if (!this.engine || !this.session) return false;
     try {
       await this.engine.include(this.session.vault.epoch);
     } catch (cause) {
       this.set({ error: messageFor(cause) });
-      return;
+      return false;
     }
     this.startLoop();
     await this.syncNow();
+    return true;
   }
 
-  /** One sync pass at a time; later calls wait for the current one. */
-  syncNow(): Promise<void> {
+  /**
+   * One sync pass at a time; later calls wait for the current one. Resolves with the pass's
+   * result, or undefined when it did not run or failed (the view then explains why).
+   */
+  syncNow(): Promise<SyncResult | undefined> {
     if (this.running) return this.running;
     this.running = (async () => {
-      if (!this.engine || !this.state) return;
+      if (!this.engine || !this.state) return undefined;
       this.set({ syncing: true });
       try {
         const result = await this.withSyncLock(() => this.engine!.runOnce());
-        if (!result) return;
+        if (!result) return undefined;
         this.set({
           blocked: result.blocked === 'library-mismatch',
           error: result.quotaExceeded
@@ -326,8 +336,10 @@ export class AutoSyncController {
               ? 'Some changes could not be sent yet. Retrying.'
               : undefined,
         });
+        return result;
       } catch (cause) {
         this.set({ error: messageFor(cause) });
+        return undefined;
       } finally {
         await this.refresh(await this.state.load());
         this.set({ syncing: false });
@@ -538,12 +550,19 @@ export function fileNameFor(item?: Pick<ChangeItem, 'title' | 'mimeType'>) {
   return `${item?.title ?? 'original'}${EXTENSIONS[item?.mimeType ?? ''] ?? ''}`;
 }
 
+/** What a finished Sync now pass did, or undefined when the view already explains a problem. */
+export function syncSummary(result: SyncResult | undefined) {
+  if (!result || result.failed || result.quotaExceeded || result.blocked) return undefined;
+  if (result.paused || result.needsResync) return undefined;
+  const changes = result.uploaded + result.renamed + result.deleted;
+  return changes ? `${changes} change${changes === 1 ? '' : 's'} synced.` : 'Up to date.';
+}
+
 function messageFor(cause: unknown) {
   if (cause instanceof ApiFailure) {
     if (cause.code === 'NOT_ELIGIBLE')
       return 'Only verified IITGN accounts (@iitgn.ac.in) can sign in.';
     if (cause.code === 'UNAUTHENTICATED') return 'Sign-in did not work. Try again.';
-    return cause.message;
   }
-  return cause instanceof Error ? cause.message : String(cause);
+  return plainMessage(cause);
 }

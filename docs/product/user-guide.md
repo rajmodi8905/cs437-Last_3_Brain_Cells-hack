@@ -48,11 +48,11 @@ In Settings, **Export library** creates an unencrypted ZIP of originals and meta
 
 Restore supports ZIPs up to 250 MB, up to 500 MB unpacked and 500 items. For larger libraries export smaller selections, such as individual source backups. Manual restore is transfer, not automatic synchronization.
 
-Browser eviction, cleared site data or device loss can remove your library. Request persistent storage in Settings, but keep backups regardless of the result. The app does not provide application-level encryption or control OS/browser backups.
+Browser eviction, cleared site data or device loss can remove your library. After a save the app asks the browser to keep your library, once per session; Settings shows the result and offers **Keep my library on this device** when it is not kept. Keep backups regardless of the result. The app does not provide application-level encryption or control OS/browser backups.
 
 ## Install, update and use offline
 
-Open a production build over HTTPS, finish model setup, then use Chrome's install menu or Safari's Share menu and **Add to Home Screen**. Desktop localhost is also a secure development context. A plain HTTP LAN address is not enough for phone PWA/WebGPU testing.
+Open a production build over HTTPS, then use Chrome's install menu (or the app's one-time **Install** offer after a save) or Safari's Share menu and **Add to Home Screen**. On iPhone, add it to the Home Screen before the model download: Safari can clear website data after seven days without use, while the Home Screen app keeps its own storage. In installed Android Chrome, Campus Recall appears in the share sheet; shared files and text open on Add, kept only on this device until you save them. Desktop localhost is also a secure development context. A plain HTTP LAN address is not enough for phone PWA/WebGPU testing.
 
 After caching, the production app's interface, originals, processing and search can run offline. New webpage capture still needs internet. Finish processing and back up before applying an app update. Use the Privacy Policy and Terms links in Settings for the current data-handling details.
 
