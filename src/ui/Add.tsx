@@ -1,7 +1,15 @@
-import { useRef, useState } from 'react';
-import { ArrowRight, LoaderCircle } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
+import { ArrowRight, LoaderCircle, X } from 'lucide-react';
 import type { LibraryItem, LibraryRepository, SaveInput } from '../shared';
 import type { CaptureService } from '../app/services';
+import { plainMessage } from '../app/plainError';
+import { takeShare } from '../app/shareTarget';
+import { fileProblem, sameFile } from '../app/fileCheck';
+import { bytes } from './hooks';
+/** True when a paste belongs to a field the student is typing in. */
+const typingIn = (target: EventTarget | null) =>
+  target instanceof Element &&
+  !!target.closest('input, textarea, select, [contenteditable]:not([contenteditable="false"])');
 export function Add({
   repository,
   capture: { captureWebpage, extractHtml, extractPdfText, validateWebUrl },
@@ -23,6 +31,97 @@ export function Add({
   const [drag, setDrag] = useState(false);
   const input = useRef<HTMLInputElement>(null);
   const lastCapture = useRef<{ url: string; title: string } | undefined>(undefined);
+  const [shareNotice, setShareNotice] = useState('');
+  const fileList = useRef<HTMLUListElement>(null);
+  const dropzone = useRef<HTMLButtonElement>(null);
+  // After a remove, the file whose remove button should take focus (or the drop zone).
+  const focusAfterRemove = useRef<number | undefined>(undefined);
+  /** Adds to the selection. The same file picked again is listed once. */
+  const addFiles = (added: File[]) =>
+    setFiles((current) => [
+      ...current,
+      ...added.filter(
+        (file, i) =>
+          !current.some((kept) => sameFile(kept, file)) &&
+          !added.slice(0, i).some((earlier) => sameFile(earlier, file)),
+      ),
+    ]);
+  const removeFile = (index: number) => {
+    focusAfterRemove.current = index;
+    setFiles((current) => current.filter((_, i) => i !== index));
+  };
+  useEffect(() => {
+    const index = focusAfterRemove.current;
+    if (index === undefined) return;
+    focusAfterRemove.current = undefined;
+    const buttons = fileList.current?.querySelectorAll<HTMLElement>('.file-remove');
+    const next = buttons?.[Math.min(index, buttons.length - 1)];
+    (next ?? dropzone.current)?.focus();
+  }, [files]);
+  const problems = files.map(fileProblem);
+  const valid = files.filter((_, i) => !problems[i]);
+  const invalid = problems.filter((problem): problem is string => !!problem);
+  // Pasting on Add: an image joins Files; text starts a note. A paste into a field stays there.
+  const pasteBlocked = useRef(false);
+  pasteBlocked.current = busy || capturing;
+  useEffect(() => {
+    const paste = (e: ClipboardEvent) => {
+      if (pasteBlocked.current || typingIn(e.target) || typingIn(document.activeElement)) return;
+      const data = e.clipboardData;
+      if (!data) return;
+      const pasted = Array.from(data.files ?? []);
+      if (pasted.length) {
+        e.preventDefault();
+        setTab('file');
+        setError('');
+        addFiles(pasted);
+        setShareNotice(
+          pasted.length === 1
+            ? 'Pasted file added. Check it, then save locally.'
+            : `${pasted.length} pasted files added. Check them, then save locally.`,
+        );
+        return;
+      }
+      const pastedText = data.getData('text/plain');
+      if (!pastedText.trim()) return;
+      e.preventDefault();
+      setTab('note');
+      setError('');
+      setText((current) => (current.trim() ? `${current}\n${pastedText}` : pastedText));
+      setShareNotice('Pasted text added to a note. Check it, then save locally.');
+    };
+    document.addEventListener('paste', paste);
+    return () => document.removeEventListener('paste', paste);
+  }, []);
+  // A share from another app (Android share sheet) opens Add with the share's id. Fill the form
+  // from it and delete the temporary copy; the student still checks it and saves.
+  useEffect(() => {
+    const id = new URLSearchParams(location.hash.split('?')[1] ?? '').get('share');
+    if (!id) return;
+    // The id is used once; reloading shows an empty Add screen.
+    history.replaceState(history.state, '', '#/add');
+    let current = true;
+    const missing = 'The shared item is no longer here. Share it again, or choose it below.';
+    void takeShare(id, new URL(import.meta.env.BASE_URL, location.href).href)
+      .then((draft) => {
+        if (!current) return;
+        if (!draft) return setShareNotice(missing);
+        setTab(draft.tab);
+        setFiles(draft.files);
+        setTitle(draft.title);
+        setText(draft.text);
+        setUrl(draft.url);
+        setShareNotice(
+          draft.tab === 'file'
+            ? 'The shared files are ready. Check them, then save locally.'
+            : 'The shared text is ready. Check it, then save locally.',
+        );
+      })
+      .catch(() => current && setShareNotice(missing));
+    return () => {
+      current = false;
+    };
+  }, []);
   const save = async (e: React.FormEvent) => {
     e.preventDefault();
     if (busy) return;
@@ -33,10 +132,18 @@ export function Add({
       let inputs: SaveInput[];
       if (tab === 'file') {
         if (!files.length) throw new Error('Choose at least one file.');
-        inputs = files.map((file) => ({
+        if (!valid.length) {
+          setError(
+            invalid.length === 1
+              ? invalid[0]
+              : 'None of these files can be saved. Remove them or choose other files.',
+          );
+          return;
+        }
+        inputs = valid.map((file) => ({
           kind: 'file',
           file,
-          title: files.length === 1 ? title : undefined,
+          title: valid.length === 1 ? title : undefined,
         }));
       } else {
         if (!text.trim()) throw new Error('Add some text before saving.');
@@ -47,13 +154,19 @@ export function Add({
         ];
       }
       for (const value of inputs) saved.push(await repository.save(value));
+      // Files that cannot be saved were listed with the reason; say so again on the Library.
+      const skipped =
+        tab === 'file' && invalid.length
+          ? `${invalid.join(' ')} ${invalid.length} remaining file(s) were not saved.`
+          : undefined;
       setFiles([]);
       setText('');
       setTitle('');
       setUrl('');
-      onSaved(saved);
+      onSaved(saved, skipped);
     } catch (cause) {
-      const message = `${cause instanceof Error ? cause.message : String(cause)}${saved.length ? ` Stopped at ${files[saved.length]?.name ?? 'the next item'}. ${files.length - saved.length} remaining file(s) were not saved.` : ''}`;
+      const remaining = valid.length - saved.length + invalid.length;
+      const message = `${plainMessage(cause)}${saved.length ? ` Stopped at ${valid[saved.length]?.name ?? 'the next item'}. ${remaining} remaining file(s) were not saved.` : ''}`;
       if (saved.length) onSaved(saved, message);
       else setError(message);
     } finally {
@@ -74,7 +187,7 @@ export function Add({
       );
       if (!title) setTitle(value.title);
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : String(cause));
+      setError(plainMessage(cause));
     } finally {
       setCapturing(false);
     }
@@ -84,7 +197,7 @@ export function Add({
       <div className="page-heading">
         <div>
           <span className="eyebrow">YOUR PERSONAL LIBRARY</span>
-          <h1>Add to your library</h1>
+          <h1 tabIndex={-1}>Add to your library</h1>
           <p>Keep the original here. Search for it in your own words later.</p>
         </div>
       </div>
@@ -125,10 +238,16 @@ export function Add({
                 type="file"
                 multiple
                 accept="image/jpeg,image/png,image/webp,application/pdf,audio/mpeg,audio/wav,audio/mp4,video/mp4"
-                onChange={(e) => setFiles(Array.from(e.target.files ?? []))}
+                onChange={(e) => {
+                  addFiles(Array.from(e.target.files ?? []));
+                  setError('');
+                  // Picking the same file again after removing it still reports a change.
+                  e.target.value = '';
+                }}
               />
               <button
                 type="button"
+                ref={dropzone}
                 className={`dropzone ${drag ? 'dragging' : ''}`}
                 disabled={busy}
                 onClick={() => input.current?.click()}
@@ -140,7 +259,8 @@ export function Add({
                 onDrop={(e) => {
                   e.preventDefault();
                   setDrag(false);
-                  setFiles(Array.from(e.dataTransfer.files));
+                  setError('');
+                  addFiles(Array.from(e.dataTransfer.files));
                 }}
               >
                 <strong>
@@ -149,21 +269,45 @@ export function Add({
                     : 'Choose files or drop them here'}
                 </strong>
                 <span>Images, PDFs, audio and MP4 video</span>
-                <span className="small muted">Originals stay on this device</span>
+                <span className="small muted">
+                  {files.length
+                    ? 'Choose or drop more to add them'
+                    : 'Originals stay on this device'}
+                </span>
               </button>
               {files.length > 0 && (
-                <ul className="selected-files">
+                <ul className="selected-files" aria-label="Selected files" ref={fileList}>
                   {files.map((f, i) => (
-                    <li key={i}>
-                      <span>{f.name}</span>
-                      <span className="muted">{(f.size / 1e6).toFixed(1)} MB</span>
+                    <li key={`${f.name}-${f.size}-${f.lastModified}`}>
+                      <span className="file-copy">
+                        <span className="file-name">{f.name}</span>
+                        <span className="file-size muted">{bytes(f.size)}</span>
+                        {problems[i] && (
+                          <span className="file-problem error-text">{problems[i]}</span>
+                        )}
+                      </span>
+                      <button
+                        type="button"
+                        className="icon-button file-remove"
+                        aria-label={`Remove ${f.name}`}
+                        disabled={busy}
+                        onClick={() => removeFile(i)}
+                      >
+                        <X size={18} />
+                      </button>
                     </li>
                   ))}
                 </ul>
               )}
+              {/* Announced when files that cannot be saved are picked. */}
+              <p className="field-help error-text file-summary" aria-live="polite">
+                {invalid.length
+                  ? `${invalid.length === 1 ? '1 file cannot' : `${invalid.length} files cannot`} be saved. Remove ${invalid.length === 1 ? 'it' : 'them'} or choose other files.`
+                  : ''}
+              </p>
             </>
           )}
-          {(tab !== 'file' || files.length <= 1) && (
+          {(tab !== 'file' || valid.length <= 1) && (
             <label>
               Title <span className="muted">optional</span>
               <input
@@ -237,7 +381,7 @@ export function Add({
                       );
                       if (!title) setTitle(captured.title);
                     } catch (cause) {
-                      setError(cause instanceof Error ? cause.message : String(cause));
+                      setError(plainMessage(cause));
                     }
                   }}
                 />
@@ -263,6 +407,11 @@ export function Add({
                 {Array.from(text).length.toLocaleString()} / 20,000 characters
               </span>
             </label>
+          )}
+          {shareNotice && (
+            <p className="notice" role="status">
+              {shareNotice}
+            </p>
           )}
           {error && (
             <div role="alert" className="notice error">

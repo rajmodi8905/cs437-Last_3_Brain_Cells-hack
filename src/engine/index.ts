@@ -125,7 +125,7 @@ export class LocalEngine implements EngineClient {
             try {
               const original = await this.repository.getOriginal(claim.item.id);
               if (!original) throw new Error('The original file is unavailable.');
-              progress('extracting', 'Reading the saved original');
+              progress('extracting', 'Getting it ready to search');
               let extracted: Extracted;
               switch (claim.item.kind) {
                 case 'note':
@@ -156,7 +156,7 @@ export class LocalEngine implements EngineClient {
               }
               check();
               if (extracted.samples) {
-                progress('transcribing', 'Transcribing speech on this device');
+                progress('transcribing', 'Turning speech into text on this device');
                 const speech = await this.models.transcribe(extracted.samples);
                 check();
                 for (const chunk of speech.chunks ?? [])
@@ -197,7 +197,7 @@ export class LocalEngine implements EngineClient {
                 const part = extracted.parts[i];
                 progress(
                   'embedding',
-                  `Indexing part ${i + 1} of ${extracted.parts.length}`,
+                  `Getting it ready to search (${i + 1} of ${extracted.parts.length})`,
                   i,
                   extracted.parts.length,
                 );
@@ -221,7 +221,7 @@ export class LocalEngine implements EngineClient {
                   'No searchable content was extracted. The original is still saved and can be opened.',
                 );
               check();
-              progress('publishing', 'Saving the search index');
+              progress('publishing', 'Finishing up');
               const published = await this.repository.publishSegments(claim, segments, {
                 durationMs: extracted.durationMs,
                 pageCount: extracted.pageCount,

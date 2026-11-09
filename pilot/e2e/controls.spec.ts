@@ -71,28 +71,31 @@ test('a kept-offline copy opens without the network, and removing it only remove
   await expect(laptop.getByRole('region', { name: 'Auto-sync' }).getByRole('alert')).toBeVisible();
 });
 
-test('removing the cloud library stops other devices until they start again', async ({
+test('a kept-offline copy still opens after the app restarts without the network', async ({
   browser,
 }) => {
-  const { phone, phoneSync, laptopSync } = await phoneAndLaptop(browser);
-  await laptopSync.getByRole('button', { name: 'Remove cloud library' }).click();
-  await laptopSync.getByRole('button', { name: 'Yes, remove cloud library' }).click();
-  await expect(
-    laptopSync.getByRole('button', { name: "Include this device's library" }),
-  ).toBeVisible();
-  await expect(laptopSync.getByRole('list', { name: 'In your cloud library' })).toHaveCount(0);
+  const { laptop, cloud, bytes } = await phoneAndLaptop(browser);
+  await cloud.getByRole('button', { name: 'Keep offline Hostel mess rules' }).click();
+  await expect(cloud).toContainText('Kept offline');
 
-  const uploads: string[] = [];
-  phone.on('request', (request) => {
-    if (/\/api\/v1\/(items|uploads)\//.test(request.url())) uploads.push(request.url());
-  });
-  await phoneSync.getByRole('button', { name: 'Sync now' }).click();
-  await expect(phoneSync).toContainText('Your cloud library was removed or reset');
-  expect(uploads).toEqual([]);
-  await phoneSync.getByRole('button', { name: 'Start again' }).click();
-  await phoneSync.getByRole('button', { name: "Include this device's library" }).click();
-  await expect(phoneSync).toContainText('1 item synced');
-  expect(uploads.length).toBeGreaterThan(0);
+  // The app is closed and reopened while the sync service cannot be reached.
+  await laptop.route('**/api/v1/**', (route) => route.abort('internetdisconnected'));
+  await laptop.reload();
+  await laptop.goto('/#/settings');
+  await laptop.waitForLoadState();
+  const sync = laptop.getByRole('region', { name: 'Auto-sync' });
+  await expect(sync).toContainText('Offline');
+  const kept = sync.getByRole('list', { name: 'Kept offline' });
+  await expect(kept).toContainText('Hostel mess rules');
+
+  const [download] = await Promise.all([
+    laptop.waitForEvent('download'),
+    kept.getByRole('button', { name: 'Download Hostel mess rules' }).click(),
+  ]);
+  expect(sha(await readFile((await download.path())!))).toBe(sha(bytes));
+  await kept.getByRole('button', { name: 'Open Hostel mess rules' }).click();
+  await expect(laptop.getByRole('region', { name: 'Hostel mess rules' })).toBeVisible();
+  await expect(sync.getByRole('alert')).toHaveCount(0);
 });
 
 test('pausing sync on a device sends nothing until it resumes', async ({ browser }) => {

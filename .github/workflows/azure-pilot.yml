@@ -1,0 +1,229 @@
+name: Deploy Azure pilot
+
+on:
+  workflow_run:
+    workflows: [Verify Campus Recall]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# Serial execution also covers manual runs. Recheck main after waiting/building;
+# a queued, older successful CI run must never replace a newer main release.
+concurrency:
+  group: campus-recall-azure-pilot
+  cancel-in-progress: false
+
+env:
+  PILOT_IMAGE_REPOSITORY: ghcr.io/rajmodi8905/campus-recall-pilot
+  PILOT_ORIGIN: https://campusrecall.indiasouthcentral.cloudapp.azure.com
+
+jobs:
+  authorize:
+    if: >-
+      github.repository == 'rajmodi8905/cs437-Last_3_Brain_Cells-hack' &&
+      (github.event_name == 'workflow_dispatch' ||
+       (vars.PILOT_AUTO_DEPLOY_ENABLED == 'true' && github.event.workflow_run.conclusion == 'success'))
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      actions: read
+    outputs:
+      revision: ${{ steps.authorize.outputs.revision }}
+      ci_run_id: ${{ steps.authorize.outputs.ci_run_id }}
+      ci_attempt: ${{ steps.authorize.outputs.ci_attempt }}
+    steps:
+      - name: Require current main and its latest successful push CI attempt
+        id: authorize
+        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7
+        with:
+          script: |
+            if (context.ref !== 'refs/heads/main') throw new Error('Deployment requires main');
+            const { owner, repo } = context.repo;
+            const fullName = `${owner}/${repo}`;
+            const { data: main } = await github.rest.repos.getBranch({ owner, repo, branch: 'main' });
+            const eventRun = context.payload.workflow_run;
+            const revision = context.eventName === 'workflow_run' ? eventRun?.head_sha : context.sha;
+            if (!/^[0-9a-f]{40}$/.test(revision ?? '') || revision !== main.commit.sha) {
+              throw new Error('Candidate is not current main; use a fresh deployment run');
+            }
+            const { data } = await github.rest.actions.listWorkflowRuns({
+              owner, repo, workflow_id: 'ci.yml', branch: 'main', event: 'push',
+              head_sha: revision, per_page: 1,
+            });
+            const verified = data.workflow_runs[0];
+            if (!verified || verified.status !== 'completed' || verified.conclusion !== 'success' ||
+                verified.head_sha !== revision || verified.head_branch !== 'main' ||
+                verified.event !== 'push' || verified.head_repository?.full_name !== fullName ||
+                verified.path !== '.github/workflows/ci.yml') {
+              throw new Error('Latest push CI attempt for this exact main SHA must succeed');
+            }
+            if (context.eventName === 'workflow_run' &&
+                (eventRun.id !== verified.id || eventRun.run_attempt !== verified.run_attempt ||
+                 eventRun.head_repository?.full_name !== fullName || eventRun.event !== 'push')) {
+              throw new Error('Trigger is not the verified same-repository main push CI attempt');
+            }
+            core.setOutput('revision', revision);
+            core.setOutput('ci_run_id', String(verified.id));
+            core.setOutput('ci_attempt', String(verified.run_attempt));
+
+  deploy:
+    needs: authorize
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    permissions:
+      contents: read
+      actions: read
+      packages: write
+      id-token: write
+    # Configure this environment to allow main ONLY. Azure OIDC must trust this
+    # exact repository/environment subject, using the dedicated VM deploy role.
+    environment:
+      name: azure-pilot
+      url: https://campusrecall.indiasouthcentral.cloudapp.azure.com
+    env:
+      SOURCE_REVISION: ${{ needs.authorize.outputs.revision }}
+      CI_RUN_ID: ${{ needs.authorize.outputs.ci_run_id }}
+      CI_ATTEMPT: ${{ needs.authorize.outputs.ci_attempt }}
+    steps:
+      - name: Check out only the verified main source
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ needs.authorize.outputs.revision }}
+          persist-credentials: false
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
+      - name: Sign in to GHCR with the scoped workflow token
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build and publish the exact verified Linux AMD64 runtime
+        id: image
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
+        with:
+          context: .
+          file: pilot/deploy/Dockerfile
+          target: runtime
+          platforms: linux/amd64
+          push: true
+          tags: ${{ env.PILOT_IMAGE_REPOSITORY }}:sha-${{ env.SOURCE_REVISION }}
+          build-args: SOURCE_REVISION=${{ env.SOURCE_REVISION }}
+          labels: org.opencontainers.image.source=https://github.com/${{ github.repository }}
+          # No build record artifacts/cache or extra attestation manifests needed
+          # for this short pilot. The returned immutable image digest is recorded.
+          provenance: false
+          sbom: false
+        env:
+          DOCKER_BUILD_RECORD_UPLOAD: 'false'
+      - name: Validate immutable digest and anonymous registry access
+        env:
+          IMAGE_DIGEST: ${{ steps.image.outputs.digest }}
+        run: |
+          set -euo pipefail
+          [[ "$IMAGE_DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]]
+          [[ "$SOURCE_REVISION" =~ ^[0-9a-f]{40}$ ]]
+          test "$(git rev-parse HEAD)" = "$SOURCE_REVISION"
+          anonymous_config=$(mktemp -d)
+          trap 'rm -rf "$anonymous_config"' EXIT
+          # GHCR packages initially default private. Make this package public in
+          # its settings before the first deployment; never copy a PAT to the VM.
+          docker --config "$anonymous_config" manifest inspect \
+            "$PILOT_IMAGE_REPOSITORY@$IMAGE_DIGEST" > /dev/null
+      - name: Sign in to Azure using the dedicated deployment identity
+        uses: azure/login@8216e11d8cd9b42fe925c852af8e76311ff067ac # v2
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+      - name: Recheck current main and the exact CI attempt before touching the VM
+        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7
+        with:
+          script: |
+            const { owner, repo } = context.repo;
+            const { data: main } = await github.rest.repos.getBranch({ owner, repo, branch: 'main' });
+            const { data: run } = await github.rest.actions.getWorkflowRun({
+              owner, repo, run_id: Number(process.env.CI_RUN_ID),
+            });
+            if (main.commit.sha !== process.env.SOURCE_REVISION ||
+                run.head_sha !== process.env.SOURCE_REVISION || run.head_branch !== 'main' ||
+                run.status !== 'completed' || run.conclusion !== 'success' || run.event !== 'push' ||
+                run.path !== '.github/workflows/ci.yml' ||
+                run.head_repository?.full_name !== `${owner}/${repo}` ||
+                String(run.run_attempt) !== process.env.CI_ATTEMPT) {
+              throw new Error('Main or verified CI attempt changed; refusing a stale deployment');
+            }
+      - name: Deploy immutable image through Azure VM Run Command
+        env:
+          IMAGE_DIGEST: ${{ steps.image.outputs.digest }}
+          AZURE_RESOURCE_GROUP: ${{ vars.AZURE_RESOURCE_GROUP }}
+          AZURE_VM_NAME: ${{ vars.AZURE_VM_NAME }}
+        run: |
+          set -euo pipefail
+          test -n "$AZURE_RESOURCE_GROUP"
+          test -n "$AZURE_VM_NAME"
+          export IMAGE_REF="$PILOT_IMAGE_REPOSITORY@$IMAGE_DIGEST"
+          export DEPLOYMENT_RUN_ID="$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+          # Transfer this checked-out main script, never a PR-produced artifact,
+          # remote mutable URL, shell interpolation, or production credential.
+          python3 - <<'PY'
+          import base64, os, pathlib, re, shlex
+          image, revision, run_id = (os.environ[k] for k in ('IMAGE_REF', 'SOURCE_REVISION', 'DEPLOYMENT_RUN_ID'))
+          if not re.fullmatch(r'ghcr\.io/rajmodi8905/campus-recall-pilot@sha256:[0-9a-f]{64}', image):
+              raise SystemExit('Invalid immutable image reference')
+          if not re.fullmatch(r'[0-9a-f]{40}', revision) or not re.fullmatch(r'[0-9]+-[0-9]+', run_id):
+              raise SystemExit('Invalid revision or deployment run identity')
+          encoded = base64.b64encode(pathlib.Path('pilot/deploy/deploy-release.sh').read_bytes()).decode('ascii')
+          command = '\n'.join([
+              'set -eu', 'payload=$(mktemp)', 'trap \'rm -f "$payload"\' EXIT',
+              f'printf %s {shlex.quote(encoded)} | base64 --decode > "$payload"',
+              'bash "$payload" ' + ' '.join(shlex.quote(v) for v in (image, revision, run_id)),
+              "printf '\\nCAMPUS_RECALL_RUN_COMMAND_EXIT:0\\n'", '',
+          ])
+          pathlib.Path(os.environ['RUNNER_TEMP'], 'pilot-run-command.sh').write_text(command)
+          PY
+          # Keep raw guest output private; the success marker is not sufficient
+          # unless ARM's embedded statuses and the wrapper exit marker agree.
+          az vm run-command invoke --only-show-errors \
+            --resource-group "$AZURE_RESOURCE_GROUP" --name "$AZURE_VM_NAME" \
+            --command-id RunShellScript --scripts "@$RUNNER_TEMP/pilot-run-command.sh" \
+            --output json > "$RUNNER_TEMP/pilot-run-command-result.json"
+          python3 - <<'PY'
+          import json, os, pathlib
+          result = json.loads(pathlib.Path(os.environ['RUNNER_TEMP'], 'pilot-run-command-result.json').read_text())
+          values = result.get('value', [])
+          if not values or any(not v.get('code', '').lower().endswith('/succeeded') or
+                               v.get('level', '').lower() == 'error' for v in values):
+              raise SystemExit('Azure Run Command reported an embedded failure')
+          lines = '\n'.join(v.get('message', '') for v in values).splitlines()
+          expected = f"CAMPUS_RECALL_DEPLOY_OK:{os.environ['SOURCE_REVISION']}:{os.environ['IMAGE_DIGEST']}"
+          if lines.count(expected) != 1 or lines.count('CAMPUS_RECALL_RUN_COMMAND_EXIT:0') != 1:
+              raise SystemExit('Guest script did not confirm the exact revision/digest and successful exit')
+          print('Verified guest deployment revision, image digest and successful script completion')
+          PY
+      - name: Verify trusted HTTPS health and record release identity
+        env:
+          IMAGE_DIGEST: ${{ steps.image.outputs.digest }}
+        run: |
+          set -euo pipefail
+          curl --fail --silent --show-error --retry 3 --retry-all-errors \
+            --connect-timeout 10 --max-time 30 "$PILOT_ORIGIN/api/v1/config" \
+            --output "$RUNNER_TEMP/pilot-public-config.json"
+          python3 - <<'PY'
+          import json, os, pathlib
+          config = json.loads(pathlib.Path(os.environ['RUNNER_TEMP'], 'pilot-public-config.json').read_text())
+          if not isinstance(config, dict):
+              raise SystemExit('Public API did not return a config object')
+          PY
+          {
+            echo '### Azure pilot deployment verified'
+            echo "- Source: \`$SOURCE_REVISION\`"
+            echo "- Image: \`$PILOT_IMAGE_REPOSITORY@$IMAGE_DIGEST\`"
+            echo "- CI: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$CI_RUN_ID (attempt $CI_ATTEMPT)"
+            echo "- Hosted origin: $PILOT_ORIGIN"
+            echo '- Guest checked running image identity, compatible schema, backups and public built assets.'
+          } >> "$GITHUB_STEP_SUMMARY"

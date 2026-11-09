@@ -40,6 +40,36 @@
           "suite": "browser",
           "file": "tests/e2e/storage-recovery.spec.ts",
           "title": "[S1] a storage failure during save leaves no item, original or job in any tab"
+        },
+        {
+          "suite": "fast",
+          "file": "tests/app/add-selection.test.tsx",
+          "title": "a second pick or a drop adds to the selection without duplicates, and each file can be removed"
+        },
+        {
+          "suite": "fast",
+          "file": "tests/app/add-selection.test.tsx",
+          "title": "checks type and size when files are picked, names the file and the rule, and saves only the files that can be saved"
+        },
+        {
+          "suite": "fast",
+          "file": "tests/app/add-selection.test.tsx",
+          "title": "saves nothing when no picked file can be saved, and still asks for a file when none is picked"
+        },
+        {
+          "suite": "fast",
+          "file": "tests/app/add-selection.test.tsx",
+          "title": "pasting an image adds it to Files, pasting text starts a note, and a paste into a field is left alone"
+        },
+        {
+          "suite": "browser",
+          "file": "tests/e2e/polish.spec.ts",
+          "title": "files picked twice add up, can be removed, and a file that cannot be saved is explained before saving"
+        },
+        {
+          "suite": "browser",
+          "file": "tests/e2e/polish.spec.ts",
+          "title": "pasting an image or text on Add fills the form, but never a paste into a field"
         }
       ],
       "remaining": []
@@ -322,6 +352,46 @@
           "suite": "acceptance",
           "file": "tests/acceptance/offline.spec.ts",
           "title": "production processing, semantic search and source viewing remain local offline"
+        },
+        {
+          "suite": "fast",
+          "file": "tests/app/first-run-search.test.tsx",
+          "title": "asks for the one-time download on Search instead of showing a global error"
+        },
+        {
+          "suite": "fast",
+          "file": "tests/app/first-run-search.test.tsx",
+          "title": "shows plain size progress, then runs the typed search when setup finishes"
+        },
+        {
+          "suite": "fast",
+          "file": "tests/app/first-run-search.test.tsx",
+          "title": "keeps a stopped download in the card with a plain message and a retry"
+        },
+        {
+          "suite": "fast",
+          "file": "tests/app/first-run-search.test.tsx",
+          "title": "explains why a saved item waits and points the Library banner at Search"
+        },
+        {
+          "suite": "fast",
+          "file": "tests/app/first-run-search.test.tsx",
+          "title": "shows plain copy and size progress in Settings, with the same setup action"
+        },
+        {
+          "suite": "browser",
+          "file": "tests/e2e/first-run-search.spec.ts",
+          "title": "a search before setup shows the download card with the real size and no error"
+        },
+        {
+          "suite": "browser",
+          "file": "tests/e2e/first-run-search.spec.ts",
+          "title": "a stopped download stays in the card with a plain message and a retry"
+        },
+        {
+          "suite": "browser",
+          "file": "tests/e2e/first-run-search.spec.ts",
+          "title": "the Library setup banner leads to the Search download card"
         }
       ],
       "remaining": []
@@ -504,6 +574,26 @@
           "suite": "browser",
           "file": "tests/e2e/storage-recovery.spec.ts",
           "title": "[S12] a recoverable failure survives reopening and retry publishes one new generation"
+        },
+        {
+          "suite": "fast",
+          "file": "tests/app/navigation-feedback.test.tsx",
+          "title": "shows an engine failure that is not tied to an item"
+        },
+        {
+          "suite": "fast",
+          "file": "tests/app/navigation-feedback.test.tsx",
+          "title": "confirms Retry processing and Cancel processing"
+        },
+        {
+          "suite": "fast",
+          "file": "tests/app/plain-copy.test.tsx",
+          "title": "a library row shows a processing failure as a plain sentence"
+        },
+        {
+          "suite": "fast",
+          "file": "tests/engine/progress-wording.test.ts",
+          "title": "describes each processing step in plain words"
         }
       ],
       "remaining": []
@@ -571,6 +661,356 @@
           "suite": "acceptance",
           "file": "tests/acceptance/offline.spec.ts",
           "title": "production processing, semantic search and source viewing remain local offline"
+        },
+        {
+          "suite": "fast",
+          "file": "tests/app/navigation-feedback.test.tsx",
+          "title": "moves focus to the new heading and names the screen in the title, but not on first load"
+        },
+        {
+          "suite": "fast",
+          "file": "tests/app/navigation-feedback.test.tsx",
+          "title": "keeps focus in the search box and announces how many results were found"
+        },
+        {
+          "suite": "fast",
+          "file": "tests/app/navigation-feedback.test.tsx",
+          "title": "shows a raw error as a plain sentence with details, and clears it on the next screen"
+        },
+        {
+          "suite": "fast",
+          "file": "tests/app/navigation-feedback.test.tsx",
+          "title": "confirms Download original and the per-item backup in the viewer"
+        },
+        {
+          "suite": "fast",
+          "file": "tests/app/phone-feel.test.tsx",
+          "title": "Back closes the viewer, and closing it with its button removes its history entry"
+        },
+        {
+          "suite": "fast",
+          "file": "tests/app/phone-feel.test.tsx",
+          "title": "a search from the open viewer replaces its entry instead of leaving a dead Back step"
+        },
+        {
+          "suite": "fast",
+          "file": "tests/app/phone-feel.test.tsx",
+          "title": "the item menu closes on a tap outside and on Escape, which leaves the viewer open"
+        },
+        {
+          "suite": "fast",
+          "file": "tests/app/phone-feel.test.tsx",
+          "title": "asks the browser to keep the library after a save, once per session"
+        },
+        {
+          "suite": "fast",
+          "file": "tests/app/phone-feel.test.tsx",
+          "title": "Settings says the library is kept once persistence is granted"
+        },
+        {
+          "suite": "fast",
+          "file": "tests/app/phone-feel.test.tsx",
+          "title": "the persistence request skips a granted library and repeats nothing in a session"
+        },
+        {
+          "suite": "fast",
+          "file": "tests/app/phone-feel.test.tsx",
+          "title": "offers to install once after a save, and remembers Not now"
+        },
+        {
+          "suite": "fast",
+          "file": "tests/app/phone-feel.test.tsx",
+          "title": "Install opens the browser prompt, and an installed app is not offered again"
+        },
+        {
+          "suite": "fast",
+          "file": "tests/app/phone-feel.test.tsx",
+          "title": "does not show the install offer while the welcome dialog is open"
+        },
+        {
+          "suite": "fast",
+          "file": "tests/app/phone-feel.test.tsx",
+          "title": "recognises iPhone and iPad Safari outside the Home Screen app"
+        },
+        {
+          "suite": "fast",
+          "file": "tests/app/search-next-steps.test.tsx",
+          "title": "\"No strong matches\" offers all types, says what is still getting ready and suggests a shorter search"
+        },
+        {
+          "suite": "fast",
+          "file": "tests/app/search-next-steps.test.tsx",
+          "title": "without a type filter or waiting items, no-match next steps leave those lines out"
+        },
+        {
+          "suite": "fast",
+          "file": "tests/app/search-next-steps.test.tsx",
+          "title": "one waiting item is described in the singular"
+        },
+        {
+          "suite": "fast",
+          "file": "tests/app/search-next-steps.test.tsx",
+          "title": "an empty search keeps focus in the box and says what to type"
+        },
+        {
+          "suite": "fast",
+          "file": "tests/app/search-next-steps.test.tsx",
+          "title": "keeps the last five distinct searches that found something, on this device only"
+        },
+        {
+          "suite": "fast",
+          "file": "tests/app/search-next-steps.test.tsx",
+          "title": "removes one recent search, clears them all, and the Settings switch turns them off"
+        },
+        {
+          "suite": "fast",
+          "file": "tests/app/plain-copy.test.tsx",
+          "title": "Settings counts one item in the singular and describes storage in plain words"
+        },
+        {
+          "suite": "fast",
+          "file": "tests/app/plain-copy.test.tsx",
+          "title": "Escape closes a Rename or Delete dialog over the viewer and leaves the viewer open"
+        },
+        {
+          "suite": "fast",
+          "file": "tests/app/share-target.test.ts",
+          "title": "turns a share into the matching Add draft"
+        },
+        {
+          "suite": "fast",
+          "file": "tests/app/share-target.test.ts",
+          "title": "keeps a share in a temporary local cache and hands it over once"
+        },
+        {
+          "suite": "fast",
+          "file": "tests/app/plain-error.test.ts",
+          "title": "plainError > turns the Auto-sync RATE_LIMITED error into a plain sentence"
+        },
+        {
+          "suite": "fast",
+          "file": "tests/app/plain-error.test.ts",
+          "title": "plainError > turns the Auto-sync NOT_FOUND error into a plain sentence"
+        },
+        {
+          "suite": "fast",
+          "file": "tests/app/plain-error.test.ts",
+          "title": "plainError > turns the Auto-sync VAULT_RESET error into a plain sentence"
+        },
+        {
+          "suite": "fast",
+          "file": "tests/app/plain-error.test.ts",
+          "title": "plainError > turns the Auto-sync QUOTA_EXCEEDED error into a plain sentence"
+        },
+        {
+          "suite": "fast",
+          "file": "tests/app/plain-error.test.ts",
+          "title": "plainError > turns the Auto-sync UNAUTHENTICATED error into a plain sentence"
+        },
+        {
+          "suite": "fast",
+          "file": "tests/app/plain-error.test.ts",
+          "title": "plainError > turns the Auto-sync FORBIDDEN error into a plain sentence"
+        },
+        {
+          "suite": "fast",
+          "file": "tests/app/plain-error.test.ts",
+          "title": "plainError > turns the Auto-sync RESYNC_REQUIRED error into a plain sentence"
+        },
+        {
+          "suite": "fast",
+          "file": "tests/app/plain-error.test.ts",
+          "title": "plainError > turns the Auto-sync INTERNAL_ERROR error into a plain sentence"
+        },
+        {
+          "suite": "fast",
+          "file": "tests/app/plain-error.test.ts",
+          "title": "plainError > turns the Auto-sync LIMIT_EXCEEDED error into a plain sentence"
+        },
+        {
+          "suite": "fast",
+          "file": "tests/app/plain-error.test.ts",
+          "title": "plainError > turns the Auto-sync INVALID_INPUT error into a plain sentence"
+        },
+        {
+          "suite": "fast",
+          "file": "tests/app/plain-error.test.ts",
+          "title": "plainError > says a full cloud library is full and a rate limit means waiting"
+        },
+        {
+          "suite": "fast",
+          "file": "tests/app/plain-error.test.ts",
+          "title": "plainError > explains a network failure as a connection problem"
+        },
+        {
+          "suite": "fast",
+          "file": "tests/app/plain-error.test.ts",
+          "title": "plainError > explains a storage quota failure as running out of space"
+        },
+        {
+          "suite": "fast",
+          "file": "tests/app/plain-error.test.ts",
+          "title": "plainError > rewrites the raw message \"Title must be between one and 120 Unicode code points.\" and keeps it as a detail"
+        },
+        {
+          "suite": "fast",
+          "file": "tests/app/plain-error.test.ts",
+          "title": "plainError > rewrites the raw message \"Integrity check failed for embeddinggemma/onnx/model_q4.onnx. Please retry setup.\" and keeps it as a detail"
+        },
+        {
+          "suite": "fast",
+          "file": "tests/app/plain-error.test.ts",
+          "title": "plainError > rewrites the raw message \"Could not download embeddinggemma/onnx/model_q4.onnx. Retry when connected.\" and keeps it as a detail"
+        },
+        {
+          "suite": "fast",
+          "file": "tests/app/plain-error.test.ts",
+          "title": "plainError > rewrites the raw message \"Downloaded original does not match its hash.\" and keeps it as a detail"
+        },
+        {
+          "suite": "fast",
+          "file": "tests/app/plain-error.test.ts",
+          "title": "plainError > rewrites the raw message \"HTTP 502\" and keeps it as a detail"
+        },
+        {
+          "suite": "fast",
+          "file": "tests/app/plain-error.test.ts",
+          "title": "plainError > rewrites the raw message \"Request origin or CSRF token is not valid.\" and keeps it as a detail"
+        },
+        {
+          "suite": "fast",
+          "file": "tests/app/plain-error.test.ts",
+          "title": "plainError > rewrites the raw message \"after must be a cursor.\" and keeps it as a detail"
+        },
+        {
+          "suite": "fast",
+          "file": "tests/app/plain-error.test.ts",
+          "title": "plainError > rewrites the raw message \"This browser does not support safe processing locks. Use a current Safari, Chrome or Firefox.\" and keeps it as a detail"
+        },
+        {
+          "suite": "fast",
+          "file": "tests/app/plain-error.test.ts",
+          "title": "plainError > rewrites the raw message \"The server did not return the requested part of the original.\" and keeps it as a detail"
+        },
+        {
+          "suite": "fast",
+          "file": "tests/app/plain-error.test.ts",
+          "title": "plainError > keeps a title rule that names the real limit"
+        },
+        {
+          "suite": "fast",
+          "file": "tests/app/plain-error.test.ts",
+          "title": "plainError > keeps messages that are already written for students"
+        },
+        {
+          "suite": "fast",
+          "file": "tests/app/plain-error.test.ts",
+          "title": "plainError > falls back to a plain sentence and keeps the unknown text as a detail"
+        },
+        {
+          "suite": "browser",
+          "file": "tests/e2e/navigation-feedback.spec.ts",
+          "title": "each screen change focuses the new heading and names the screen in the title"
+        },
+        {
+          "suite": "browser",
+          "file": "tests/e2e/navigation-feedback.spec.ts",
+          "title": "submitting a search keeps focus in the search box"
+        },
+        {
+          "suite": "browser",
+          "file": "tests/e2e/navigation-feedback.spec.ts",
+          "title": "an error clears on the next screen and a raw error reads as a plain sentence"
+        },
+        {
+          "suite": "browser",
+          "file": "tests/e2e/navigation-feedback.spec.ts",
+          "title": "downloads, item backups and cancelled processing confirm what happened"
+        },
+        {
+          "suite": "browser",
+          "file": "tests/e2e/phone-feel.spec.ts",
+          "title": "on a laptop, Escape closes the viewer and opening another item adds no Back step"
+        },
+        {
+          "suite": "browser",
+          "file": "tests/e2e/phone-feel.spec.ts",
+          "title": "the manifest uses the paper colour and accepts shared files and text"
+        },
+        {
+          "suite": "browser",
+          "file": "tests/e2e/phone-feel.spec.ts",
+          "title": "the first save asks the browser to keep the library, and Settings says when it will"
+        },
+        {
+          "suite": "browser",
+          "file": "tests/e2e/phone-feel.spec.ts",
+          "title": "a refused request is not repeated in the same session and the button stays"
+        },
+        {
+          "suite": "browser",
+          "file": "tests/e2e/phone-feel.spec.ts",
+          "title": "Chromium gets one install offer after the first save, and Not now is remembered"
+        },
+        {
+          "suite": "browser",
+          "file": "tests/e2e/phone-feel.spec.ts",
+          "title": "Install opens the browser install prompt and the offer goes away"
+        },
+        {
+          "suite": "browser",
+          "file": "tests/e2e/phone-feel.spec.ts",
+          "title": "Android Chrome does not show the iPhone tip"
+        },
+        {
+          "suite": "browser",
+          "file": "tests/e2e/phone-feel.spec.ts",
+          "title": "a photo shared from another app arrives on Add, offline, and saves locally"
+        },
+        {
+          "suite": "browser",
+          "file": "tests/e2e/phone-feel.spec.ts",
+          "title": "shared text becomes a note, and a shared link fills the webpage form"
+        },
+        {
+          "suite": "browser",
+          "file": "tests/e2e/phone-feel.spec.ts",
+          "title": "on a phone > Back closes the full-screen viewer, keeps the list scrolled and returns focus"
+        },
+        {
+          "suite": "browser",
+          "file": "tests/e2e/phone-feel.spec.ts",
+          "title": "on a phone > the close button leaves no extra Back step"
+        },
+        {
+          "suite": "browser",
+          "file": "tests/e2e/phone-feel.spec.ts",
+          "title": "on a phone > a tap opens the item menu where it can be seen, and a tap outside closes it"
+        },
+        {
+          "suite": "browser",
+          "file": "tests/e2e/phone-feel.spec.ts",
+          "title": "in iPhone Safari > the search download card suggests the Home Screen before downloading"
+        },
+        {
+          "suite": "browser",
+          "file": "tests/e2e/phone-feel.spec.ts",
+          "title": "in iPhone Safari > the Home Screen app does not show the tip"
+        },
+        {
+          "suite": "browser",
+          "file": "tests/e2e/polish.spec.ts",
+          "title": "an empty search says what to type and keeps focus in the box"
+        },
+        {
+          "suite": "browser",
+          "file": "tests/e2e/polish.spec.ts",
+          "title": "Escape closes a dialog over the viewer and leaves the viewer open"
+        },
+        {
+          "suite": "browser",
+          "file": "tests/e2e/polish.spec.ts",
+          "title": "Settings uses plain words and has a switch for recent searches"
         }
       ],
       "manualEvidence": [

@@ -346,7 +346,8 @@ export class PostgresPilotStore implements PilotStore {
   async committedBytes(ownerKey: string) {
     const { rows } = await this.database.query<{ bytes: string }>(
       `SELECT
-         (SELECT COALESCE(SUM(byte_length), 0) FROM items WHERE owner_key = $1 AND NOT deleted) +
+         (SELECT COALESCE(SUM(byte_length + COALESCE((data->>'indexBytes')::bigint, 0)), 0)
+            FROM items WHERE owner_key = $1 AND NOT deleted) +
          (SELECT COALESCE(SUM((item->>'byteLength')::bigint), 0)
             FROM uploads WHERE owner_key = $1 AND result IS NULL) AS bytes`,
       [ownerKey],

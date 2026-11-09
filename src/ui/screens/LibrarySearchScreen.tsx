@@ -1,12 +1,14 @@
-import { ArrowUpRight, ChevronRight, LoaderCircle } from 'lucide-react';
+import { ArrowUpRight, ChevronRight, LoaderCircle, X } from 'lucide-react';
 import type { CampusRecallModel } from '../../app/useCampusRecall';
 import { kinds, kindLabels } from '../presentation';
 import { ItemRow } from '../ItemRow';
 import { CloudResultRow } from '../../../pilot/ui/CloudResultRow';
+import { SearchSetupCard } from '../SearchSetupCard';
 export function LibrarySearchScreen({ model }: { model: CampusRecallModel }) {
   const {
     screen,
     ready,
+    setupKnown,
     filter,
     chooseFilter,
     visible,
@@ -18,7 +20,19 @@ export function LibrarySearchScreen({ model }: { model: CampusRecallModel }) {
     items,
     searchInput,
     readyCount,
+    announcement,
+    query,
+    waitingCount,
+    recentSearches,
   } = model;
+  // Clearing the search box goes back to the start of Search, with the recent searches.
+  const showResults = results !== null && !!query.trim();
+  const runRecent = (text: string) => {
+    model.setQuery(text);
+    void model.runSearch(undefined, undefined, text);
+  };
+  // App shows the install offer here instead of this banner, so the two never stack.
+  const offering = model.installOffer && !model.update && !model.error;
   return (
     <>
       <div className="page-heading">
@@ -26,7 +40,9 @@ export function LibrarySearchScreen({ model }: { model: CampusRecallModel }) {
           <span className="eyebrow">
             {screen === 'search' ? 'FIND IT AGAIN' : 'YOUR PERSONAL LIBRARY'}
           </span>
-          <h1>{screen === 'search' ? 'Find your saved information' : 'Your library'}</h1>
+          <h1 tabIndex={-1}>
+            {screen === 'search' ? 'Find your saved information' : 'Your library'}
+          </h1>
           <p>
             {screen === 'search'
               ? 'Use a detail, a topic or a description. Open the source to check.'
@@ -39,13 +55,14 @@ export function LibrarySearchScreen({ model }: { model: CampusRecallModel }) {
           Save something
         </a>
       </div>
-      {!ready && (
+      {/* On Search the download card below replaces this banner. */}
+      {!ready && setupKnown && screen !== 'search' && !offering && (
         <div className="setup-banner">
           <div>
             <strong>Processing and search run on this device.</strong>
             <p>Set up the local models once to search by meaning, images and speech.</p>
           </div>
-          <a href="#/settings" className="text-link">
+          <a href="#/search" className="text-link">
             Set up offline search <ChevronRight size={16} />
           </a>
         </div>
@@ -122,13 +139,19 @@ export function LibrarySearchScreen({ model }: { model: CampusRecallModel }) {
         </>
       ) : (
         <>
-          {searching ? (
+          {/* Announces the result count when a search finishes, without moving focus. */}
+          <p className="sr-only" role="status">
+            {announcement}
+          </p>
+          {!ready && setupKnown ? (
+            <SearchSetupCard model={model} />
+          ) : searching ? (
             <div className="empty-state" aria-live="polite">
               <LoaderCircle size={28} className="spin" />
               <h2>Searching on this device…</h2>
               <p>The first search may take longer while the model loads.</p>
             </div>
-          ) : results !== null ? (
+          ) : showResults && results ? (
             <>
               <div className="list-heading">
                 <h2>
@@ -149,6 +172,7 @@ export function LibrarySearchScreen({ model }: { model: CampusRecallModel }) {
                         key={result.segmentId}
                         result={result}
                         services={model.services}
+                        notify={model.notify}
                       />
                     ) : null;
                   })}
@@ -160,9 +184,28 @@ export function LibrarySearchScreen({ model }: { model: CampusRecallModel }) {
                     Nothing matched strongly enough. Try another description or check Recent saves.
                     This does not mean you never saved it.
                   </p>
-                  <a href="#/library" className="button secondary">
-                    Browse your library
-                  </a>
+                  <ul className="next-steps">
+                    <li>
+                      Try fewer or different words, such as a course code or a phrase you remember.
+                    </li>
+                    {waitingCount > 0 && (
+                      <li>
+                        {waitingCount === 1
+                          ? '1 item is still getting ready and is not searchable yet.'
+                          : `${waitingCount} items are still getting ready and are not searchable yet.`}
+                      </li>
+                    )}
+                  </ul>
+                  <div className="button-row">
+                    {filter && (
+                      <button className="button secondary" onClick={() => chooseFilter(undefined)}>
+                        Search all types
+                      </button>
+                    )}
+                    <a href="#/library" className="button secondary">
+                      Browse your library
+                    </a>
+                  </div>
                 </div>
               )}
               <p className="search-note">
@@ -179,6 +222,31 @@ export function LibrarySearchScreen({ model }: { model: CampusRecallModel }) {
               <span className="small muted">
                 {readyCount} of {items.length} saved items ready to search
               </span>
+              {recentSearches.length > 0 && (
+                <div className="recent-searches">
+                  <h3 id="recent-searches-title">Recent searches</h3>
+                  <ul aria-labelledby="recent-searches-title">
+                    {recentSearches.map((text) => (
+                      <li key={text}>
+                        <button className="recent-run" onClick={() => runRecent(text)}>
+                          {text}
+                        </button>
+                        <button
+                          className="icon-button"
+                          aria-label={`Remove “${text}” from recent searches`}
+                          onClick={() => model.removeRecentSearch(text)}
+                        >
+                          <X size={16} />
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                  <button className="text-button" onClick={model.clearRecentSearches}>
+                    Clear recent searches
+                  </button>
+                  <span className="small muted">Kept on this device only.</span>
+                </div>
+              )}
             </div>
           )}
         </>

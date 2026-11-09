@@ -142,3 +142,52 @@ describe('P05 publishing and fetching index bundles', () => {
     await expect(phone.api.index(globalId)).rejects.toMatchObject({ code: 'ITEM_DELETED' });
   });
 });
+
+describe('P11 quota counts search-index bytes', () => {
+  const wordy = (n: number) => ({
+    modality: 'text' as const,
+    location: { kind: 'page' as const, page: n + 1 },
+    text: 'Guests need a pass. '.repeat(900),
+    vector: unit(n),
+  });
+
+  it('refuses an index that would push stored bytes over the quota', async () => {
+    await pilot.close();
+    // The 10,009-byte original fits; a ~37 KB index on top of it does not.
+    pilot = await startPilotServer(30_000);
+    const phone = await signedIn();
+    const globalId = await uploaded(phone);
+    const small = await bundleFor(globalId, 'Hostel mess rules');
+    await phone.api.publishIndex(globalId, {
+      opId: randomUUID(),
+      epoch: phone.epoch,
+      bundle: small,
+    });
+    const indexed = await pilot.store.committedBytes('google:subject-a');
+    expect(indexed).toBeGreaterThan(pdf.length);
+
+    // Replacing the index counts only the new bundle, not both.
+    await phone.api.publishIndex(globalId, {
+      opId: randomUUID(),
+      epoch: phone.epoch,
+      bundle: small,
+    });
+    expect(await pilot.store.committedBytes('google:subject-a')).toBe(indexed);
+
+    const large = await bundleFor(globalId, 'Hostel mess rules', {
+      segments: [wordy(1), wordy(2)],
+    });
+    await expect(
+      phone.api.publishIndex(globalId, { opId: randomUUID(), epoch: phone.epoch, bundle: large }),
+    ).rejects.toMatchObject({ code: 'QUOTA_EXCEEDED' });
+    expect(await pilot.store.committedBytes('google:subject-a')).toBe(indexed);
+
+    // Deleting the item frees the index bytes too.
+    await phone.api.remove(globalId, {
+      opId: randomUUID(),
+      epoch: phone.epoch,
+      expectedRevision: 1,
+    });
+    expect(await pilot.store.committedBytes('google:subject-a')).toBe(0);
+  });
+});

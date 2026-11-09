@@ -2,6 +2,7 @@
 // UI-agnostic; the Settings section subscribes to its view.
 import type { CampusRecallServices } from '../../src/app/services';
 import type { IndexedSegment, ItemKind, SearchableSegment, SourceLocation } from '../../src/shared';
+import { plainMessage } from '../../src/app/plainError';
 import {
   ApiFailure,
   createApiClient,
@@ -12,11 +13,12 @@ import {
 import { applyEntry, type SignInResult } from './entry';
 import { IndexedDbSyncStateStore } from './idb';
 import { repositoryLibrary } from './library';
-import { SyncEngine } from './sync';
+import { SyncEngine, type SyncResult } from './sync';
 import type { SyncSnapshot } from './types';
 
 export interface AutoSyncView {
-  status: 'local-only' | 'loading' | 'unavailable' | 'signed-out' | 'signed-in';
+  /** `offline`: the service cannot be reached; the last account's kept items are shown. */
+  status: 'local-only' | 'loading' | 'unavailable' | 'offline' | 'signed-out' | 'signed-in';
   signInMode?: 'google' | 'dev';
   /** Google sign-in is configured on this server. */
   googleReady: boolean;
@@ -38,7 +40,11 @@ export interface AutoSyncView {
   needsResync: boolean;
   /** Cloud items kept on this device for offline use. */
   offlineIds: string[];
+  /** Sign-out could not reach the server, so its session may still be valid. */
+  signOutPending: boolean;
   error?: string;
+  /** How a Google sign-in that came back without a session ended. */
+  signInResult?: string;
 }
 
 const SYNC_EVERY_MS = 15_000;
@@ -68,6 +74,14 @@ export function getAutoSync(services: CampusRecallServices) {
 }
 const LIBRARY_ID_KEY = 'pilot-library-id';
 const ACTIVATED_KEY = 'pilot-auto-sync-activated';
+/** The account last signed in here, so its kept-offline items open without a network. */
+const LAST_ACCOUNT_KEY = 'pilot-last-account';
+/** Set until the server confirms sign-out; while set, the old session is never restored. */
+const SIGN_OUT_PENDING_KEY = 'pilot-sign-out-pending';
+const SIGN_OUT_PENDING_MESSAGE =
+  'Could not reach the sync service to sign out, so this device may still be signed in. Connect to the internet and sign out again.';
+const SIGN_OUT_PENDING_REMOVED_MESSAGE =
+  'Synced copies were removed from this device, but the sync service could not be reached to sign out, so this device may still be signed in. Connect to the internet and sign out again.';
 
 export class AutoSyncController {
   private api: ApiClient;
@@ -83,6 +97,7 @@ export class AutoSyncController {
     paused: false,
     needsResync: false,
     offlineIds: [],
+    signOutPending: false,
   };
   private listeners = new Set<() => void>();
   private engine?: SyncEngine;
@@ -91,7 +106,7 @@ export class AutoSyncController {
   private timer?: ReturnType<typeof setInterval>;
   private unsubscribeLibrary?: () => void;
   private debounce?: ReturnType<typeof setTimeout>;
-  private running?: Promise<void>;
+  private running?: Promise<SyncResult | undefined>;
   private started?: Promise<void>;
 
   constructor(
@@ -121,13 +136,22 @@ export class AutoSyncController {
     // Drops entry and credential-like parameters from the address before anything else runs.
     const entry = typeof location !== 'undefined' ? applyEntry() : undefined;
     if (entry?.from === 'insiit') this.set({ entry: 'insiit' });
-    if (entry?.signIn) this.set({ error: SIGN_IN_MESSAGES[entry.signIn] });
+    if (entry?.signIn) this.set({ signInResult: SIGN_IN_MESSAGES[entry.signIn] });
+    if (await this.services.preferences.get<boolean>(SIGN_OUT_PENDING_KEY)) {
+      this.set({ signOutPending: true, error: SIGN_OUT_PENDING_MESSAGE });
+      // Finishing an earlier sign-out does not wait for the user to turn sync on again.
+      if (!(await this.services.preferences.get<boolean>(ACTIVATED_KEY))) {
+        await this.finishSignOut();
+        return;
+      }
+    }
     if (await this.services.preferences.get<boolean>(ACTIVATED_KEY)) await this.begin();
   }
 
   /** Explicit permission to contact the sync service; library inclusion is a separate choice. */
   async activate() {
     await this.start();
+    this.set({ signInResult: undefined });
     await this.services.preferences.set(ACTIVATED_KEY, true);
     await this.begin();
   }
@@ -137,25 +161,84 @@ export class AutoSyncController {
     try {
       const config = await this.api.config();
       this.set({ signInMode: config.signIn, googleReady: config.signIn === 'google' });
-    } catch {
+    } catch (cause) {
+      await this.unreachable(cause);
+      return;
+    }
+    if (this.view.signOutPending && !(await this.finishSignOut())) {
       this.set({ status: 'unavailable' });
       return;
     }
-    const session = await this.api.restoreSession().catch(() => undefined);
-    if (session) await this.attach(session);
-    else this.set({ status: 'signed-out' });
+    let session: SessionInfo | undefined;
+    try {
+      session = await this.api.restoreSession();
+    } catch (cause) {
+      await this.unreachable(cause);
+      return;
+    }
+    if (session) {
+      await this.attach(session);
+      return;
+    }
+    // The session ended on the server (expired or signed out elsewhere): stop showing this
+    // account's kept items to whoever opens the app offline next.
+    await this.services.preferences.set(LAST_ACCOUNT_KEY, undefined);
+    this.set({ status: 'signed-out' });
+  }
+
+  /**
+   * Only a request that never got an answer means the device is offline. A server that answers
+   * with an error is reachable but failing, so it is reported as unavailable, not offline.
+   */
+  private async unreachable(cause: unknown) {
+    if (cause instanceof ApiFailure) this.set({ status: 'unavailable' });
+    else await this.openOffline();
+  }
+
+  /**
+   * Ends a session that an earlier sign-out could not reach the server to end. True once the
+   * server has no session for this device.
+   */
+  async finishSignOut() {
+    try {
+      // Restoring only fetches the CSRF token that sign-out needs; nothing is attached.
+      if (await this.api.restoreSession()) await this.api.signOut();
+    } catch {
+      this.set({ signOutPending: true, error: SIGN_OUT_PENDING_MESSAGE });
+      return false;
+    }
+    await this.services.preferences.set(SIGN_OUT_PENDING_KEY, false);
+    this.set({ signOutPending: false, error: undefined });
+    return true;
+  }
+
+  /** Without the service, opens the last account's local state so kept items still open. */
+  private async openOffline() {
+    const last = await this.services.preferences.get<{ account: string; email: string }>(
+      LAST_ACCOUNT_KEY,
+    );
+    if (!last || this.view.signOutPending) {
+      this.set({ status: 'unavailable' });
+      return;
+    }
+    await this.connect(last.account);
+    if (!this.state) return;
+    const snapshot = await this.state.load();
+    this.set({ status: 'offline', email: last.email });
+    await this.refresh(snapshot);
   }
 
   /** Leave setup without contacting sign-in or polling again on the next reload. */
   async useLocalOnly() {
     await this.services.preferences.set(ACTIVATED_KEY, false);
     this.detach();
-    this.set({ status: 'local-only', error: undefined });
+    this.set({ status: 'local-only', error: undefined, signInResult: undefined });
   }
 
   /** Leaves for Google; the server finishes sign-in and brings the user back to Settings. */
   signInGoogle(go: (url: string) => void = (url) => location.assign(url)) {
     if (!this.view.googleReady) return;
+    this.set({ signInResult: undefined });
     go(`${this.apiBase}/auth/google/start`);
   }
 
@@ -164,7 +247,7 @@ export class AutoSyncController {
   }
 
   private async signIn(token: () => Promise<string>) {
-    this.set({ error: undefined });
+    this.set({ error: undefined, signInResult: undefined });
     try {
       await this.attach(await this.api.signIn(await token()));
     } catch (cause) {
@@ -173,8 +256,21 @@ export class AutoSyncController {
   }
 
   private async attach(session: SessionInfo) {
-    this.detach();
+    await this.connect(session.account);
     this.session = session;
+    await this.services.preferences.set(LAST_ACCOUNT_KEY, {
+      account: session.account,
+      email: session.email,
+    });
+    const snapshot = await this.state!.load();
+    this.set({ status: 'signed-in', email: session.email, error: undefined });
+    await this.refresh(snapshot);
+    if (snapshot.included) this.startLoop();
+  }
+
+  /** Opens an account's sync state on this device and the engine over it. */
+  private async connect(account: string) {
+    this.detach();
     let libraryId = await this.services.preferences.get<string>(LIBRARY_ID_KEY);
     if (!libraryId) {
       libraryId = globalThis.crypto.randomUUID();
@@ -185,7 +281,7 @@ export class AutoSyncController {
       this.services.library,
       database ? (id) => database.segments.where('itemId').equals(id).toArray() : undefined,
     );
-    this.state = new IndexedDbSyncStateStore(session.account);
+    this.state = new IndexedDbSyncStateStore(account);
     this.engine = new SyncEngine({
       api: this.api,
       // A rename from another device changes what search embeds, so re-index it.
@@ -204,33 +300,34 @@ export class AutoSyncController {
     const engine = this.engine;
     (this.services.engine as CloudSearchHook).extraSegments = async (kind) =>
       (await engine.cloudSegments()).filter((segment) => !kind || segment.itemKind === kind);
-    const snapshot = await this.state.load();
-    this.set({ status: 'signed-in', email: session.email, error: undefined });
-    await this.refresh(snapshot);
-    if (snapshot.included) this.startLoop();
   }
 
-  async include() {
-    if (!this.engine || !this.session) return;
+  /** Resolves true once the library is included and its first sync pass has run. */
+  async include(): Promise<boolean> {
+    if (!this.engine || !this.session) return false;
     try {
       await this.engine.include(this.session.vault.epoch);
     } catch (cause) {
       this.set({ error: messageFor(cause) });
-      return;
+      return false;
     }
     this.startLoop();
     await this.syncNow();
+    return true;
   }
 
-  /** One sync pass at a time; later calls wait for the current one. */
-  syncNow(): Promise<void> {
+  /**
+   * One sync pass at a time; later calls wait for the current one. Resolves with the pass's
+   * result, or undefined when it did not run or failed (the view then explains why).
+   */
+  syncNow(): Promise<SyncResult | undefined> {
     if (this.running) return this.running;
     this.running = (async () => {
-      if (!this.engine || !this.state) return;
+      if (!this.engine || !this.state) return undefined;
       this.set({ syncing: true });
       try {
         const result = await this.withSyncLock(() => this.engine!.runOnce());
-        if (!result) return;
+        if (!result) return undefined;
         this.set({
           blocked: result.blocked === 'library-mismatch',
           error: result.quotaExceeded
@@ -239,8 +336,10 @@ export class AutoSyncController {
               ? 'Some changes could not be sent yet. Retrying.'
               : undefined,
         });
+        return result;
       } catch (cause) {
         this.set({ error: messageFor(cause) });
+        return undefined;
       } finally {
         await this.refresh(await this.state.load());
         this.set({ syncing: false });
@@ -326,11 +425,27 @@ export class AutoSyncController {
   /** `removeLocalCopies` also deletes this account's sync state and offline copies here. */
   async signOut(removeLocalCopies = false) {
     await this.services.preferences.set(ACTIVATED_KEY, false);
-    await this.api.signOut().catch(() => undefined);
+    await this.services.preferences.set(LAST_ACCOUNT_KEY, undefined);
+    // Recorded first, so a closed tab or failed request never leaves the session restorable.
+    await this.services.preferences.set(SIGN_OUT_PENDING_KEY, true);
+    let ended = true;
+    try {
+      await this.api.signOut();
+    } catch (cause) {
+      // No session left on the server is a finished sign-out too.
+      ended = cause instanceof ApiFailure && cause.code === 'UNAUTHENTICATED';
+    }
+    if (ended) await this.services.preferences.set(SIGN_OUT_PENDING_KEY, false);
     const state = this.state;
     this.detach();
     if (removeLocalCopies) await state?.destroy();
     this.set({
+      signOutPending: !ended,
+      error: ended
+        ? undefined
+        : removeLocalCopies
+          ? SIGN_OUT_PENDING_REMOVED_MESSAGE
+          : SIGN_OUT_PENDING_MESSAGE,
       status: 'local-only',
       email: undefined,
       opened: undefined,
@@ -435,12 +550,19 @@ export function fileNameFor(item?: Pick<ChangeItem, 'title' | 'mimeType'>) {
   return `${item?.title ?? 'original'}${EXTENSIONS[item?.mimeType ?? ''] ?? ''}`;
 }
 
+/** What a finished Sync now pass did, or undefined when the view already explains a problem. */
+export function syncSummary(result: SyncResult | undefined) {
+  if (!result || result.failed || result.quotaExceeded || result.blocked) return undefined;
+  if (result.paused || result.needsResync) return undefined;
+  const changes = result.uploaded + result.renamed + result.deleted;
+  return changes ? `${changes} change${changes === 1 ? '' : 's'} synced.` : 'Up to date.';
+}
+
 function messageFor(cause: unknown) {
   if (cause instanceof ApiFailure) {
     if (cause.code === 'NOT_ELIGIBLE')
       return 'Only verified IITGN accounts (@iitgn.ac.in) can sign in.';
     if (cause.code === 'UNAUTHENTICATED') return 'Sign-in did not work. Try again.';
-    return cause.message;
   }
-  return cause instanceof Error ? cause.message : String(cause);
+  return plainMessage(cause);
 }

@@ -9,7 +9,14 @@ import { fileNameFor, getAutoSync } from '../client/autosync';
  * comes from this device's offline copy when there is one, otherwise from the cloud, and is
  * checked against its hash before it is shown.
  */
-export function CloudViewer({ services }: { services: CampusRecallServices }) {
+export function CloudViewer({
+  services,
+  notify,
+}: {
+  services: CampusRecallServices;
+  /** Confirms a finished action, such as a download. */
+  notify?: (message: string) => void;
+}) {
   const controller = getAutoSync(services);
   const view = useSyncExternalStore(controller.subscribe, controller.getView);
   const globalId = view.opened?.globalId;
@@ -43,6 +50,7 @@ export function CloudViewer({ services }: { services: CampusRecallServices }) {
         location={view.opened.location}
         repository={repository}
         onClose={() => controller.closeViewer()}
+        onNotify={notify}
       />
     </div>
   );

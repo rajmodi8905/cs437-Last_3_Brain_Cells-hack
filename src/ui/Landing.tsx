@@ -420,9 +420,7 @@ export function Landing() {
               </li>
               <li className="rv" style={{ '--d': 1 } as React.CSSProperties}>
                 <h3>On Android or laptop</h3>
-                <p>
-                  Use Chrome's app menu and choose Install. Installing needs HTTPS or localhost.
-                </p>
+                <p>Use Chrome's app menu and choose Install.</p>
               </li>
             </ol>
           </div>

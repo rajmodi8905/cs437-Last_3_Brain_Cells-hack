@@ -36,7 +36,11 @@ export function useModalFocus(model: CampusRecallModel) {
           first?.focus();
         }
       }
-      if (e.key === 'Escape') {
+      if (e.key === 'Escape' && (rename || deleting)) {
+        // Only the topmost layer closes: the viewer behind the dialog stays open. Cancelling
+        // the key also keeps the viewer's CloseWatcher from treating it as a close request.
+        e.preventDefault();
+        e.stopPropagation();
         if (rename) setRename(undefined);
         if (deleting) setDeleting(undefined);
       }

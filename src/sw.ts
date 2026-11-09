@@ -1,12 +1,30 @@
 /// <reference lib="webworker" />
 import { precacheAndRoute, cleanupOutdatedCaches, getCacheKeyForURL } from 'workbox-precaching';
 import { ASSET_CACHE } from './engine/assets';
+import { SHARE_PATH, sharedAddHash, storeShare } from './app/shareTarget';
 declare const self: ServiceWorkerGlobalScope & { __WB_MANIFEST: any };
 precacheAndRoute(self.__WB_MANIFEST);
 cleanupOutdatedCaches();
 self.addEventListener('activate', (event) => event.waitUntil(self.clients.claim()));
 self.addEventListener('message', (event) => {
   if (event.data?.type === 'SKIP_WAITING') void self.skipWaiting();
+});
+// Android's share sheet posts shared files and text to the manifest's share_target. They are
+// kept on this device for Add to pick up; nothing is forwarded to the network.
+self.addEventListener('fetch', (event) => {
+  const scope = self.registration.scope;
+  const url = new URL(event.request.url);
+  if (event.request.method !== 'POST' || `${url.origin}${url.pathname}` !== `${scope}${SHARE_PATH}`)
+    return;
+  event.respondWith(
+    (async () => {
+      const id = await event.request
+        .formData()
+        .then((form) => storeShare(form, scope))
+        .catch(() => 'unavailable');
+      return Response.redirect(new URL(sharedAddHash(id), scope).href, 303);
+    })(),
+  );
 });
 // Explicit setup owns the asset cache. Ordinary use can only read cached assets.
 self.addEventListener('fetch', (event) => {
