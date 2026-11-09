@@ -102,7 +102,7 @@ const json = (s: Session, path: string, method: string, body: unknown) =>
 const pdf = new TextEncoder().encode('%PDF-1.4\n' + 'Guests need a pass. '.repeat(5000));
 const sha = (bytes: Uint8Array) => createHash('sha256').update(bytes).digest('hex');
 const describeItem = (bytes: Uint8Array, over: Record<string, unknown> = {}) => ({
-  kind: 'pdf',
+  kind: 'pdf' as const,
   title: 'Hostel mess rules',
   mimeType: 'application/pdf',
   byteLength: bytes.length,
@@ -355,6 +355,48 @@ describe('P03 owner isolation', () => {
     expect(await objects.get(aIndexKey)).toBeDefined();
     const aIndexResAfter = await call(a, `/items/${aGlobalId}/index`);
     expect(aIndexResAfter.status).toBe(200);
+  });
+
+  it('rejects access and deletion with 403 FORBIDDEN if stored objectKey does not belong to owner', async () => {
+    const a = await signIn();
+    const globalId = randomUUID();
+    const foreignKey = 'google:other-user/1/some-item/original';
+    const foreignIndexKey = 'google:other-user/1/some-item/index';
+    await objects.put(foreignKey, new TextEncoder().encode('secret original'));
+    await objects.put(
+      foreignIndexKey,
+      new TextEncoder().encode(JSON.stringify({ secret: 'index' })),
+    );
+    await store.publish(
+      'google:subject-a',
+      {
+        ...describeItem(pdf),
+        globalId,
+        revision: 1,
+        deleted: false,
+        objectKey: foreignKey,
+        indexObjectKey: foreignIndexKey,
+      },
+      a.epoch,
+    );
+
+    // GET /original rejects with 403
+    const getRes = await call(a, `/items/${globalId}/original`);
+    expect(getRes.status).toBe(403);
+
+    // GET /index rejects with 403
+    const indexRes = await call(a, `/items/${globalId}/index`);
+    expect(indexRes.status).toBe(403);
+
+    // DELETE rejects with 403 and leaves foreign keys intact in objects
+    const delRes = await json(a, `/items/${globalId}`, 'DELETE', {
+      opId: randomUUID(),
+      epoch: a.epoch,
+      expectedRevision: 1,
+    });
+    expect(delRes.status).toBe(403);
+    expect(await objects.get(foreignKey)).toBeDefined();
+    expect(await objects.get(foreignIndexKey)).toBeDefined();
   });
 });
 

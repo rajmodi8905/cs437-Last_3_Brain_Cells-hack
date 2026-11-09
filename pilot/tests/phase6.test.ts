@@ -158,6 +158,43 @@ describe('P10 pause and cloud library removal', () => {
     expect((await phone.engine.status()).paused).toBe(false);
   });
 
+  it('stops remaining uploads when paused between items in a batch', async () => {
+    const holder: { engine?: SyncEngine } = {};
+    let item1Completed = false;
+    const phone = await device(async (url, init, baseFetch) => {
+      // Pause right after item 1 completes its upload
+      if (url.includes('/complete') && !item1Completed) {
+        item1Completed = true;
+        const res = await baseFetch(url, init);
+        await holder.engine?.setPaused(true);
+        return res;
+      }
+      return baseFetch(url, init);
+    });
+    holder.engine = phone.engine;
+
+    phone.library.add(
+      { kind: 'note', title: 'Note 1', mimeType: 'text/plain;charset=utf-8' },
+      new TextEncoder().encode('First note'),
+    );
+    phone.library.add(
+      { kind: 'note', title: 'Note 2', mimeType: 'text/plain;charset=utf-8' },
+      new TextEncoder().encode('Second note'),
+    );
+
+    const result = await phone.engine.runOnce();
+    expect(result).toMatchObject({ paused: true, uploaded: 1 });
+    expect(await phone.engine.catalogue()).toHaveLength(1);
+    expect((await phone.engine.status()).paused).toBe(true);
+
+    // Resuming completes the second item
+    await phone.engine.setPaused(false);
+    const resumeResult = await phone.engine.runOnce();
+    expect(resumeResult.uploaded).toBe(1);
+    expect(await phone.engine.catalogue()).toHaveLength(2);
+    expect((await phone.engine.status()).paused).toBe(false);
+  });
+
   it('stops other devices after the cloud library is removed until the user starts again', async () => {
     const { phone, id } = await phoneWithPdf();
     const laptop = await device();
