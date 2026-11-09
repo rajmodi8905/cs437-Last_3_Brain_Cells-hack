@@ -47,15 +47,17 @@ function idToken(
 let server: Server;
 let base = '';
 let store: MemoryPilotStore;
+let objects: MemoryObjectStore;
 beforeEach(async () => {
   store = new MemoryPilotStore();
+  objects = new MemoryObjectStore();
   const handler = createPilotHandler({
     clientId,
     allowedEmailDomain: 'iitgn.ac.in',
     origin,
     keys: staticKeySource({ 'test-key': signing.publicKey }),
     store,
-    objects: new MemoryObjectStore(),
+    objects,
     nowSeconds: () => clock,
     quotaBytes: 1_000_000,
     chunkBytes: 64 * 1024,
@@ -298,6 +300,61 @@ describe('P03 owner isolation', () => {
     const a = await signIn();
     expect(store.uploadOwner((await res.json()).uploadId)).toBe('google:subject-b');
     expect((await changes(a)).changes).toHaveLength(0);
+  });
+
+  it('strips client-supplied storage pointers and prevents reading or deleting other accounts blobs', async () => {
+    // 1. User A signs in, uploads a document, and has an index bundle
+    const a = await signIn();
+    const { globalId: aGlobalId } = await upload(a, pdf);
+    const aIndexKey = `google:subject-a/1/${aGlobalId}/index`;
+    await objects.put(
+      aIndexKey,
+      new TextEncoder().encode(JSON.stringify({ note: "A's private index" })),
+    );
+    const aItem = await store.getItem('google:subject-a', aGlobalId);
+    if (aItem) {
+      await store.publish('google:subject-a', { ...aItem, indexObjectKey: aIndexKey }, a.epoch);
+    }
+    const aIndexRes = await call(a, `/items/${aGlobalId}/index`);
+    expect(aIndexRes.status).toBe(200);
+
+    // 2. User B signs in and attempts an upload carrying A's storage keys
+    const b = await signIn(idToken({ sub: 'subject-b', email: 'student.b@iitgn.ac.in' }));
+    const bGlobalId = randomUUID();
+    const { done } = await upload(b, pdf, bGlobalId, {
+      indexObjectKey: aIndexKey,
+      objectKey: `google:subject-a/1/${aGlobalId}/original`,
+      index: {
+        indexVersion: 'pilot-v1',
+        contentSha256: sha(pdf),
+        searchMetadataDigest: 'x',
+        segmentCount: 1,
+      },
+      ownerKey: 'google:subject-a',
+    });
+    expect(done.status).toBe(200);
+
+    // 3. Assert the stored item for B has none of the client-supplied storage pointers
+    const bStored = await store.getItem('google:subject-b', bGlobalId);
+    expect(bStored).toBeDefined();
+    expect(bStored?.indexObjectKey).toBeUndefined();
+    expect(bStored?.index).toBeUndefined();
+    expect(bStored?.objectKey).toBe(`google:subject-b/1/${bGlobalId}/original`);
+
+    // 4. Assert B's GET /items/:id/index returns 404 NOT_FOUND
+    const bIndexRes = await call(b, `/items/${bGlobalId}/index`);
+    expect(bIndexRes.status).toBe(404);
+
+    // 5. Assert deleting B's item leaves A's index intact
+    const delRes = await json(b, `/items/${bGlobalId}`, 'DELETE', {
+      opId: randomUUID(),
+      epoch: b.epoch,
+      expectedRevision: 1,
+    });
+    expect(delRes.status).toBe(200);
+    expect(await objects.get(aIndexKey)).toBeDefined();
+    const aIndexResAfter = await call(a, `/items/${aGlobalId}/index`);
+    expect(aIndexResAfter.status).toBe(200);
   });
 });
 

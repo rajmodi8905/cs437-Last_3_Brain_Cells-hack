@@ -128,6 +128,21 @@ export class SyncEngine {
     return bytes;
   }
 
+  /**
+   * Re-reads the `paused` flag from durable state so that a concurrent `setPaused(true)` is
+   * never overwritten by the in-memory snapshot, and returns whether sync is now paused.
+   */
+  private async syncPaused(snapshot: SyncSnapshot): Promise<boolean> {
+    const latest = await this.state.load();
+    snapshot.paused = latest.paused;
+    return !!snapshot.paused;
+  }
+
+  private async saveState(snapshot: SyncSnapshot): Promise<void> {
+    await this.syncPaused(snapshot);
+    await this.state.save(snapshot);
+  }
+
   async runOnce(): Promise<SyncResult> {
     const result: SyncResult = {
       uploaded: 0,
@@ -145,24 +160,27 @@ export class SyncEngine {
     if (snapshot.libraryId !== this.libraryId) return { ...result, blocked: 'library-mismatch' };
 
     await this.plan(snapshot, await this.library.listItems());
-    await this.state.save(snapshot);
+    if (await this.syncPaused(snapshot)) return { ...result, paused: true };
+    await this.saveState(snapshot);
 
     try {
       await this.pull(snapshot, result);
-      await this.state.save(snapshot);
+      if (await this.syncPaused(snapshot)) return { ...result, paused: true };
+      await this.saveState(snapshot);
       await this.syncRemoteIndexes(snapshot, result);
       await this.cleanOffline(snapshot);
     } catch (cause) {
       result.failed++;
       if (cause instanceof ApiFailure && cause.code === 'RESYNC_REQUIRED') {
         snapshot.needsResync = true;
-        await this.state.save(snapshot);
+        await this.saveState(snapshot);
         return { ...result, needsResync: true };
       }
       return result;
     }
 
     for (const op of [...snapshot.ops]) {
+      if (await this.syncPaused(snapshot)) return { ...result, paused: true };
       if (!snapshot.ops.includes(op)) continue;
       try {
         await this.send(op, snapshot, result);
@@ -170,15 +188,16 @@ export class SyncEngine {
         result.failed++;
         if (cause instanceof ApiFailure && cause.code === 'VAULT_RESET') {
           snapshot.needsResync = true;
-          await this.state.save(snapshot);
+          await this.saveState(snapshot);
           return { ...result, needsResync: true };
         }
-        await this.state.save(snapshot);
+        await this.saveState(snapshot);
         if (isTransient(cause)) break;
         continue;
       }
-      await this.state.save(snapshot);
+      await this.saveState(snapshot);
     }
+    if (snapshot.paused) return { ...result, paused: true };
     return result;
   }
 
@@ -331,6 +350,7 @@ export class SyncEngine {
         for (let attempt = 0; !item; attempt++) {
           try {
             if (!op.uploadId) {
+              if (await this.syncPaused(snapshot)) return;
               const { kind, title, mimeType, byteLength, contentSha256, createdAt, sourceUrl } =
                 local;
               const begun = await this.api.beginUpload(op.globalId, {
@@ -341,14 +361,16 @@ export class SyncEngine {
               op.uploadId = begun.uploadId;
               op.chunkBytes = begun.chunkBytes;
               op.sentChunks = 0;
-              await this.state.save(snapshot);
+              await this.saveState(snapshot);
             }
             const size = op.chunkBytes!;
             for (let n = op.sentChunks ?? 0; n * size < bytes.length; n++) {
+              if (await this.syncPaused(snapshot)) return;
               await this.api.putChunk(op.uploadId, n, bytes.slice(n * size, (n + 1) * size));
               op.sentChunks = n + 1;
-              await this.state.save(snapshot);
+              await this.saveState(snapshot);
             }
+            if (await this.syncPaused(snapshot)) return;
             ({ item } = await this.api.completeUpload(op.uploadId, {
               opId: op.completeOpId,
               epoch,
@@ -364,7 +386,7 @@ export class SyncEngine {
               opId: this.newId(),
               completeOpId: this.newId(),
             });
-            await this.state.save(snapshot);
+            await this.saveState(snapshot);
           }
         }
         snapshot.catalogue[item.globalId] = item;
@@ -376,6 +398,7 @@ export class SyncEngine {
           });
         result.uploaded++;
       } else if (op.kind === 'rename') {
+        if (await this.syncPaused(snapshot)) return;
         const { item } = await this.api.rename(op.globalId, {
           opId: op.opId,
           epoch,
@@ -387,9 +410,11 @@ export class SyncEngine {
           Object.assign(mapping, { syncedTitle: item.title, syncedRevision: item.revision });
         result.renamed++;
       } else if (op.kind === 'publishIndex') {
+        if (await this.syncPaused(snapshot)) return;
         await this.sendIndex(op, snapshot, mapping, result);
         return;
       } else {
+        if (await this.syncPaused(snapshot)) return;
         await this.api.remove(op.globalId, {
           opId: op.opId,
           epoch,
@@ -578,6 +603,7 @@ export class SyncEngine {
       this.removeOp(snapshot, op);
       return;
     }
+    if (await this.syncPaused(snapshot)) return;
     const { item } = await this.api.publishIndex(op.globalId, {
       opId: op.opId,
       epoch: snapshot.epoch!,

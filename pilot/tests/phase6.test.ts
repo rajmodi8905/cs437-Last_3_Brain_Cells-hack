@@ -20,9 +20,15 @@ const pdf = new TextEncoder().encode(
 );
 const writes = (log: string[]) => log.filter((line) => !line.startsWith('GET'));
 
-async function device() {
+async function device(
+  interceptFetch?: (url: string, init: RequestInit, baseFetch: typeof fetch) => Promise<Response>,
+) {
   const net = deviceFetch();
-  const api = createApiClient({ base: pilot.base, fetch: net.fetchImpl });
+  const fetchWrapper: typeof fetch = (input, init = {}) => {
+    if (interceptFetch) return interceptFetch(String(input), init, net.fetchImpl);
+    return net.fetchImpl(input, init);
+  };
+  const api = createApiClient({ base: pilot.base, fetch: fetchWrapper });
   const library = new MemoryLocalLibrary();
   const offline = new MemoryOfflineStore();
   const engine = new SyncEngine({
@@ -108,6 +114,48 @@ describe('P10 pause and cloud library removal', () => {
     expect(phone.net.controls.log).toEqual([]);
     await phone.engine.setPaused(false);
     expect((await phone.engine.runOnce()).uploaded).toBe(1);
+  });
+
+  it('stops upload when paused while a chunk is in flight and preserves paused state', async () => {
+    const holder: { engine?: SyncEngine } = {};
+    let pausedMidway = false;
+    const phone = await device(async (url, init, baseFetch) => {
+      if (url.includes('/chunks/0') && !pausedMidway) {
+        pausedMidway = true;
+        const res = await baseFetch(url, init);
+        await holder.engine?.setPaused(true);
+        return res;
+      }
+      return baseFetch(url, init);
+    });
+    holder.engine = phone.engine;
+
+    // Multi-chunk PDF (chunkBytes is 32 KB by default; 2000 repeats is ~70 KB = 3 chunks)
+    const multiChunkPdf = new TextEncoder().encode(
+      '%PDF-1.4\n' + 'Guests need a pass from the warden. '.repeat(2000),
+    );
+    phone.library.add(
+      { kind: 'pdf', title: 'Large rulebook', mimeType: 'application/pdf' },
+      multiChunkPdf,
+    );
+
+    const result = await phone.engine.runOnce();
+    expect(result).toMatchObject({ paused: true, uploaded: 0 });
+
+    // Assert no chunk 1 or complete request was sent
+    expect(phone.net.controls.log.some((line) => line.includes('/chunks/1'))).toBe(false);
+    expect(phone.net.controls.log.some((line) => line.includes('/complete'))).toBe(false);
+
+    // Assert status().paused is still true after the pass ends
+    const status = await phone.engine.status();
+    expect(status.paused).toBe(true);
+
+    // Resuming after unpausing completes the upload
+    await phone.engine.setPaused(false);
+    const resumeResult = await phone.engine.runOnce();
+    expect(resumeResult.uploaded).toBe(1);
+    expect(phone.net.controls.log.some((line) => line.includes('/complete'))).toBe(true);
+    expect((await phone.engine.status()).paused).toBe(false);
   });
 
   it('stops other devices after the cloud library is removed until the user starts again', async () => {
