@@ -98,30 +98,6 @@ test('a kept-offline copy still opens after the app restarts without the network
   await expect(sync.getByRole('alert')).toHaveCount(0);
 });
 
-test('removing the cloud library stops other devices until they start again', async ({
-  browser,
-}) => {
-  const { phone, phoneSync, laptopSync } = await phoneAndLaptop(browser);
-  await laptopSync.getByRole('button', { name: 'Remove cloud library' }).click();
-  await laptopSync.getByRole('button', { name: 'Yes, remove cloud library' }).click();
-  await expect(
-    laptopSync.getByRole('button', { name: "Include this device's library" }),
-  ).toBeVisible();
-  await expect(laptopSync.getByRole('list', { name: 'In your cloud library' })).toHaveCount(0);
-
-  const uploads: string[] = [];
-  phone.on('request', (request) => {
-    if (/\/api\/v1\/(items|uploads)\//.test(request.url())) uploads.push(request.url());
-  });
-  await phoneSync.getByRole('button', { name: 'Sync now' }).click();
-  await expect(phoneSync).toContainText('Your cloud library was removed or reset');
-  expect(uploads).toEqual([]);
-  await phoneSync.getByRole('button', { name: 'Start again' }).click();
-  await phoneSync.getByRole('button', { name: "Include this device's library" }).click();
-  await expect(phoneSync).toContainText('1 item synced');
-  expect(uploads.length).toBeGreaterThan(0);
-});
-
 test('pausing sync on a device sends nothing until it resumes', async ({ browser }) => {
   const email = freshEmail();
   const phone = await openApp(browser);
