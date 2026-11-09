@@ -172,6 +172,24 @@ export function checkIdentityClaims(
   };
 }
 
+/** Extracts only the declared item description fields from untrusted input. */
+export function pickItemDescription(
+  raw: unknown,
+): Omit<CloudItem, 'globalId' | 'revision' | 'deleted' | 'index'> {
+  const item = (raw && typeof raw === 'object' ? raw : {}) as Record<string, unknown>;
+  const { kind, title, mimeType, byteLength, contentSha256, createdAt, sourceUrl } = item;
+  return {
+    kind: kind as ItemKind,
+    title: typeof title === 'string' ? title : (title as unknown as string),
+    mimeType: typeof mimeType === 'string' ? mimeType : (mimeType as unknown as string),
+    byteLength: typeof byteLength === 'number' ? byteLength : (byteLength as unknown as number),
+    contentSha256:
+      typeof contentSha256 === 'string' ? contentSha256 : (contentSha256 as unknown as string),
+    createdAt: typeof createdAt === 'number' ? createdAt : (createdAt as unknown as number),
+    ...(typeof sourceUrl === 'string' ? { sourceUrl } : {}),
+  };
+}
+
 /** Validates a client-supplied item description before an upload is accepted. */
 export function validateCloudItem(
   item: Omit<CloudItem, 'revision' | 'deleted' | 'index'>,
