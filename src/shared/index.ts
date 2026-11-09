@@ -93,7 +93,10 @@ export interface LibraryRepository {
   listItems(filters?: ItemFilters): Promise<LibraryItem[]>;
   renameItem(id: string, title: string): Promise<LibraryItem>;
   deleteItem(id: string): Promise<void>;
+  /** One ZIP for a selection that fits the import limits; larger selections are refused. */
   exportItems(ids: string[]): Promise<Blob>;
+  /** A whole-library backup, split into as many ZIPs as the import limits need. */
+  exportBackup?(ids: string[]): Promise<Blob[]>;
   importArchive(archive: Blob): Promise<ImportReport>;
 }
 
@@ -158,6 +161,16 @@ export const LIMITS = {
   maxPdfPages: 50,
   maxAudioDurationMs: 5 * 60 * 1000,
   maxVideoDurationMs: 2 * 60 * 1000,
+} as const;
+
+/** What one backup ZIP may hold; export splits a library so that every part imports. */
+export const ARCHIVE_LIMITS = {
+  maxItems: 500,
+  maxArchiveBytes: 250_000_000,
+  maxUnpackedBytes: 500_000_000,
+  maxEntryBytes: 100_000_000,
+  /** Originals per exported part, leaving room for ZIP headers and the manifest. */
+  partBytes: 200_000_000,
 } as const;
 
 export const SUPPORTED_MIME_TYPES: Record<string, ItemKind> = {

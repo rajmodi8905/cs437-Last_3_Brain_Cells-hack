@@ -193,11 +193,22 @@ export function useCampusRecall(services: CampusRecallServices) {
   };
   const exportAll = () =>
     perform('export', async () => {
-      downloadBlob(
-        await repository.exportItems(items.map((i) => i.id)),
-        `campus-recall-${new Date().toISOString().slice(0, 10)}.zip`,
+      const ids = items.map((i) => i.id);
+      const archives = repository.exportBackup
+        ? await repository.exportBackup(ids)
+        : [await repository.exportItems(ids)];
+      const name = `campus-recall-${new Date().toISOString().slice(0, 10)}`;
+      archives.forEach((archive, n) =>
+        downloadBlob(
+          archive,
+          archives.length === 1 ? `${name}.zip` : `${name}-part-${n + 1}-of-${archives.length}.zip`,
+        ),
       );
-      notify('Backup created. Keep this unencrypted ZIP somewhere private.');
+      notify(
+        archives.length === 1
+          ? 'Backup created. Keep this unencrypted ZIP somewhere private.'
+          : `Backup created as ${archives.length} ZIP files. Import each one to restore. Keep them somewhere private.`,
+      );
     });
   const action = (value: LibraryItem, name: string) => {
     setMenu(undefined);

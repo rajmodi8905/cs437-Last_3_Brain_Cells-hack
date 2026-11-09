@@ -2,6 +2,7 @@ import Dexie, { type Table } from 'dexie';
 import { zipSync, unzipSync, strToU8, strFromU8 } from 'fflate';
 import {
   AppOperationError,
+  ARCHIVE_LIMITS,
   LIMITS,
   SUPPORTED_MIME_TYPES,
   type AppError,
@@ -268,6 +269,30 @@ function validateArchiveEntry(
   }
   return candidate as ArchiveManifest['items'][number];
 }
+
+/** Groups items, in order, into the fewest parts that each fit one importable ZIP. */
+export function planArchiveParts<T extends { byteLength: number }>(items: T[]): T[][] {
+  const parts: T[][] = [];
+  let current: T[] = [];
+  let bytes = 0;
+  for (const item of items) {
+    if (
+      current.length &&
+      (current.length >= ARCHIVE_LIMITS.maxItems ||
+        bytes + item.byteLength > ARCHIVE_LIMITS.partBytes)
+    ) {
+      parts.push(current);
+      current = [];
+      bytes = 0;
+    }
+    current.push(item);
+    bytes += item.byteLength;
+  }
+  if (current.length) parts.push(current);
+  return parts;
+}
+
+const fitsOneArchive = (items: LibraryItem[]) => planArchiveParts(items).length <= 1;
 
 export class DexieLibraryRepository implements ProcessingRepository {
   constructor(public readonly database: CampusRecallDatabase) {}
@@ -629,10 +654,31 @@ export class DexieLibraryRepository implements ProcessingRepository {
   }
 
   async exportItems(ids: string[]): Promise<Blob> {
+    const items = await this.itemsForExport(ids);
+    if (!fitsOneArchive(items))
+      throw error(
+        'LIMIT_EXCEEDED',
+        `One backup ZIP holds at most ${ARCHIVE_LIMITS.maxItems} items and ${ARCHIVE_LIMITS.partBytes / 1_000_000} MB. Use Export all, which splits a large library into several ZIPs.`,
+      );
+    return this.buildArchive(items);
+  }
+
+  async exportBackup(ids: string[]): Promise<Blob[]> {
+    const parts = planArchiveParts(await this.itemsForExport(ids));
+    const archives: Blob[] = [];
+    for (const part of parts) archives.push(await this.buildArchive(part));
+    return archives;
+  }
+
+  private async itemsForExport(ids: string[]): Promise<LibraryItem[]> {
     if (!ids.length) throw error('INVALID_INPUT', 'Select at least one item to export.');
     const items = await Promise.all(ids.map((id) => this.database.items.get(id)));
     if (items.some((item) => !item))
       throw error('SOURCE_UNAVAILABLE', 'An item selected for export is unavailable.');
+    return items as LibraryItem[];
+  }
+
+  private async buildArchive(items: LibraryItem[]): Promise<Blob> {
     const manifest: ArchiveManifest = {
       format: 'campus-recall',
       version: 1,
@@ -640,7 +686,7 @@ export class DexieLibraryRepository implements ProcessingRepository {
       items: [],
     };
     const files: Record<string, Uint8Array> = {};
-    for (const item of items as LibraryItem[]) {
+    for (const item of items) {
       const original = await this.getOriginal(item.id);
       if (!original) throw error('SOURCE_UNAVAILABLE', 'An item original is unavailable.');
       const path = `originals/${item.id}`;
@@ -660,6 +706,9 @@ export class DexieLibraryRepository implements ProcessingRepository {
     }
     files['manifest.json'] = strToU8(JSON.stringify(manifest));
     const archiveBytes = zipSync(files);
+    // The importer would reject it; never report a backup that cannot be restored.
+    if (archiveBytes.byteLength > ARCHIVE_LIMITS.maxArchiveBytes)
+      throw error('LIMIT_EXCEEDED', 'This backup ZIP would be too large to import.');
     const archiveBuffer = new ArrayBuffer(archiveBytes.byteLength);
     new Uint8Array(archiveBuffer).set(archiveBytes);
     return new Blob([archiveBuffer], { type: 'application/zip' });
@@ -667,7 +716,7 @@ export class DexieLibraryRepository implements ProcessingRepository {
   async importArchive(archive: Blob): Promise<ImportReport> {
     let files: Record<string, Uint8Array>;
     let manifest: ArchiveManifest;
-    if (archive.size > 250_000_000)
+    if (archive.size > ARCHIVE_LIMITS.maxArchiveBytes)
       throw error(
         'INVALID_ARCHIVE',
         'Backup ZIP exceeds the 250 MB import limit. Export smaller selections.',
@@ -678,8 +727,8 @@ export class DexieLibraryRepository implements ProcessingRepository {
         filter(entry) {
           unpacked += entry.originalSize;
           if (
-            unpacked > 500_000_000 ||
-            entry.originalSize > 100_000_000 ||
+            unpacked > ARCHIVE_LIMITS.maxUnpackedBytes ||
+            entry.originalSize > ARCHIVE_LIMITS.maxEntryBytes ||
             (entry.name !== 'manifest.json' && !/^originals\/[0-9a-f-]+$/.test(entry.name))
           )
             throw new Error('Unsupported archive contents or size.');
@@ -696,7 +745,7 @@ export class DexieLibraryRepository implements ProcessingRepository {
       manifest.format !== 'campus-recall' ||
       manifest.version !== 1 ||
       !Array.isArray(manifest.items) ||
-      manifest.items.length > 500 ||
+      manifest.items.length > ARCHIVE_LIMITS.maxItems ||
       new Set(manifest.items.map((item) => item && item.id)).size !== manifest.items.length
     )
       throw error('INVALID_ARCHIVE', 'Archive manifest is invalid.');
