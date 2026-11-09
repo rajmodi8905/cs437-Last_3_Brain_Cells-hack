@@ -80,7 +80,7 @@ export class MemoryPilotStore implements PilotStore {
   async committedBytes(ownerKey: string) {
     let bytes = 0;
     for (const item of this.vaultOf(ownerKey).items.values())
-      if (!item.deleted) bytes += item.byteLength;
+      if (!item.deleted) bytes += item.byteLength + (item.indexBytes ?? 0);
     for (const upload of this.uploads.values())
       if (upload.ownerKey === ownerKey && !upload.result) bytes += upload.item.byteLength;
     return bytes;

@@ -602,6 +602,7 @@ export function createPilotHandler(options: PilotServerOptions): RequestListener
                 deleted: true,
                 objectKey: undefined,
                 indexObjectKey: undefined,
+                indexBytes: undefined,
                 index: undefined,
               }
             : { ...current, revision: decision.nextRevision, title: write.title };
@@ -677,10 +678,15 @@ export function createPilotHandler(options: PilotServerOptions): RequestListener
           options.supportedIndexVersions ?? PILOT_INDEX_VERSIONS,
         );
         if (!valid.ok) throw new ApiError(valid.code, valid.reason);
+        const bytes = new TextEncoder().encode(JSON.stringify(body.bundle));
+        // The new bundle replaces any earlier one, so only the difference is new storage.
+        const used = (await store.committedBytes(session.ownerKey)) - (current.indexBytes ?? 0);
+        if (used + bytes.length > options.quotaBytes)
+          throw new ApiError('QUOTA_EXCEEDED', 'This would exceed your cloud storage quota.');
         const indexObjectKey = `${session.ownerKey}/${epoch}/${current.globalId}/index`;
-        await objects.put(indexObjectKey, new TextEncoder().encode(JSON.stringify(body.bundle)));
+        await objects.put(indexObjectKey, bytes);
         // An index does not change the item's revision, so it never causes rename conflicts.
-        const next = { ...current, index: valid.value, indexObjectKey };
+        const next = { ...current, index: valid.value, indexObjectKey, indexBytes: bytes.length };
         await store.publish(session.ownerKey, next, epoch);
         return { status: 200, body: { item: publicItem(next) } };
       });
