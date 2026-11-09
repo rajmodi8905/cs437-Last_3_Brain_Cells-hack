@@ -213,6 +213,57 @@ describe('P09 changes from other devices', () => {
     expect((await other.engine.catalogue())[0].title).toBe('Renamed on laptop');
   });
 
+  it('clears a rename conflict when the item is renamed again here', async () => {
+    const { phone, id, globalId, other } = await syncedPhone();
+    await other.api.rename(globalId, {
+      opId: randomUUID(),
+      epoch: other.epoch,
+      expectedRevision: 1,
+      title: 'Renamed on laptop',
+    });
+    phone.library.setTitle(id, 'Renamed on phone');
+    expect((await phone.engine.runOnce()).conflicts).toBe(1);
+
+    phone.library.setTitle(id, 'Final title');
+    phone.net.controls.log.length = 0;
+    expect(await phone.engine.runOnce()).toMatchObject({ renamed: 1, conflicts: 0, failed: 0 });
+    expect(writes(phone.net.controls.log)).toEqual([`PATCH /items/${globalId}`]);
+    expect((await phone.state.load()).mappings.find((m) => m.localId === id)).toMatchObject({
+      state: 'synced',
+      syncedTitle: 'Final title',
+      remoteTitle: undefined,
+    });
+    phone.net.controls.log.length = 0;
+    await phone.engine.runOnce();
+    expect(writes(phone.net.controls.log)).toEqual([]);
+
+    await other.engine.include(other.epoch);
+    await other.engine.runOnce();
+    expect((await other.engine.catalogue())[0].title).toBe('Final title');
+  });
+
+  it('clears a rename conflict without a request when the other title is chosen here', async () => {
+    const { phone, id, globalId, other } = await syncedPhone();
+    await other.api.rename(globalId, {
+      opId: randomUUID(),
+      epoch: other.epoch,
+      expectedRevision: 1,
+      title: 'Renamed on laptop',
+    });
+    phone.library.setTitle(id, 'Renamed on phone');
+    expect((await phone.engine.runOnce()).conflicts).toBe(1);
+
+    phone.library.setTitle(id, 'Renamed on laptop');
+    phone.net.controls.log.length = 0;
+    expect(await phone.engine.runOnce()).toMatchObject({ renamed: 0, conflicts: 0, failed: 0 });
+    expect(writes(phone.net.controls.log)).toEqual([]);
+    expect((await phone.state.load()).mappings.find((m) => m.localId === id)).toMatchObject({
+      state: 'synced',
+      syncedTitle: 'Renamed on laptop',
+      syncedRevision: 2,
+    });
+  });
+
   it('removes the local copy when the document was deleted elsewhere', async () => {
     const { phone, id, globalId, other } = await syncedPhone();
     await other.api.remove(globalId, {

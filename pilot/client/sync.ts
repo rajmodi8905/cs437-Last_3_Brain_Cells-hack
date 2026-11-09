@@ -219,6 +219,8 @@ export class SyncEngine {
           title: item.title,
           expectedRevision: mapping.syncedRevision,
         });
+      } else if (mapping.state === 'conflict' && mapping.syncedRevision !== undefined) {
+        this.planConflict(snapshot, mapping, item, hasOp(mapping.globalId, 'rename'));
       }
     }
 
@@ -272,6 +274,38 @@ export class SyncEngine {
     }
   }
 
+  /**
+   * The user settles a rename conflict by renaming the item here: to the other device's title
+   * (accepted with no request) or to any new title (sent against the revision now on the server).
+   */
+  private planConflict(
+    snapshot: SyncSnapshot,
+    mapping: Mapping,
+    item: LocalItem,
+    renameQueued: boolean,
+  ) {
+    if (item.title === mapping.remoteTitle) {
+      Object.assign(mapping, {
+        state: 'synced',
+        syncedTitle: item.title,
+        remoteTitle: undefined,
+        conflictLocalTitle: undefined,
+      } satisfies Partial<Mapping>);
+      return;
+    }
+    // Conflicts saved before this field existed: start watching from the current title.
+    mapping.conflictLocalTitle ??= item.title;
+    if (item.title === mapping.conflictLocalTitle || renameQueued) return;
+    snapshot.ops.push({
+      kind: 'rename',
+      opId: this.newId(),
+      localId: item.id,
+      globalId: mapping.globalId,
+      title: item.title,
+      expectedRevision: mapping.syncedRevision!,
+    });
+  }
+
   private async pull(snapshot: SyncSnapshot, result: SyncResult) {
     const page = await this.api.changes(snapshot.epoch!, snapshot.cursor);
     const local = new Map((await this.library.listItems()).map((item) => [item.id, item]));
@@ -301,12 +335,14 @@ export class SyncEngine {
           syncedTitle: remoteTitle,
           syncedRevision: item.revision,
           remoteTitle: undefined,
+          conflictLocalTitle: undefined,
         } satisfies Partial<Mapping>);
         this.dropOps(snapshot, item.globalId, 'rename');
       } else {
         // Both sides renamed: keep both titles and let the user choose.
         mapping.state = 'conflict';
         mapping.remoteTitle = remoteTitle;
+        mapping.conflictLocalTitle = localItem.title;
         mapping.syncedRevision = item.revision;
         this.dropOps(snapshot, item.globalId, 'rename');
         result.conflicts++;
@@ -384,7 +420,13 @@ export class SyncEngine {
         });
         snapshot.catalogue[item.globalId] = item;
         if (mapping)
-          Object.assign(mapping, { syncedTitle: item.title, syncedRevision: item.revision });
+          Object.assign(mapping, {
+            state: 'synced',
+            syncedTitle: item.title,
+            syncedRevision: item.revision,
+            remoteTitle: undefined,
+            conflictLocalTitle: undefined,
+          } satisfies Partial<Mapping>);
         result.renamed++;
       } else if (op.kind === 'publishIndex') {
         await this.sendIndex(op, snapshot, mapping, result);
@@ -412,6 +454,7 @@ export class SyncEngine {
         const current = cause.body.current as ChangeItem | undefined;
         mapping.state = 'conflict';
         mapping.remoteTitle = current?.title;
+        mapping.conflictLocalTitle = op.kind === 'rename' ? op.title : undefined;
         if (current) mapping.syncedRevision = current.revision;
         this.removeOp(snapshot, op);
         result.conflicts++;
