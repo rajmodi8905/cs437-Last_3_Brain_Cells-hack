@@ -42,6 +42,8 @@ export interface Mapping {
   syncedRevision?: number;
   /** The other device's title while in conflict. */
   remoteTitle?: string;
+  /** This device's title when the conflict was found; renaming away from it resolves the conflict. */
+  conflictLocalTitle?: string;
   /** Key (hash|title digest|index version) of the index last published for this item. */
   publishedIndex?: string;
   /** Index key this device cannot publish, such as one built by an older model. */
