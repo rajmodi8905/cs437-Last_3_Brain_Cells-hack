@@ -94,7 +94,8 @@
   padding: 10px;
   white-space: normal;
 }
-.sync-signout-choice {
+.sync-signout-choice,
+.settings-switch {
   display: flex;
   align-items: flex-start;
   gap: 12px;
@@ -104,7 +105,8 @@
   font-size: 15px;
   font-weight: 400;
 }
-.sync-signout-choice input {
+.sync-signout-choice input,
+.settings-switch input {
   flex: 0 0 20px;
   width: 20px;
   height: 20px;
@@ -112,7 +114,8 @@
   padding: 0;
   accent-color: var(--ink);
 }
-.sync-signout-choice span {
+.sync-signout-choice span,
+.settings-switch span {
   min-width: 0;
 }
 .setup-progress {
@@ -216,4 +219,10 @@
   height: 8px;
   background: var(--signal);
   border: 1px solid var(--ink);
+}
+.sync-choice {
+  margin: 4px 0 18px;
+}
+.sync-choice .field-help {
+  margin: 8px 0 0;
 }

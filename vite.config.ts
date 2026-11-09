@@ -38,8 +38,45 @@ export default defineConfig({
         start_url: './#/library',
         scope: './',
         display: 'standalone',
-        background_color: '#f7f8fa',
-        theme_color: '#245edb',
+        // The paper colour, matching index.html's theme-color, for the status bar and splash.
+        background_color: '#f4f1ea',
+        theme_color: '#f4f1ea',
+        // Installed Android Chrome lists the app in the share sheet. src/sw.ts answers the POST on
+        // the device and opens Add; the types match Add's file picker.
+        share_target: {
+          action: './share-target',
+          method: 'POST',
+          enctype: 'multipart/form-data',
+          params: {
+            title: 'title',
+            text: 'text',
+            url: 'url',
+            files: [
+              {
+                name: 'files',
+                accept: [
+                  'image/jpeg',
+                  'image/png',
+                  'image/webp',
+                  'application/pdf',
+                  'audio/mpeg',
+                  'audio/wav',
+                  'audio/mp4',
+                  'video/mp4',
+                  '.jpg',
+                  '.jpeg',
+                  '.png',
+                  '.webp',
+                  '.pdf',
+                  '.mp3',
+                  '.wav',
+                  '.m4a',
+                  '.mp4',
+                ],
+              },
+            ],
+          },
+        },
         icons: [
           { src: 'icon.svg', sizes: 'any', type: 'image/svg+xml', purpose: 'any' },
           { src: 'icon-192.png', sizes: '192x192', type: 'image/png' },

@@ -1,9 +1,11 @@
 import { useState, useSyncExternalStore } from 'react';
 import type { CampusRecallServices } from '../../src/app/services';
 import { downloadBlob } from '../../src/app/download';
+import { plainMessage } from '../../src/app/plainError';
 import type { SearchResult } from '../../src/shared';
 import { time } from '../../src/ui/hooks';
 import { getAutoSync } from '../client/autosync';
+import { enterViewer } from '../../src/app/viewerHistory';
 
 const locationLabel = (result: SearchResult) =>
   result.location.kind === 'page'
@@ -16,9 +18,12 @@ const locationLabel = (result: SearchResult) =>
 export function CloudResultRow({
   result,
   services,
+  notify,
 }: {
   result: SearchResult;
   services: CampusRecallServices;
+  /** Confirms a finished download. */
+  notify?: (message: string) => void;
 }) {
   const controller = getAutoSync(services);
   const view = useSyncExternalStore(controller.subscribe, controller.getView);
@@ -43,7 +48,10 @@ export function CloudResultRow({
           <button
             className="button secondary"
             aria-label={`Open ${item.title} at ${locationLabel(result)}`}
-            onClick={() => controller.open(globalId, result.location)}
+            onClick={() => {
+              enterViewer();
+              controller.open(globalId, result.location);
+            }}
           >
             Open
           </button>
@@ -55,8 +63,9 @@ export function CloudResultRow({
               try {
                 const { blob, name } = await controller.download(globalId);
                 downloadBlob(blob, name);
+                notify?.('Download started. Check your downloads.');
               } catch (cause) {
-                setError(cause instanceof Error ? cause.message : String(cause));
+                setError(plainMessage(cause));
               }
             }}
           >

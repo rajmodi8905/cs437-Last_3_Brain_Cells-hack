@@ -24,6 +24,38 @@
   white-space: nowrap;
   margin-left: auto;
 }
+.setup-card {
+  background: var(--card);
+  border: var(--rule);
+  border-left: 10px solid var(--signal);
+  box-shadow: var(--hard);
+  padding: 24px 26px;
+  margin-bottom: 36px;
+  max-width: 720px;
+}
+.setup-card h2 {
+  font-size: clamp(26px, 3.2vw, 38px);
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  line-height: 1.05;
+  margin: 8px 0 14px;
+  text-wrap: balance;
+}
+.setup-card p {
+  max-width: 56ch;
+  margin: 0 0 12px;
+  overflow-wrap: anywhere;
+}
+.setup-card .setup-progress {
+  margin: 18px 0;
+}
+.setup-card .button {
+  margin: 8px 0 14px;
+  white-space: normal;
+}
+.setup-card > p:last-child {
+  margin-bottom: 0;
+}
 .library-toolbar {
   margin-bottom: 28px;
 }
@@ -368,4 +400,73 @@
   background: var(--signal);
   color: var(--ink);
   font-weight: 700;
+}
+/* iPhone Safari: install before the large download. */
+.setup-card .setup-tip {
+  padding-left: 12px;
+  border-left: 3px solid var(--ink);
+}
+/* An item menu that would open under the phone's bottom bar opens above its button. */
+.dropdown[data-side='up'] {
+  top: auto;
+  bottom: 100%;
+  transform-origin: bottom right;
+}
+.next-steps {
+  max-width: 52ch;
+  margin: -12px 0 24px;
+  padding-left: 20px;
+  font-size: 16px;
+  line-height: 1.5;
+  color: var(--ink-2);
+}
+.next-steps li + li {
+  margin-top: 6px;
+}
+.recent-searches {
+  width: 100%;
+  max-width: 560px;
+  margin-top: 32px;
+}
+.recent-searches h3 {
+  font-family: var(--mono);
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  margin: 0 0 8px;
+}
+.recent-searches ul {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 8px;
+  border-top: 1px solid var(--ink);
+}
+.recent-searches li {
+  display: flex;
+  align-items: center;
+  border-bottom: 1px solid var(--hair);
+}
+.recent-run {
+  flex: 1;
+  min-width: 0;
+  min-height: 44px;
+  padding: 8px 0;
+  border: 0;
+  background: none;
+  color: var(--ink);
+  font-size: 16px;
+  text-align: left;
+  overflow-wrap: anywhere;
+}
+.recent-searches .small {
+  display: block;
+  margin-top: 4px;
+}
+@media (hover: hover) and (pointer: fine) {
+  .recent-run:hover {
+    text-decoration: underline;
+    text-decoration-color: var(--signal);
+    text-decoration-thickness: 2px;
+  }
 }

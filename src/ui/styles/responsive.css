@@ -249,8 +249,13 @@
   .empty-state .button {
     min-height: 48px;
   }
-  .empty-state .button {
+  .empty-state .button,
+  .setup-card .button {
     width: 100%;
+  }
+  .setup-card {
+    padding: 18px 16px;
+    margin-bottom: 28px;
   }
   .mobile-nav {
     position: fixed;

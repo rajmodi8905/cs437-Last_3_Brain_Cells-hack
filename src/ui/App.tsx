@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useSyncExternalStore } from 'react';
 import { ArrowUpRight, Search, ShieldCheck, WifiOff, X } from 'lucide-react';
 import type { CampusRecallServices } from '../app/services';
 import { useCampusRecall } from '../app/useCampusRecall';
@@ -9,15 +9,15 @@ import { Landing } from './Landing';
 import { LibrarySearchScreen } from './screens/LibrarySearchScreen';
 import { SettingsScreen } from './screens/SettingsScreen';
 import { useModalFocus } from './useModalFocus';
+import { useScreenChange } from './useScreenChange';
+import { useViewerHistory } from '../app/viewerHistory';
 import { getAutoSync } from '../../pilot/client/autosync';
 import { CloudViewer } from '../../pilot/ui/CloudViewer';
 const Policy = lazy(() => import('./Policy').then((m) => ({ default: m.Policy })));
 export function App({ services }: { services: CampusRecallServices }) {
   const model = useCampusRecall(services);
-  // A new screen starts at its heading instead of inheriting a long Settings scroll.
-  useEffect(() => {
-    window.scrollTo(0, 0);
-  }, [model.screen]);
+  // Title, focus and scroll position follow the screen (see useScreenChange).
+  useScreenChange(model.screen);
   // Pilot Auto-sync runs app-wide once signed in and opted in.
   useEffect(() => {
     void getAutoSync(services).start();
@@ -36,6 +36,23 @@ export function App({ services }: { services: CampusRecallServices }) {
   useEffect(() => {
     if (openLocal) getAutoSync(services).closeViewer();
   }, [openLocal, services]);
+  // Back, Escape and the close button close either viewer the same way (see viewerHistory).
+  const cloud = getAutoSync(services);
+  const cloudOpen = !!useSyncExternalStore(cloud.subscribe, cloud.getView).opened;
+  const closeViewers = useCallback(() => {
+    setOpenLocal(undefined);
+    getAutoSync(services).closeViewer();
+  }, [services, setOpenLocal]);
+  useViewerHistory(!!openLocal || cloudOpen, closeViewers);
+  useEffect(() => {
+    if (!cloudOpen) return;
+    // The local viewer closes from the app's key handler; the cloud viewer closes here.
+    const escape = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && !e.defaultPrevented) getAutoSync(services).closeViewer();
+    };
+    window.addEventListener('keydown', escape);
+    return () => window.removeEventListener('keydown', escape);
+  }, [cloudOpen, services]);
   useModalFocus(model);
   const {
     selected,
@@ -47,15 +64,21 @@ export function App({ services }: { services: CampusRecallServices }) {
     setQuery,
     runSearch,
     searchInput,
+    searchHint,
     update,
     error,
+    errorDetail,
     setError,
+    notify,
     repository,
     saved,
     item,
     setSelected,
     toast,
     setToast,
+    installOffer,
+    install,
+    declineInstall,
   } = model;
   if (screen === 'home') return <Landing />;
   // The class drives the visual state; aria-current exposes the same state to assistive technology.
@@ -126,11 +149,16 @@ export function App({ services }: { services: CampusRecallServices }) {
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               maxLength={1000}
+              aria-describedby={searchHint ? 'search-hint' : undefined}
             />
             <button type="submit" className="search-submit" aria-label="Search">
               <ArrowUpRight size={18} />
             </button>
             <kbd>{/Mac/.test(navigator.userAgent) ? '⌘ K' : 'Ctrl K'}</kbd>
+            {/* Always present, so the hint is announced when it appears. */}
+            <p id="search-hint" className="search-hint" aria-live="polite">
+              {searchHint ? 'Type what you remember, then search.' : ''}
+            </p>
           </form>
           <span className="local-indicator">
             {offline ? <WifiOff size={15} /> : <ShieldCheck size={15} />}{' '}
@@ -159,7 +187,15 @@ export function App({ services }: { services: CampusRecallServices }) {
           )}
           {error && (
             <div className="notice error" role="alert">
-              <span>{error}</span>
+              <span>
+                {error}
+                {errorDetail && (
+                  <details className="error-detail">
+                    <summary>Show details</summary>
+                    <code>{errorDetail}</code>
+                  </details>
+                )}
+              </span>
               <button
                 className="icon-button"
                 aria-label="Dismiss error"
@@ -167,6 +203,20 @@ export function App({ services }: { services: CampusRecallServices }) {
               >
                 <X size={16} />
               </button>
+            </div>
+          )}
+          {/* One offer, never beside another notice; on Library it takes the setup banner's place. */}
+          {installOffer && !update && !error && screen === 'library' && (
+            <div className="notice install-offer">
+              <span>Install Campus Recall for quick access and so your library is kept</span>
+              <span className="button-row">
+                <button className="button secondary" onClick={() => void install()}>
+                  Install
+                </button>
+                <button className="text-button" onClick={declineInstall}>
+                  Not now
+                </button>
+              </span>
             </div>
           )}
           {(screen === 'library' || screen === 'search') && <LibrarySearchScreen model={model} />}
@@ -181,7 +231,7 @@ export function App({ services }: { services: CampusRecallServices }) {
           )}
           {!['library', 'search', 'add', 'settings', 'privacy', 'terms'].includes(screen) && (
             <div className="empty-state">
-              <h1>Page not found</h1>
+              <h1 tabIndex={-1}>Page not found</h1>
               <a href="#/library">Return to your library</a>
             </div>
           )}
@@ -195,10 +245,11 @@ export function App({ services }: { services: CampusRecallServices }) {
             location={selected.location}
             repository={repository}
             onClose={() => setSelected(undefined)}
+            onNotify={notify}
           />
         </div>
       ) : (
-        <CloudViewer services={services} />
+        <CloudViewer services={services} notify={notify} />
       )}
       <nav className="mobile-nav" aria-label="Mobile navigation">
         {[

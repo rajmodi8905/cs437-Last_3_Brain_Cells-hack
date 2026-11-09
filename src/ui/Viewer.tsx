@@ -13,11 +13,13 @@ import type { LibraryItem, LibraryRepository, SourceLocation } from '../shared';
 import { pdfjs } from '../shared/browser-assets';
 import { downloadBlob, time, useObjectUrl } from './hooks';
 import { useViewerFocus } from './useViewerFocus';
+import { plainMessage } from '../app/plainError';
 export function Viewer({
   item,
   location,
   repository,
   onClose,
+  onNotify,
 }: {
   item: LibraryItem;
   location?: SourceLocation;
@@ -25,6 +27,8 @@ export function Viewer({
   repository: Pick<LibraryRepository, 'getOriginal'> &
     Partial<Pick<LibraryRepository, 'exportItems'>>;
   onClose: () => void;
+  /** Confirms a finished action, such as a download, with the app's notification. */
+  onNotify?: (message: string) => void;
 }) {
   const [zoom, setZoom] = useState(false);
   const [blob, setBlob] = useState<Blob>();
@@ -58,7 +62,7 @@ export function Viewer({
         }
       })
       .catch((cause) => {
-        if (current) setError(String(cause));
+        if (current) setError(plainMessage(cause));
       });
     return () => {
       current = false;
@@ -97,8 +101,9 @@ export function Viewer({
         viewport,
       });
       await render.promise;
-    })().catch((cause) => {
-      if (!cancelled) setError(`Could not display this PDF. ${cause.message}`);
+    })().catch(() => {
+      if (!cancelled)
+        setError('Could not display this PDF. Download the original to open it in another app.');
     });
     return () => {
       cancelled = true;
@@ -244,7 +249,10 @@ export function Viewer({
       {blob && (
         <button
           className="button secondary source-download"
-          onClick={() => downloadBlob(blob, item.originalName ?? `${item.title}.txt`)}
+          onClick={() => {
+            downloadBlob(blob, item.originalName ?? `${item.title}.txt`);
+            onNotify?.('Download started. Check your downloads.');
+          }}
         >
           <ArrowDownToLine size={16} /> Download original
         </button>
@@ -254,8 +262,11 @@ export function Viewer({
           className="text-button"
           onClick={() =>
             void repository.exportItems!([item.id])
-              .then((archive) => downloadBlob(archive, `campus-recall-${item.id}.zip`))
-              .catch((cause) => setError(cause.message))
+              .then((archive) => {
+                downloadBlob(archive, `campus-recall-${item.id}.zip`);
+                onNotify?.('Item backup created. Keep this unencrypted ZIP somewhere private.');
+              })
+              .catch((cause) => setError(plainMessage(cause)))
           }
         >
           Export this item as backup
