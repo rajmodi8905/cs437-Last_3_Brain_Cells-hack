@@ -267,6 +267,31 @@
           "title": "reports malformed JSON manifests consistently without writes"
         },
         {
+          "suite": "fast",
+          "file": "tests/storage/backup-limits.test.ts",
+          "title": "Backup export stays within the import limits > splits a library one item over the archive item limit into ZIPs that all import"
+        },
+        {
+          "suite": "fast",
+          "file": "tests/storage/backup-limits.test.ts",
+          "title": "Backup export stays within the import limits > puts large media into parts below the ZIP size and unpacked limits"
+        },
+        {
+          "suite": "fast",
+          "file": "tests/storage/backup-limits.test.ts",
+          "title": "Backup export stays within the import limits > refuses a single-ZIP export the importer would reject instead of producing it"
+        },
+        {
+          "suite": "fast",
+          "file": "tests/app/backup.test.ts",
+          "title": "Export all > asks the repository for one importable ZIP per part, never the whole large library"
+        },
+        {
+          "suite": "fast",
+          "file": "tests/app/backup.test.ts",
+          "title": "Export all > waits between part downloads and names each part"
+        },
+        {
           "suite": "browser",
           "file": "tests/e2e/library.spec.ts",
           "title": "[S6] exported originals restore into an independent browser profile and stay queued"

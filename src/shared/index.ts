@@ -93,6 +93,10 @@ export interface LibraryRepository {
   listItems(filters?: ItemFilters): Promise<LibraryItem[]>;
   renameItem(id: string, title: string): Promise<LibraryItem>;
   deleteItem(id: string): Promise<void>;
+  /**
+   * One ZIP for a selection that fits the import limits; larger selections are refused.
+   * Whole-library backups split the library with `planArchiveParts` first.
+   */
   exportItems(ids: string[]): Promise<Blob>;
   importArchive(archive: Blob): Promise<ImportReport>;
 }
@@ -159,6 +163,38 @@ export const LIMITS = {
   maxAudioDurationMs: 5 * 60 * 1000,
   maxVideoDurationMs: 2 * 60 * 1000,
 } as const;
+
+/** What one backup ZIP may hold; export splits a library so that every part imports. */
+export const ARCHIVE_LIMITS = {
+  maxItems: 500,
+  maxArchiveBytes: 250_000_000,
+  maxUnpackedBytes: 500_000_000,
+  maxEntryBytes: 100_000_000,
+  /** Originals per exported part, leaving room for ZIP headers and the manifest. */
+  partBytes: 200_000_000,
+} as const;
+
+/** Groups items, in order, into the fewest parts that each fit one importable ZIP. */
+export function planArchiveParts<T extends { byteLength: number }>(items: T[]): T[][] {
+  const parts: T[][] = [];
+  let current: T[] = [];
+  let bytes = 0;
+  for (const item of items) {
+    if (
+      current.length &&
+      (current.length >= ARCHIVE_LIMITS.maxItems ||
+        bytes + item.byteLength > ARCHIVE_LIMITS.partBytes)
+    ) {
+      parts.push(current);
+      current = [];
+      bytes = 0;
+    }
+    current.push(item);
+    bytes += item.byteLength;
+  }
+  if (current.length) parts.push(current);
+  return parts;
+}
 
 export const SUPPORTED_MIME_TYPES: Record<string, ItemKind> = {
   'image/jpeg': 'image',

@@ -9,7 +9,7 @@ import {
 } from '../shared';
 import type { CampusRecallServices } from './services';
 import { useLibraryItems } from './useLibraryItems';
-import { downloadBlob } from './download';
+import { backupCreatedMessage, downloadParts, exportLibrary } from './backup';
 import { plainError } from './plainError';
 import {
   createPersistenceRequest,
@@ -407,11 +407,9 @@ export function useCampusRecall(services: CampusRecallServices) {
   };
   const exportAll = () =>
     perform('export', async () => {
-      downloadBlob(
-        await repository.exportItems(items.map((i) => i.id)),
-        `campus-recall-${new Date().toISOString().slice(0, 10)}.zip`,
-      );
-      notify('Backup created. Keep this unencrypted ZIP somewhere private.');
+      const archives = await exportLibrary(repository, items);
+      await downloadParts(archives, `campus-recall-${new Date().toISOString().slice(0, 10)}`);
+      notify(backupCreatedMessage(archives.length));
     });
   const action = (value: LibraryItem, name: string) => {
     setMenu(undefined);
