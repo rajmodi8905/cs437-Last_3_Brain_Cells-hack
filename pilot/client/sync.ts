@@ -29,7 +29,7 @@ export interface SyncResult {
   failed: number;
   /** Index bundles this device published. */
   indexed: number;
-  /** Sync is paused on this device; nothing was sent. */
+  /** Sync was paused; any work completed before the pause is recorded in the counts. */
   paused?: true;
   /** The cloud library was removed or reset; the user must start again. */
   needsResync?: true;
@@ -55,6 +55,7 @@ export class SyncEngine {
   private offline?: OfflineStore;
   private indexVersion: string;
   private downloadRangeBytes: number;
+  private paused?: boolean;
 
   constructor(options: {
     api: ApiClient;
@@ -128,18 +129,8 @@ export class SyncEngine {
     return bytes;
   }
 
-  /**
-   * Re-reads the `paused` flag from durable state so that a concurrent `setPaused(true)` is
-   * never overwritten by the in-memory snapshot, and returns whether sync is now paused.
-   */
-  private async syncPaused(snapshot: SyncSnapshot): Promise<boolean> {
-    const latest = await this.state.load();
-    snapshot.paused = latest.paused;
-    return !!snapshot.paused;
-  }
-
   private async saveState(snapshot: SyncSnapshot): Promise<void> {
-    await this.syncPaused(snapshot);
+    if (this.paused !== undefined) snapshot.paused = this.paused;
     await this.state.save(snapshot);
   }
 
@@ -153,19 +144,21 @@ export class SyncEngine {
       indexed: 0,
     };
     const snapshot = await this.state.load();
+    if (this.paused === undefined) this.paused = snapshot.paused;
+    else snapshot.paused = this.paused;
     if (!snapshot.included || snapshot.epoch === undefined) return result;
-    if (snapshot.paused) return { ...result, paused: true };
+    if (this.paused) return { ...result, paused: true };
     if (snapshot.needsResync) return { ...result, needsResync: true };
     // A different or recreated library would look like mass deletion; refuse instead.
     if (snapshot.libraryId !== this.libraryId) return { ...result, blocked: 'library-mismatch' };
 
     await this.plan(snapshot, await this.library.listItems());
-    if (await this.syncPaused(snapshot)) return { ...result, paused: true };
+    if (this.paused) return { ...result, paused: true };
     await this.saveState(snapshot);
 
     try {
       await this.pull(snapshot, result);
-      if (await this.syncPaused(snapshot)) return { ...result, paused: true };
+      if (this.paused) return { ...result, paused: true };
       await this.saveState(snapshot);
       await this.syncRemoteIndexes(snapshot, result);
       await this.cleanOffline(snapshot);
@@ -180,7 +173,7 @@ export class SyncEngine {
     }
 
     for (const op of [...snapshot.ops]) {
-      if (await this.syncPaused(snapshot)) return { ...result, paused: true };
+      if (this.paused) return { ...result, paused: true };
       if (!snapshot.ops.includes(op)) continue;
       try {
         await this.send(op, snapshot, result);
@@ -196,8 +189,9 @@ export class SyncEngine {
         continue;
       }
       await this.saveState(snapshot);
+      if (this.paused) return { ...result, paused: true };
     }
-    if (snapshot.paused) return { ...result, paused: true };
+    if (this.paused) return { ...result, paused: true };
     return result;
   }
 
@@ -350,7 +344,7 @@ export class SyncEngine {
         for (let attempt = 0; !item; attempt++) {
           try {
             if (!op.uploadId) {
-              if (await this.syncPaused(snapshot)) return;
+              if (this.paused) return;
               const { kind, title, mimeType, byteLength, contentSha256, createdAt, sourceUrl } =
                 local;
               const begun = await this.api.beginUpload(op.globalId, {
@@ -365,12 +359,12 @@ export class SyncEngine {
             }
             const size = op.chunkBytes!;
             for (let n = op.sentChunks ?? 0; n * size < bytes.length; n++) {
-              if (await this.syncPaused(snapshot)) return;
+              if (this.paused) return;
               await this.api.putChunk(op.uploadId, n, bytes.slice(n * size, (n + 1) * size));
               op.sentChunks = n + 1;
               await this.saveState(snapshot);
             }
-            if (await this.syncPaused(snapshot)) return;
+            if (this.paused) return;
             ({ item } = await this.api.completeUpload(op.uploadId, {
               opId: op.completeOpId,
               epoch,
@@ -398,7 +392,7 @@ export class SyncEngine {
           });
         result.uploaded++;
       } else if (op.kind === 'rename') {
-        if (await this.syncPaused(snapshot)) return;
+        if (this.paused) return;
         const { item } = await this.api.rename(op.globalId, {
           opId: op.opId,
           epoch,
@@ -410,11 +404,11 @@ export class SyncEngine {
           Object.assign(mapping, { syncedTitle: item.title, syncedRevision: item.revision });
         result.renamed++;
       } else if (op.kind === 'publishIndex') {
-        if (await this.syncPaused(snapshot)) return;
+        if (this.paused) return;
         await this.sendIndex(op, snapshot, mapping, result);
         return;
       } else {
-        if (await this.syncPaused(snapshot)) return;
+        if (this.paused) return;
         await this.api.remove(op.globalId, {
           opId: op.opId,
           epoch,
@@ -465,11 +459,17 @@ export class SyncEngine {
 
   async status() {
     const { included, paused, needsResync, epoch } = await this.state.load();
-    return { included, paused: !!paused, needsResync: !!needsResync, epoch };
+    return {
+      included,
+      paused: this.paused !== undefined ? this.paused : !!paused,
+      needsResync: !!needsResync,
+      epoch,
+    };
   }
 
   /** Pause stops all sync work on this device only; cloud data is untouched. */
   async setPaused(paused: boolean) {
+    this.paused = paused;
     const snapshot = await this.state.load();
     await this.state.save({ ...snapshot, paused });
   }
@@ -603,7 +603,7 @@ export class SyncEngine {
       this.removeOp(snapshot, op);
       return;
     }
-    if (await this.syncPaused(snapshot)) return;
+    if (this.paused) return;
     const { item } = await this.api.publishIndex(op.globalId, {
       opId: op.opId,
       epoch: snapshot.epoch!,

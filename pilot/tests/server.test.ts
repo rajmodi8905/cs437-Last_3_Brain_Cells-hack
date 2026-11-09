@@ -312,9 +312,8 @@ describe('P03 owner isolation', () => {
       new TextEncoder().encode(JSON.stringify({ note: "A's private index" })),
     );
     const aItem = await store.getItem('google:subject-a', aGlobalId);
-    if (aItem) {
-      await store.publish('google:subject-a', { ...aItem, indexObjectKey: aIndexKey }, a.epoch);
-    }
+    expect(aItem).toBeDefined();
+    await store.publish('google:subject-a', { ...aItem!, indexObjectKey: aIndexKey }, a.epoch);
     const aIndexRes = await call(a, `/items/${aGlobalId}/index`);
     expect(aIndexRes.status).toBe(200);
 
@@ -357,7 +356,7 @@ describe('P03 owner isolation', () => {
     expect(aIndexResAfter.status).toBe(200);
   });
 
-  it('rejects access and deletion with 403 FORBIDDEN if stored objectKey does not belong to owner', async () => {
+  it('protects against stored unowned object keys on read and delete', async () => {
     const a = await signIn();
     const globalId = randomUUID();
     const foreignKey = 'google:other-user/1/some-item/original';
@@ -380,23 +379,51 @@ describe('P03 owner isolation', () => {
       a.epoch,
     );
 
-    // GET /original rejects with 403
+    // GET /original returns 404 NOT_FOUND rather than leaking existence or serving foreign data
     const getRes = await call(a, `/items/${globalId}/original`);
-    expect(getRes.status).toBe(403);
+    expect(getRes.status).toBe(404);
 
-    // GET /index rejects with 403
+    // GET /index returns 404 NOT_FOUND
     const indexRes = await call(a, `/items/${globalId}/index`);
-    expect(indexRes.status).toBe(403);
+    expect(indexRes.status).toBe(404);
 
-    // DELETE rejects with 403 and leaves foreign keys intact in objects
+    // DELETE skips unowned keys, tombstones the item, and leaves foreign keys intact in objects
     const delRes = await json(a, `/items/${globalId}`, 'DELETE', {
       opId: randomUUID(),
       epoch: a.epoch,
       expectedRevision: 1,
     });
-    expect(delRes.status).toBe(403);
+    expect(delRes.status).toBe(200);
     expect(await objects.get(foreignKey)).toBeDefined();
     expect(await objects.get(foreignIndexKey)).toBeDefined();
+    const afterItem = await store.getItem('google:subject-a', globalId);
+    expect(afterItem?.deleted).toBe(true);
+  });
+
+  it('resets vault cleanly without throwing if stored item had unowned keys', async () => {
+    const a = await signIn();
+    const globalId = randomUUID();
+    const foreignKey = 'google:other-user/1/foreign-item/original';
+    await objects.put(foreignKey, new TextEncoder().encode('other user data'));
+    await store.publish(
+      'google:subject-a',
+      {
+        ...describeItem(pdf),
+        globalId,
+        revision: 1,
+        deleted: false,
+        objectKey: foreignKey,
+      },
+      a.epoch,
+    );
+
+    const resetRes = await json(a, '/vault', 'DELETE', {
+      confirm: 'remove-cloud-library',
+      epoch: a.epoch,
+    });
+    expect(resetRes.status).toBe(200);
+    // Foreign blob is untouched
+    expect(await objects.get(foreignKey)).toBeDefined();
   });
 });
 
