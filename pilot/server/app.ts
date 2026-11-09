@@ -5,6 +5,7 @@ import type { IncomingMessage, RequestListener, ServerResponse } from 'node:http
 import {
   decideWrite,
   PILOT_INDEX_VERSIONS,
+  pickItemDescription,
   searchMetadataDigest,
   validateCloudItem,
   validateIndexBundle,
@@ -17,10 +18,10 @@ import {
   VaultResetError,
   publicItem,
   stagingKey,
-  type ItemDescription,
   type ObjectStore,
   type PilotStore,
   type Session,
+  type StoredItem,
 } from './store';
 import { DEFAULT_LIMITS, RateLimiter, type RateLimits } from './limits';
 import type { KeySource } from './tokens';
@@ -469,7 +470,8 @@ export function createPilotHandler(options: PilotServerOptions): RequestListener
       const opId = opIdOf(body);
       const epoch = await requireEpoch(session.ownerKey, body);
       const result = await idempotent(session.ownerKey, opId, async () => {
-        const item = { ...(body.item as ItemDescription), globalId };
+        const description = pickItemDescription(body.item);
+        const item = { ...description, globalId };
         const valid = validateCloudItem(item);
         if (!valid.ok) throw new ApiError(valid.code, valid.reason);
         const existing = await store.getItem(session.ownerKey, globalId);
@@ -477,7 +479,6 @@ export function createPilotHandler(options: PilotServerOptions): RequestListener
         if (existing) throw new ApiError('INVALID_INPUT', 'This item already exists.');
         if ((await store.committedBytes(session.ownerKey)) + item.byteLength > options.quotaBytes)
           throw new ApiError('QUOTA_EXCEEDED', 'This would exceed your cloud storage quota.');
-        const { globalId: _id, ...description } = item;
         const uploadId = randomUUID();
         await store.createUpload({
           uploadId,
@@ -557,8 +558,9 @@ export function createPilotHandler(options: PilotServerOptions): RequestListener
         }
         const objectKey = `${session.ownerKey}/${upload.epoch}/${upload.globalId}/original`;
         await objects.compose(objectKey, parts);
-        const item = {
-          ...upload.item,
+        const description = pickItemDescription(upload.item);
+        const item: StoredItem = {
+          ...description,
           globalId: upload.globalId,
           revision: 1,
           deleted: false,
@@ -606,8 +608,8 @@ export function createPilotHandler(options: PilotServerOptions): RequestListener
               }
             : { ...current, revision: decision.nextRevision, title: write.title };
         if (write.type === 'delete') {
-          if (current.objectKey) await objects.delete(current.objectKey);
-          if (current.indexObjectKey) await objects.delete(current.indexObjectKey);
+          for (const key of [current.objectKey, current.indexObjectKey])
+            if (key?.startsWith(`${session.ownerKey}/`)) await objects.delete(key);
         }
         await store.publish(session.ownerKey, next, epoch);
         return { status: 200, body: { item: publicItem(next) } };
@@ -618,7 +620,12 @@ export function createPilotHandler(options: PilotServerOptions): RequestListener
     if ((match = /^\/items\/([^/]+)\/original$/.exec(path)) && method === 'GET') {
       const session = await requireSession(req, false);
       const item = await store.getItem(session.ownerKey, match[1]);
-      if (!item || item.deleted || !item.objectKey)
+      if (
+        !item ||
+        item.deleted ||
+        !item.objectKey ||
+        !item.objectKey.startsWith(`${session.ownerKey}/`)
+      )
         throw new ApiError('NOT_FOUND', 'Item not found.');
       const size = item.byteLength;
       const headers = {
@@ -650,8 +657,8 @@ export function createPilotHandler(options: PilotServerOptions): RequestListener
       await requireEpoch(session.ownerKey, body);
       const { epoch, removed, abandoned } = await store.resetVault(session.ownerKey);
       for (const item of removed) {
-        if (item.objectKey) await objects.delete(item.objectKey);
-        if (item.indexObjectKey) await objects.delete(item.indexObjectKey);
+        for (const key of [item.objectKey, item.indexObjectKey])
+          if (key?.startsWith(`${session.ownerKey}/`)) await objects.delete(key);
       }
       for (const upload of abandoned)
         for (const n of upload.chunks) await objects.delete(stagingKey(upload.uploadId, n));
@@ -691,8 +698,10 @@ export function createPilotHandler(options: PilotServerOptions): RequestListener
       const session = await requireSession(req, false);
       const item = await store.getItem(session.ownerKey, match[1]);
       if (item?.deleted) throw new ApiError('ITEM_DELETED', 'This item was deleted.');
-      const bytes = item?.indexObjectKey ? await objects.get(item.indexObjectKey) : undefined;
-      if (!item || !bytes) throw new ApiError('NOT_FOUND', 'No index for this item.');
+      if (!item || !item.indexObjectKey || !item.indexObjectKey.startsWith(`${session.ownerKey}/`))
+        throw new ApiError('NOT_FOUND', 'No index for this item.');
+      const bytes = await objects.get(item.indexObjectKey);
+      if (!bytes) throw new ApiError('NOT_FOUND', 'No index for this item.');
       return send(res, 200, bytes, { 'content-type': 'application/json' });
     }
 
