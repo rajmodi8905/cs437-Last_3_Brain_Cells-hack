@@ -56,7 +56,9 @@ export function AutoSyncSection({ services }: { services: CampusRecallServices }
               ? 'Paused'
               : view.status === 'local-only'
                 ? 'Local only'
-                : 'Not syncing'}
+                : view.status === 'offline'
+                  ? 'Offline'
+                  : 'Not syncing'}
         </span>
       </div>
 
@@ -93,7 +95,59 @@ export function AutoSyncSection({ services }: { services: CampusRecallServices }
         <p>Local only. Your library stays on this device. Auto-sync is not available here.</p>
       )}
 
-      {(view.status === 'signed-out' || view.status === 'unavailable') && (
+      {view.status === 'offline' && (
+        <>
+          <p role="status">
+            Offline. The sync service cannot be reached. Items you kept offline for {view.email}{' '}
+            still open on this device.
+          </p>
+          {view.cloudOnly.some((item) => view.offlineIds.includes(item.globalId)) && (
+            <>
+              <h3 id="kept-offline-title">Kept offline</h3>
+              <ul className="selected-files" aria-labelledby="kept-offline-title">
+                {view.cloudOnly
+                  .filter((item) => view.offlineIds.includes(item.globalId))
+                  .map((item) => (
+                    <li key={item.globalId}>
+                      <span>{kindNames[item.kind ?? ''] ?? 'Item'}</span>
+                      <span>{item.title}</span>
+                      <span className="muted">{bytes(item.byteLength ?? 0)}</span>
+                      <button
+                        className="button secondary"
+                        aria-label={`Open ${item.title}`}
+                        onClick={() => controller.open(item.globalId)}
+                      >
+                        Open
+                      </button>
+                      <button
+                        className="button secondary"
+                        aria-label={`Download ${item.title}`}
+                        disabled={busy}
+                        onClick={act(async () => {
+                          const { blob, name } = await controller.download(item.globalId);
+                          downloadBlob(blob, name);
+                        })}
+                      >
+                        Download
+                      </button>
+                    </li>
+                  ))}
+              </ul>
+            </>
+          )}
+          <button
+            className="button secondary"
+            disabled={busy}
+            onClick={act(() => controller.activate())}
+          >
+            Try again
+          </button>
+        </>
+      )}
+
+      {(view.status === 'signed-out' ||
+        view.status === 'unavailable' ||
+        view.status === 'offline') && (
         <button
           className="button secondary"
           disabled={busy}
@@ -375,6 +429,15 @@ export function AutoSyncSection({ services }: { services: CampusRecallServices }
         <p className="notice error" role="alert">
           {error}
         </p>
+      )}
+      {view.signOutPending && (
+        <button
+          className="button secondary"
+          disabled={busy}
+          onClick={act(() => controller.finishSignOut())}
+        >
+          Sign out again
+        </button>
       )}
     </section>
   );

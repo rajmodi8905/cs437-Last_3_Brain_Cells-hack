@@ -7,6 +7,8 @@ export type ItemDescription = Omit<CloudItem, 'globalId' | 'revision' | 'deleted
 export interface StoredItem extends CloudItem {
   objectKey?: string;
   indexObjectKey?: string;
+  /** Stored size of the index bundle; it counts toward the quota like the original. */
+  indexBytes?: number;
 }
 
 export interface Session {
@@ -70,7 +72,7 @@ export interface PilotStore {
   /** Returns and removes the attempt in one step, so it can be used only once. */
   takeLoginAttempt(id: string): Promise<LoginAttempt | undefined>;
   getItem(ownerKey: string, globalId: string): Promise<StoredItem | undefined>;
-  /** Bytes held by live items plus reservations of unfinished uploads. */
+  /** Bytes held by live items and their index bundles plus reservations of unfinished uploads. */
   committedBytes(ownerKey: string): Promise<number>;
   savedResponse(ownerKey: string, opId: string): Promise<SavedResponse | undefined>;
   /** `savedAt` (seconds) decides when the result is cleaned up; defaults to now. */
@@ -136,6 +138,11 @@ export interface ObjectStore {
 /** What other devices see: tombstones keep only identity and revision. */
 export const publicItem = (item: StoredItem): Change['item'] => {
   if (item.deleted) return { globalId: item.globalId, revision: item.revision, deleted: true };
-  const { objectKey: _objectKey, indexObjectKey: _indexObjectKey, ...visible } = item;
+  const {
+    objectKey: _objectKey,
+    indexObjectKey: _indexObjectKey,
+    indexBytes: _indexBytes,
+    ...visible
+  } = item;
   return visible;
 };
