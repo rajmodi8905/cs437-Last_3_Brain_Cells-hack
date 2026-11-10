@@ -27,6 +27,10 @@ export const REPLIES = {
   bigImage: `This photo is over ${LIMITS.maxImageBytes / 1_000_000} MB, so it was not saved.`,
   bigPdf: `This PDF is over ${LIMITS.maxPdfBytes / 1_000_000} MB, so it was not saved.`,
   longNote: `This note is over ${LIMITS.maxTextCodePoints.toLocaleString('en-US')} characters, so it was not saved.`,
+  notSearchable: (title: string) =>
+    `Couldn't make "${title}" searchable, but it is still saved in Campus Recall.`,
+  indexFull: (title: string) =>
+    `Your Campus Recall library is full, so "${title}" was saved but can't be searched yet.`,
 };
 
 const NOTE_MIME = 'text/plain;charset=utf-8';
@@ -185,6 +189,20 @@ export interface WhatsAppWorkerOptions {
 class Refusal extends Error {
   constructor(readonly reply: string) {
     super(reply);
+  }
+}
+
+/**
+ * A job that would fail the same way every time, so it fails at once instead of being retried.
+ * For an index job, `reply` replaces the usual message to the student.
+ */
+export class PermanentJobError extends Error {
+  constructor(
+    message: string,
+    readonly reply?: string,
+  ) {
+    super(message);
+    this.name = 'PermanentJobError';
   }
 }
 
@@ -357,7 +375,8 @@ export function createWhatsAppIngest(options: WhatsAppWorkerOptions) {
     } catch (cause) {
       const error = cause instanceof Error ? cause.message : String(cause);
       log(`WhatsApp ${job.kind} job failed (attempt ${job.attempts})`, error);
-      if (job.attempts < maxAttempts)
+      const permanent = cause instanceof PermanentJobError;
+      if (job.attempts < maxAttempts && !permanent)
         await bot.retryJob(job, error, now() + retryDelay(job.attempts));
       else {
         await bot.failJob(job, error);
@@ -365,10 +384,27 @@ export function createWhatsAppIngest(options: WhatsAppWorkerOptions) {
           const inbound = await bot.getInbound(job.wamid);
           const sender = inbound && (await bot.getSender(inbound.senderId));
           if (inbound && sender) await answer(job.wamid, sender, REPLIES.failed);
-        }
+        } else await indexFailed(job, permanent ? cause.reply : undefined);
       }
     }
     return true;
+  }
+
+  /**
+   * Tells the student once that a saved item could not be made searchable. The message already
+   * had its "Saved" reply, so "once" comes from the job: only the claim that moved it to `failed`
+   * (the terminal state) answers.
+   */
+  async function indexFailed(job: BotJob, text?: string) {
+    const failed = await bot.getJob(job.id);
+    if (failed?.state !== 'failed' || failed.attempts !== job.attempts) return;
+    const inbound = await bot.getInbound(job.wamid);
+    const sender = inbound && (await bot.getSender(inbound.senderId));
+    const item = await store.getItem(job.ownerKey, globalIdFor(job.wamid));
+    if (!sender || !item || item.deleted) return;
+    await reply(sender, text ?? REPLIES.notSearchable(item.title)).catch((cause: unknown) =>
+      log('WhatsApp reply failed', cause),
+    );
   }
 
   /** Runs due jobs until none is left; for tests and one-off runs. */
