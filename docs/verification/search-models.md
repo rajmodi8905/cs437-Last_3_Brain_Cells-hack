@@ -37,6 +37,38 @@ A student can add any public text embedding model from Hugging Face with an ONNX
 
 In the acceptance run, `Xenova/bge-small-en-v1.5` added with its documented query instruction found 8 of 8 calibration questions at 0.47. On the frozen corpus it found every text target at rank 1, but two of the three unrelated queries returned one result each. That is why a student's own model is experimental, and why EmbeddingGemma remains the default.
 
+## Review changes (Nakshatra, PR #54)
+
+**A stricter gate.** EmbeddingGemma's three calibration negatives are far from campus life, so they barely tested false positives. bge-small passed them and still matched two of the three unrelated corpus queries. A student's model is now also checked against campus questions:
+
+- Five campus-style negatives join the threshold choice.
+- Eight more unrelated campus questions, never used to choose the threshold, are searched against the eight calibration notes plus twelve other campus notes.
+
+Settings shows "found N of 8 sample questions and wrongly matched M of 8 unrelated ones". A model that matches more than half (5 or more) is refused. That limit was set after seeing these numbers and does not bind any model measured (Node, q8):
+
+| Model                     | Found         | Wrongly matched |
+| ------------------------- | ------------- | --------------- |
+| bge-small-en-v1.5, mean   | 7/8           | 3/8             |
+| bge-small-en-v1.5, CLS    | 7/8           | 3/8             |
+| bge-base-en-v1.5, CLS     | 8/8           | 2/8             |
+| gte-small                 | 7/8           | 2/8             |
+| all-MiniLM-L6-v2          | 7/8           | 2/8             |
+| e5-small-v2               | 5/8 (refused) | 0/8             |
+| snowflake-arctic-embed-xs | 3/8 (refused) | 0/8             |
+
+Against only the eight calibration notes, almost no model matched the unrelated questions. The false matches appear once the pool is larger, as in the frozen corpus.
+
+**Settings read from the model.** When a repository publishes sentence-transformers settings (`1_Pooling/config.json`, and prompts in `config_sentence_transformers.json`), they are used automatically. The form's fields are optional overrides. With nothing published, mean pooling and no prefixes are used.
+
+**A real Hugging Face run.** In Chromium against a production build, with the real network, `BAAI/bge-small-en-v1.5` was added through Settings in 33 seconds:
+
+- Its revision was pinned and the full-precision ONNX file (133 MB) downloaded from `huggingface.co` and `us.aws.cdn.hf.co`.
+- CLS pooling was detected automatically.
+- It found 7 of 8 sample questions and wrongly matched 2 of 8 unrelated ones.
+- After the switch, two notes were re-indexed. "When can I eat dinner?" and "Where do I meet my mentor?" each returned one result, and "How do I renew my passport?" returned none.
+
+Hugging Face's API and file responses carry `access-control-allow-origin` for the pilot origin, and the live Content-Security-Policy already allows `huggingface.co` and `*.hf.co`.
+
 ## EmbeddingGemma is unchanged
 
 Every file listed in `retrieval-freeze.json` is byte-identical to `main`. The student's model runs in its own worker (`src/engine/custom-model.worker.ts`). Its ranking (`src/engine/modelRanking.ts`) calls the frozen `rankSegments` whenever EmbeddingGemma's thresholds are in use, and a test checks that the explicit-threshold path gives identical results. The asset manifest and EmbeddingGemma's readiness marker are unchanged, so devices that are already set up stay ready.
