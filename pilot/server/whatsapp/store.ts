@@ -125,6 +125,8 @@ export interface BotStore {
   senderState(userId: string): Promise<SenderState>;
   /** Notes that the consent notice was sent; true only for the first caller. */
   claimNotice(userId: string, now: number): Promise<boolean>;
+  /** Gives the notice claim back after its send failed, so the next message gets it. */
+  releaseNotice(userId: string): Promise<void>;
   /** Records consent with the notice version agreed to; ends any STOP. */
   setConsent(userId: string, now: number, noticeVersion: string): Promise<void>;
   /** STOP (a time) or START (undefined). */
@@ -288,6 +290,9 @@ export class MemoryBotStore implements BotStore {
     if (this.states.get(userId)?.noticeSentAt !== undefined) return false;
     this.change(userId, { noticeSentAt: now });
     return true;
+  }
+  async releaseNotice(userId: string) {
+    this.change(userId, { noticeSentAt: undefined });
   }
   async setConsent(userId: string, now: number, noticeVersion: string) {
     this.change(userId, { consentedAt: now, noticeVersion, stoppedAt: undefined });

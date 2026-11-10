@@ -196,6 +196,11 @@ export interface WhatsAppWorkerOptions {
    * after this message's reply was claimed, so each message is still confirmed at most once.
    */
   onSaved?: (sender: WhatsAppSender, title: string) => Promise<void>;
+  /**
+   * Checked again under the owner's lock just before an item is stored, because a download can
+   * take a while: false (no consent any more, STOP, DELETE ALL meanwhile) stores nothing.
+   */
+  canStore?: (sender: WhatsAppSender) => Promise<boolean>;
   /** Handles index jobs; without one they stay queued for a later indexer. */
   onIndexJob?: (job: BotJob) => Promise<void>;
   /** A claimed job is taken again after this long if its worker stopped; 5 minutes. */
@@ -363,6 +368,12 @@ export function createWhatsAppIngest(options: WhatsAppWorkerOptions) {
 
     // Like upload completion: quota, object and item under the owner's lock, all or nothing.
     const outcome = await store.withOwnerLock(ownerKey, async () => {
+      // A DELETE ALL handled by another worker while this one downloaded ends this job and
+      // clears consent; storing now would bring something back into the erased vault.
+      const current = await bot.getJob(job.id);
+      if (current?.state !== 'running' || current.attempts !== job.attempts)
+        return { cancelled: true };
+      if (options.canStore && !(await options.canStore(sender))) return { cancelled: true };
       const { epoch } = await store.vault(ownerKey);
       const existing = await store.getItem(ownerKey, globalId);
       if (existing) return { existing };
@@ -377,6 +388,12 @@ export function createWhatsAppIngest(options: WhatsAppWorkerOptions) {
       await bot.finishJob(job);
       return { item };
     });
+    if ('cancelled' in outcome) {
+      // Not stored and not answered; the content goes too, as for any message not kept.
+      await bot.finishJob(job);
+      if (options.canStore) await bot.forgetMessage(wamid);
+      return;
+    }
     if ('full' in outcome) {
       await bot.finishJob(job);
       return answer(wamid, sender, REPLIES.full);

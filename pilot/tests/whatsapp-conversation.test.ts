@@ -11,6 +11,7 @@ import { createApiClient } from '../client/api';
 import { MemoryLocalLibrary, MemoryRemoteIndexStore, MemorySyncStateStore } from '../client/memory';
 import { SyncEngine } from '../client/sync';
 import { createPilotHandler } from '../server/app';
+import { backupDatabase, restoreDatabase } from '../server/backup';
 import { AzureBlobObjectStore } from '../server/blob';
 import { MemoryObjectStore, MemoryPilotStore } from '../server/memory';
 import { BACKUP_TABLES, PostgresPilotStore } from '../server/postgres';
@@ -19,18 +20,19 @@ import { staticKeySource } from '../server/tokens';
 import {
   BOT_REPLIES,
   META_LIMITS,
+  clip,
   createWhatsAppConversation,
   parseRowId,
   rowId,
   type ConversationOptions,
 } from '../server/whatsapp/conversation';
 import { EngineHostUnavailableError, FakeEngineHost } from '../server/whatsapp/engine-host';
-import { createGraphClient } from '../server/whatsapp/graph';
+import { createGraphClient, type GraphClient } from '../server/whatsapp/graph';
 import { createWhatsAppIndexer } from '../server/whatsapp/indexer';
 import { REPLIES, createWhatsAppIngest, globalIdFor } from '../server/whatsapp/ingest';
 import { hashLinkToken } from '../server/whatsapp/links';
 import { PostgresBotStore } from '../server/whatsapp/postgres';
-import { MemoryBotStore, type BotStore } from '../server/whatsapp/store';
+import { MemoryBotStore, jobId, type BotStore } from '../server/whatsapp/store';
 import {
   ACCESS_TOKEN,
   APP_SECRET,
@@ -161,9 +163,15 @@ describe.each(backends)('WhatsApp conversation: %s', (name, available, open) => 
       phoneNumberId: PHONE_NUMBER_ID,
       baseUrl: graph.base,
     });
+    // Batch windows run on these timers, fired by the test, never by the clock.
+    const timers = new Set<() => void>();
     const conversation = createWhatsAppConversation({
       ...stores,
       graph: graphClient,
+      schedule: (run) => {
+        timers.add(run);
+        return () => timers.delete(run);
+      },
       ...(engine ? { engine } : {}),
       origin: ORIGIN,
       privacyUrl: PRIVACY_URL,
@@ -174,17 +182,38 @@ describe.each(backends)('WhatsApp conversation: %s', (name, available, open) => 
       log: (message, detail) => errors.push(`${message}: ${String(detail)}`),
       ...over.conversation,
     });
-    const worker = createWhatsAppIngest({
-      ...stores,
-      graph: graphClient,
-      quotaBytes,
-      nowSeconds: () => clock.now,
-      log: (message, detail) => errors.push(`${message}: ${String(detail)}`),
-      ...conversation.hooks,
-      ...(engine && over.index !== false
-        ? { onIndexJob: createWhatsAppIndexer({ ...stores, engine, quotaBytes }) }
-        : {}),
-    });
+    /** A worker with this conversation; tests may run several, as several processes would. */
+    const makeWorker = (graphFor: GraphClient = graphClient) =>
+      createWhatsAppIngest({
+        ...stores,
+        graph: graphFor,
+        quotaBytes,
+        nowSeconds: () => clock.now,
+        log: (message, detail) => errors.push(`${message}: ${String(detail)}`),
+        ...conversation.hooks,
+        ...(engine && over.index !== false
+          ? { onIndexJob: createWhatsAppIndexer({ ...stores, engine, quotaBytes }) }
+          : {}),
+      });
+    const worker = makeWorker();
+    /** Ends every waiting batch window, as if it had run out. */
+    const fireTimers = () => {
+      for (const run of [...timers]) {
+        timers.delete(run);
+        run();
+      }
+    };
+    /** Delivers a payload to the webhook without running a worker. */
+    const deliverOnly = async (messages: Record<string, unknown>[], from: From = FROM_A) => {
+      const body = JSON.stringify(delivery(messages, from));
+      const res = await fetch(`${base}/whatsapp/webhook`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', 'x-hub-signature-256': sign(body) },
+        body,
+      });
+      expect(res.status).toBe(200);
+      return messages.map((m) => m.id as string);
+    };
 
     /** Delivers messages from one sender, runs the worker and sends waiting confirmations. */
     const send = async (messages: Record<string, unknown>[], from: From = FROM_A) => {
@@ -268,6 +297,11 @@ describe.each(backends)('WhatsApp conversation: %s', (name, available, open) => 
       base,
       conversation,
       worker,
+      makeWorker,
+      graphClient,
+      timers,
+      fireTimers,
+      deliverOnly,
       send,
       agree,
       to,
@@ -533,31 +567,33 @@ describe.each(backends)('WhatsApp conversation: %s', (name, available, open) => 
     });
 
     it('saves further apart than the window are confirmed separately', async () => {
-      const { agree, send, texts, worker } = await setup({ conversation: { batchMs: 30 } });
-      await agree();
-      const before = texts().length;
-      const deliverOnly = async (body: string) => {
-        await send([text(body)]);
-      };
-      await deliverOnly('note First');
-      await deliverOnly('note Second');
-      expect(texts().slice(before)).toEqual([REPLIES.saved('First'), REPLIES.saved('Second')]);
-      await worker.drain();
+      const t = await setup();
+      await t.agree();
+      const before = t.texts().length;
+      await t.deliverOnly([text('note First')]);
+      await t.worker.drain();
+      // The window runs out before the next save arrives.
+      t.fireTimers();
+      await t.conversation.flush();
+      await t.deliverOnly([text('note Second')]);
+      await t.worker.drain();
+      t.fireTimers();
+      await t.conversation.flush();
+      expect(t.texts().slice(before)).toEqual([REPLIES.saved('First'), REPLIES.saved('Second')]);
     });
 
     it('waits for the window, then sends one reply on its own', async () => {
-      const t = await setup({ conversation: { batchMs: 40 } });
+      const t = await setup();
       await t.agree();
       const before = t.texts().length;
-      const body = JSON.stringify(delivery([text('note Alpha'), text('note Beta')]));
-      await fetch(`${t.base}/whatsapp/webhook`, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json', 'x-hub-signature-256': sign(body) },
-        body,
-      });
+      await t.deliverOnly([text('note Alpha'), text('note Beta')]);
       await t.worker.drain();
+      // Each save restarted the window: one timer waits, and nothing is sent yet.
+      expect(t.timers.size).toBe(1);
       expect(t.texts().slice(before)).toEqual([]);
-      await new Promise((resolve) => setTimeout(resolve, 150));
+      t.fireTimers();
+      // flush has nothing left to send but waits for the confirmation the timer started.
+      await t.conversation.flush();
       const replies = t.texts().slice(before);
       expect(replies).toHaveLength(1);
       expect(replies[0].split(': ')[1].split(', ').sort()).toEqual(['Alpha', 'Beta']);
@@ -994,7 +1030,133 @@ describe.each(backends)('WhatsApp conversation: %s', (name, available, open) => 
     });
   });
 
-  it('backups cover the new consent columns and link table', async () => {
+  describe('review fixes', () => {
+    it('a save in flight during DELETE ALL in another worker stores nothing and says nothing', async () => {
+      const t = await setup();
+      await t.agree();
+      const photo = jpeg(4000, 3);
+      const url = t.graph.addMedia('9301', photo, 'image/jpeg');
+      // The first worker blocks in the download until the vault has been erased.
+      let started!: () => void;
+      const downloading = new Promise<void>((done) => (started = done));
+      let release!: () => void;
+      const gate = new Promise<void>((done) => (release = done));
+      const slow = t.makeWorker({
+        ...t.graphClient,
+        download: async (from, max) => {
+          started();
+          await gate;
+          return t.graphClient.download(from, max);
+        },
+      });
+      const [photoId] = await t.deliverOnly([
+        message('image', { id: '9301', mime_type: 'image/jpeg', sha256: sha256Base64(photo), url }),
+      ]);
+      const running = slow.runOnce();
+      await downloading;
+      await t.send([text('DELETE ALL')]);
+      await t.send([text('CONFIRM DELETE')]);
+      expect(t.texts().at(-1)).toBe(BOT_REPLIES.deleted);
+      release();
+      await running;
+      await t.worker.drain();
+      await t.conversation.flush();
+      expect(await t.liveItems()).toEqual([]);
+      expect(t.texts().at(-1)).toBe(BOT_REPLIES.deleted);
+      expect(t.texts().some((body) => body.startsWith('Saved'))).toBe(false);
+      expect(await t.bot.getJob(jobId('index', photoId))).toBeUndefined();
+      expect((await t.bot.getInbound(photoId))!.message).toEqual({ id: photoId, type: 'image' });
+    });
+
+    it('START after a STOP sent before AGREE asks for AGREE', async () => {
+      const t = await setup();
+      await t.send([text('hi')]);
+      await t.send([text('STOP')]);
+      await t.send([text('START')]);
+      expect(t.texts().at(-1)).toBe(BOT_REPLIES.agreeFirst);
+      await t.send([text('AGREE')]);
+      expect(t.texts().at(-1)).toBe(BOT_REPLIES.agreed);
+    });
+
+    it('a notice that could not be sent is sent with the next message', async () => {
+      const t = await setup();
+      t.graph.state.failSends = 1;
+      await t.send([text('hi')]);
+      expect(t.texts()).toEqual([]);
+      await t.send([text('hello?')]);
+      expect(t.texts()).toEqual([BOT_REPLIES.notice(PRIVACY_URL)]);
+      await t.send([text('third')]);
+      expect(t.texts()).toHaveLength(1);
+    });
+
+    it('a list reply before AGREE or during STOP sends nothing back', async () => {
+      const t = await setup({ index: false });
+      await t.agree(FROM_B);
+      const [bNote] = await t.send([text('note Not for A', {}, FROM_B)], FROM_B);
+      const pick = () => listReply(rowId(globalIdFor(bNote), { kind: 'whole' }), FROM_B);
+      await t.send([text('STOP', {}, FROM_B)], FROM_B);
+      const during = t.to(FROM_B).length;
+      await t.send([pick()], FROM_B);
+      expect(t.to(FROM_B)).toHaveLength(during);
+      // Before AGREE (A never agreed): only the notice, once, and no upload.
+      await t.send([listReply(rowId(globalIdFor(bNote), { kind: 'whole' }))]);
+      await t.send([listReply(rowId(globalIdFor(bNote), { kind: 'whole' }))]);
+      expect(t.to().map((sent) => sent.type)).toEqual(['text']);
+      expect(t.graph.state.uploads.size).toBe(0);
+    });
+
+    it('an item the chat cannot carry gets a pointer to the app instead', async () => {
+      const t = await setup({ index: false });
+      await t.agree();
+      const [id] = await t.send([text('note Lecture recording')]);
+      const item = (await t.store.getItem(OWNER_A, globalIdFor(id)))!;
+      // As if it came from an included device library: an audio item.
+      await t.store.publish(
+        OWNER_A,
+        { ...item, kind: 'audio', mimeType: 'audio/mpeg', revision: item.revision + 1 },
+        (await t.store.vault(OWNER_A)).epoch,
+      );
+      const before = t.to().length;
+      await t.send([listReply(rowId(item.globalId, { kind: 'whole' }))]);
+      const sent = t.to().slice(before);
+      expect(sent.map((s) => s.type)).toEqual(['text', 'interactive']);
+      expect((sent[0].text as { body: string }).body).toBe(BOT_REPLIES.appOnly);
+      expect(t.graph.state.uploads.size).toBe(0);
+    });
+
+    it('two uses of one link at the same time open one session', async () => {
+      const t = await setup();
+      await t.agree();
+      const token = await t.openLink();
+      const results = await Promise.all([t.follow(token), t.follow(token), t.follow(token)]);
+      expect(results.map((res) => res.status).sort()).toEqual([303, 404, 404]);
+      expect(results.filter((res) => cookieOf(res))).toHaveLength(1);
+    });
+
+    it('following a link again on a browser already signed in to that vault works', async () => {
+      const t = await setup();
+      await t.agree();
+      const first = cookieOf(await t.follow(await t.openLink()))!;
+      const token = await t.openLink();
+      const res = await fetch(`${t.base}/whatsapp/open/${token}`, {
+        method: 'POST',
+        redirect: 'manual',
+        headers: { origin: ORIGIN, cookie: `recall_session=${first}` },
+      });
+      expect(res.status).toBe(303);
+      expect((await t.get('/session', cookieOf(res))).status).toBe(200);
+      expect((await t.get('/session', first)).status).toBe(401);
+    });
+
+    it('clips between whole characters', () => {
+      expect(clip('Café notes 👩‍💻👩‍💻👩‍💻', 13)).toBe('Café notes…');
+      expect(clip('🇮🇳🇮🇳🇮🇳🇮🇳', 5)).toBe('🇮🇳🇮🇳…');
+      expect(Array.from(clip('é'.normalize('NFD').repeat(30), 24)).length).toBeLessThanOrEqual(24);
+      expect(clip('short', 24)).toBe('short');
+    });
+  });
+
+  it('stores the new consent state', async () => {
     expect(BACKUP_TABLES).toContain('wa_links');
     const { bot } = await setup();
     await bot.recordInbound(
@@ -1026,5 +1188,65 @@ describe.each(backends)('WhatsApp conversation: %s', (name, available, open) => 
       consentedAt: 11,
       noticeVersion: 'v2',
     });
+  });
+});
+
+describe('WhatsApp conversation: PostgreSQL backup', () => {
+  it.skipIf(!DATABASE)('backs up and restores consent, STOP and link rows', async () => {
+    expect(BACKUP_TABLES).toContain('wa_links');
+    const pilot = await PostgresPilotStore.open({
+      connectionString: DATABASE!,
+      schema: `test_${randomUUID().replaceAll('-', '')}`,
+    });
+    cleanups.push(async () => {
+      await pilot.dropSchemaForTests();
+      await pilot.close();
+    });
+    const bot = new PostgresBotStore(pilot);
+    const sender = { userId: BSUID_A, ownerKey: OWNER_A, waId: PHONE_A };
+    await bot.recordInbound(sender, {
+      wamid: 'wamid.backup',
+      senderId: BSUID_A,
+      ownerKey: OWNER_A,
+      receivedAt: 5,
+      message: { id: 'wamid.backup', type: 'text', text: { body: 'hi' } },
+    });
+    await bot.claimNotice(BSUID_A, 6);
+    await bot.setConsent(BSUID_A, 7, 'v1');
+    await bot.setStopped(BSUID_A, 8);
+    await bot.setDeleteRequest(BSUID_A, 9);
+    const link = {
+      tokenHash: 'a'.repeat(64),
+      ownerKey: OWNER_A,
+      label: 'WhatsApp ••••3210',
+      createdAt: 10,
+      expiresAt: 610,
+    };
+    await bot.createLink(link);
+    const target = new MemoryObjectStore();
+    const backup = await backupDatabase({ store: pilot, target, now: () => 1_762_300_000_000 });
+    expect(backup.counts).toMatchObject({ wa_senders: 1, wa_links: 1 });
+
+    const restored = await restoreDatabase({
+      source: target,
+      key: backup.key,
+      connectionString: DATABASE!,
+      schema: `test_${randomUUID().replaceAll('-', '')}`,
+    });
+    cleanups.push(async () => {
+      await restored.store.dropSchemaForTests();
+      await restored.store.close();
+    });
+    const again = new PostgresBotStore(restored.store);
+    expect(await again.senderState(BSUID_A)).toEqual({
+      noticeSentAt: 6,
+      consentedAt: 7,
+      noticeVersion: 'v1',
+      stoppedAt: 8,
+      deleteRequestedAt: 9,
+    });
+    expect(await again.peekLink(link.tokenHash, 100)).toEqual(link);
+    expect(await again.takeLink(link.tokenHash, 100)).toEqual(link);
+    expect(await again.takeLink(link.tokenHash, 100)).toBeUndefined();
   });
 });

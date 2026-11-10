@@ -238,6 +238,11 @@ export class PostgresBotStore implements BotStore {
     );
     return rowCount === 1;
   }
+  async releaseNotice(userId: string) {
+    await this.run((db) =>
+      db.query('UPDATE wa_senders SET notice_sent_at = NULL WHERE user_id = $1', [userId]),
+    );
+  }
   async setConsent(userId: string, now: number, noticeVersion: string) {
     await this.run((db) =>
       db.query(

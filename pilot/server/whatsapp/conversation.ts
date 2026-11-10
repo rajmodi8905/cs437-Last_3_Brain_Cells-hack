@@ -40,6 +40,8 @@ const MAX_RESULTS = 5;
 /** WhatsApp sends photos up to 5 MB as images; larger ones go as documents. */
 const MAX_IMAGE_SEND_BYTES = 5 * 1024 * 1024;
 const SEND_AS_IMAGE = new Set(['image/jpeg', 'image/png']);
+/** Kinds sent back in the chat; others (from an included device library) open in the app. */
+const SENDABLE = new Set(['image', 'pdf', 'note']);
 
 export interface ConversationOptions {
   bot: BotStore;
@@ -58,22 +60,31 @@ export interface ConversationOptions {
   batchMs?: number;
   /** A burst's confirmation goes out once it has this many items; 10. */
   batchMax?: number;
+  /** Runs `run` after `ms`; returns a cancel function. A real timer by default; tests pass their own. */
+  schedule?: (run: () => void, ms: number) => () => void;
   supportedIndexVersions?: readonly string[];
   nowSeconds?: () => number;
   log?: (message: string, detail?: unknown) => void;
 }
 
 const codePoints = (text: string) => Array.from(text);
-/** At most `max` code points, ending in an ellipsis when cut. */
+const graphemes = new Intl.Segmenter('en', { granularity: 'grapheme' });
+/**
+ * At most `max` code points (how Meta counts), ending in an ellipsis when cut. The cut falls
+ * between whole characters, so an emoji or an accented letter is never split.
+ */
 export function clip(text: string, max: number) {
   const flat = text.replace(/\s+/g, ' ').trim();
-  const points = codePoints(flat);
-  return points.length <= max
-    ? flat
-    : `${points
-        .slice(0, max - 1)
-        .join('')
-        .trimEnd()}…`;
+  if (codePoints(flat).length <= max) return flat;
+  let kept = '';
+  let used = 0;
+  for (const { segment } of graphemes.segment(flat)) {
+    const size = codePoints(segment).length;
+    if (used + size > max - 1) break;
+    kept += segment;
+    used += size;
+  }
+  return `${kept.trimEnd()}…`;
 }
 const quote = (query: string) => `“${clip(query, 60)}”`;
 
@@ -110,6 +121,7 @@ export const BOT_REPLIES = {
   stopped:
     "Stopped. I won't save anything or reply until you send START. What you saved is kept; send START and then DELETE ALL to erase it.",
   started: "Welcome back. I'm saving and replying again.",
+  agreeFirst: 'Reply AGREE to start.',
   alreadyOn: "I'm already on. Send HELP to see what I can do.",
   deleteAsk:
     'This erases everything you saved here, also from the app, and signs out app links. Reply CONFIRM DELETE within 10 minutes to go ahead.',
@@ -130,6 +142,7 @@ export const BOT_REPLIES = {
       keywordOnly ? ' Search by meaning is off right now, so only titles were matched.' : ''
     }`,
   gone: "That item isn't in your library any more.",
+  appOnly: "This one can't be sent in WhatsApp. Open it in the app instead.",
   openCta: 'Open it in Campus Recall. The link works once, for 10 minutes.',
   noteTooLong: '(Cut short here; open it in the app to read the rest.)',
 };
@@ -256,6 +269,13 @@ export function createWhatsAppConversation(options: ConversationOptions) {
   const log = options.log ?? ((message, detail) => console.error(message, detail));
   const batchMs = options.batchMs ?? 3000;
   const batchMax = options.batchMax ?? 10;
+  const schedule =
+    options.schedule ??
+    ((run: () => void, ms: number) => {
+      const timer = setTimeout(run, ms);
+      timer.unref?.();
+      return () => clearTimeout(timer);
+    });
 
   /** Claims the message's one reply, then sends; a failed send is logged, never repeated. */
   async function answer(wamid: string, sender: WhatsAppSender, send: () => Promise<void>) {
@@ -271,39 +291,48 @@ export function createWhatsAppConversation(options: ConversationOptions) {
   // a crash can lose a confirmation but nothing is ever confirmed twice.
   const batches = new Map<
     string,
-    { sender: WhatsAppSender; titles: string[]; timer?: ReturnType<typeof setTimeout> }
+    { sender: WhatsAppSender; titles: string[]; cancel?: () => void }
   >();
-  async function sendBatch(ownerKey: string) {
+  /** Confirmations being sent right now, so `flush` and shutdown can wait for them. */
+  const sending = new Set<Promise<void>>();
+  function sendBatch(ownerKey: string) {
     const batch = batches.get(ownerKey);
-    if (!batch) return;
+    if (!batch) return Promise.resolve();
     batches.delete(ownerKey);
-    clearTimeout(batch.timer);
+    batch.cancel?.();
     const body =
       batch.titles.length === 1
         ? INGEST_REPLIES.saved(batch.titles[0])
         : BOT_REPLIES.savedMany(batch.titles);
-    await text(batch.sender, clip(body, META_LIMITS.text))().catch((cause: unknown) =>
-      log('WhatsApp reply failed', cause),
-    );
+    const sent: Promise<void> = text(batch.sender, clip(body, META_LIMITS.text))()
+      .catch((cause: unknown) => log('WhatsApp reply failed', cause))
+      .finally(() => sending.delete(sent));
+    sending.add(sent);
+    return sent;
   }
   async function onSaved(sender: WhatsAppSender, title: string) {
     const batch = batches.get(sender.ownerKey) ?? { sender, titles: [] };
     batches.set(sender.ownerKey, batch);
     batch.titles.push(title);
-    clearTimeout(batch.timer);
+    batch.cancel?.();
     if (batch.titles.length >= batchMax) return sendBatch(sender.ownerKey);
-    batch.timer = setTimeout(() => void sendBatch(sender.ownerKey), batchMs);
-    batch.timer.unref?.();
+    batch.cancel = schedule(() => void sendBatch(sender.ownerKey), batchMs);
   }
-  /** Sends every waiting confirmation now; for tests and shutdown. */
+  /** Sends every waiting confirmation now and waits for those already being sent. */
   async function flush() {
-    for (const ownerKey of [...batches.keys()]) await sendBatch(ownerKey);
+    for (const ownerKey of [...batches.keys()]) void sendBatch(ownerKey);
+    while (sending.size) await Promise.all([...sending]);
+  }
+  /** Saving needs consent and no STOP; the worker checks again under the owner's lock. */
+  async function canStore(sender: WhatsAppSender) {
+    const state = await bot.senderState(sender.userId);
+    return state.consentedAt !== undefined && state.stoppedAt === undefined;
   }
 
   /** Erases the sender's vault and everything that signs in to it (W9). */
   async function eraseEverything(sender: WhatsAppSender) {
     const batch = batches.get(sender.ownerKey);
-    if (batch) clearTimeout(batch.timer);
+    batch?.cancel?.();
     batches.delete(sender.ownerKey);
     await store.withOwnerLock(sender.ownerKey, async () => {
       await resetOwnerVault(store, objects, sender.ownerKey);
@@ -321,7 +350,8 @@ export function createWhatsAppConversation(options: ConversationOptions) {
       // Stopped: nothing is saved or answered except START.
       if (command === 'START') {
         await bot.setStopped(sender.userId, undefined);
-        await reply(BOT_REPLIES.started);
+        // A STOP sent before AGREE: starting again still needs consent.
+        await reply(state.consentedAt === undefined ? BOT_REPLIES.agreeFirst : BOT_REPLIES.started);
       } else await bot.forgetMessage(wamid);
       return true;
     }
@@ -345,9 +375,17 @@ export function createWhatsAppConversation(options: ConversationOptions) {
           return reply(BOT_REPLIES.stopped).then(() => true);
         }
       }
-      // The notice goes out once; later messages before AGREE get no answer.
+      // The notice goes out once; later messages before AGREE get no answer. If sending it
+      // fails, the claim is given back so the next message gets it.
       if (await bot.claimNotice(sender.userId, now()))
-        await reply(BOT_REPLIES.notice(options.privacyUrl));
+        await answer(wamid, sender, async () => {
+          try {
+            await text(sender, BOT_REPLIES.notice(options.privacyUrl))();
+          } catch (cause) {
+            await bot.releaseNotice(sender.userId);
+            throw cause;
+          }
+        });
       return true;
     }
 
@@ -376,7 +414,13 @@ export function createWhatsAppConversation(options: ConversationOptions) {
         await reply(BOT_REPLIES.alreadyOn);
         return true;
       case 'OPEN':
-        await reply(BOT_REPLIES.open(await createOpenLink(bot, sender, options.origin, now())));
+        // The link is made only once the reply is claimed, so a retried job leaves no spare one.
+        await answer(wamid, sender, async () => {
+          const to = addressOf(sender);
+          if (!to) return;
+          const url = await createOpenLink(bot, sender, options.origin, now());
+          await graph.sendText(to, BOT_REPLIES.open(url));
+        });
         return true;
       case 'DELETE ALL':
         await bot.setDeleteRequest(sender.userId, now());
@@ -487,9 +531,12 @@ export function createWhatsAppConversation(options: ConversationOptions) {
     await answer(wamid, sender, async () => {
       if (!to) return;
       if (!item || !bytes) return graph.sendText(to, BOT_REPLIES.gone);
+      const sendable = SENDABLE.has(item.kind);
       const place = picked && where(picked.location);
       const caption = clip(place ? `${item.title} (${place})` : item.title, META_LIMITS.caption);
-      if (item.kind === 'note') {
+      if (!sendable) {
+        await graph.sendText(to, BOT_REPLIES.appOnly);
+      } else if (item.kind === 'note') {
         const note = new TextDecoder().decode(bytes);
         const room = META_LIMITS.text - BOT_REPLIES.noteTooLong.length - 2;
         await graph.sendText(
@@ -532,7 +579,7 @@ export function createWhatsAppConversation(options: ConversationOptions) {
     flush,
     search,
     /** The worker options this conversation needs. */
-    hooks: { gate, onText, onSaved } satisfies Partial<WhatsAppWorkerOptions>,
+    hooks: { gate, onText, onSaved, canStore } satisfies Partial<WhatsAppWorkerOptions>,
   };
 }
 
@@ -542,7 +589,7 @@ export function createWhatsAppConversation(options: ConversationOptions) {
  */
 export function startWhatsAppBot(
   options: ConversationOptions &
-    Omit<WhatsAppWorkerOptions, 'gate' | 'onText' | 'onSaved'> & { idleMs?: number },
+    Omit<WhatsAppWorkerOptions, 'gate' | 'onText' | 'onSaved' | 'canStore'> & { idleMs?: number },
 ) {
   const conversation = createWhatsAppConversation(options);
   const worker = startWhatsAppWorker({ ...options, ...conversation.hooks });

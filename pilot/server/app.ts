@@ -26,6 +26,7 @@ import { resetOwnerVault } from './vault-reset';
 import type { KeySource } from './tokens';
 import { verifyIdToken } from './tokens';
 import {
+  OPEN_PATH_PREFIX,
   PAGE_HEADERS,
   confirmPage,
   hashLinkToken,
@@ -547,12 +548,19 @@ export function createPilotHandler(options: PilotServerOptions): RequestListener
       if (method !== 'POST') throw new ApiError('NOT_FOUND', 'No such endpoint.');
       if (req.headers.origin !== options.origin)
         return send(res, 403, linkErrorPage(), PAGE_HEADERS);
-      const link = hash && (await bot.takeLink(hash, now()));
-      if (!link) return send(res, 404, linkErrorPage(), PAGE_HEADERS);
+      const found = hash && (await bot.peekLink(hash, now()));
+      if (!found) return send(res, 404, linkErrorPage(), PAGE_HEADERS);
+      // Under the vault's lock, like DELETE ALL: a link taken after an erase finds nothing, so no
+      // session opens on a vault that was just erased.
+      const opened = await store.withOwnerLock(found.ownerKey, async () => {
+        const link = await bot.takeLink(hash, now());
+        if (!link || link.ownerKey !== found.ownerKey) return undefined;
+        return openSession({ ownerKey: link.ownerKey, email: link.label });
+      });
+      if (!opened) return send(res, 404, linkErrorPage(), PAGE_HEADERS);
       // A session this browser already had is replaced, not left behind.
       const previous = await sessionFromCookie(req);
-      if (previous) await store.deleteSession(previous.id);
-      const opened = await openSession({ ownerKey: link.ownerKey, email: link.label });
+      if (previous && previous.id !== opened.session.id) await store.deleteSession(previous.id);
       return send(res, 303, undefined, {
         location: `${options.origin}/?signin=whatsapp#/settings`,
         'referrer-policy': 'no-referrer',
@@ -857,6 +865,9 @@ export function createPilotHandler(options: PilotServerOptions): RequestListener
     }
     const method = req.method ?? 'GET';
     if (method === 'GET' || method === 'HEAD') return route(req, res);
+    // Opening a WhatsApp link takes that vault's lock itself; holding the browser's current
+    // session's lock as well could wait on itself when both are the same vault.
+    if (options.whatsapp && (req.url ?? '').startsWith(OPEN_PATH_PREFIX)) return route(req, res);
     const session = await sessionFromCookie(req);
     if (!session || session.expiresAt <= now()) return route(req, res);
     const pending: { flush?: () => void } = {};
