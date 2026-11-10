@@ -96,7 +96,13 @@ The wire format, states and limits referred to below are defined in [protocol.md
 
 ## WhatsApp channel (opt-in)
 
-These statements cover the optional WhatsApp channel ([whatsapp.md](whatsapp.md)): students message the bot's number and the pilot server stores what they send in a vault for that sender and indexes it for search. A student who never messages the bot sees no change, and P01 to P15 are unchanged. Tests run against a stand-in for Meta's Graph API with webhook deliveries in Meta's documented format; claims about the real Meta number need their own evidence.
+These statements cover the optional WhatsApp channel ([whatsapp.md](whatsapp.md)): students message the bot's number, agree to its notice, and the pilot server stores what they send in a vault for that sender, indexes it, answers searches in the chat and opens that vault in the app from a one-time link. A student who never messages the bot sees no change, and P01 to P15 are unchanged. Tests run against a stand-in for Meta's Graph API with webhook deliveries in Meta's documented format; claims about the real Meta number need their own evidence.
+
+### W1 — Consent before anything is stored
+
+**Statement:** Nothing a sender sends is stored, in their vault or as message content, until they reply `AGREE` to the consent notice. The notice is sent once, and the consent time and notice version are recorded.
+
+**Test:** A new sender's forwarded note, photo and `note ` message store no item, download no media and keep only each message's ID and type; they get the notice once (it names what is saved, Meta's decryption and 30-day retention, server processing, the 18+ age limit, `DELETE ALL` and the privacy link, and ends "Reply AGREE to start."), and a later message gets no second notice. An `AGREE` before the notice only gets the notice. After `AGREE` the consent time and version are stored, the student is asked to send earlier things again, and a note is saved. `HELP` and `PRIVACY` work before consent, and each sender consents for themselves.
 
 ### W2 — Exact original
 
@@ -122,8 +128,26 @@ These statements cover the optional WhatsApp channel ([whatsapp.md](whatsapp.md)
 
 **Test:** Two senders each save a note; each vault holds only its own item and storage key; reading the first sender's original with the second sender's or a Google account's session returns `NOT_FOUND`, and their change feeds do not list it.
 
+### W6 — Open the app from WhatsApp
+
+**Statement:** `OPEN` (and the link after a search result) gives a one-time link, valid for 10 minutes and stored only as a hash, whose confirmation page opens a normal session for that sender's `wa:` vault after a same-origin `POST`. The app then lists and searches the vault's items without uploading the device's own library (P02). An expired, used or unknown link opens nothing.
+
+**Test:** The link's 32-byte token is in the path and only its SHA-256 is stored. `GET` shows a page with a strict CSP, no scripts or external resources and the masked identity, and uses nothing up; `POST` from the pilot origin redirects to `/?signin=whatsapp#/settings` with a session cookie like other sessions, whose `/session` shows the masked label and whose writes still need CSRF. A second use, a use after 10 minutes, another or no `Origin`, and unknown or malformed tokens get the error page and no cookie (a refused origin leaves the link usable). The session cannot read another sender's original. In the app (Playwright), following the link shows "Signed in as WhatsApp ••••3210" and lists the WhatsApp item while "Include this device's library" is still offered and nothing is uploaded; a client test checks that listing the vault sends only `GET` requests.
+
 ### W7 — Server indexing with the app's engine
 
 **Statement:** The server indexes an opted-in WhatsApp item with the app's own engine and default model and publishes a bundle with the current `INDEX_VERSION` that passes the P05 checks; the app's cloud search then finds it.
 
 **Test:** With pinned real models, the engine host indexes `sample-03.pdf` and `sample-01.jpg`; both bundles pass `validateIndexBundle` with the app's `INDEX_VERSION`, their segments equal what the app stores for the same files, and the app's search over them returns the PDF at page 2 for its fixture question. With a stand-in engine, a stored item's bundle is published like `PUT /items/{id}/index` (same checks, quota, object key and change feed); a deleted item gets none, a renamed one is indexed with its new title, failures are retried with the job backoff, and a refused original or full quota fails the job once and tells the student once.
+
+### W8 — Search in WhatsApp
+
+**Statement:** Typed text that is not a command or a save is a search of only the sender's items, answered with a list of at most five results within Meta's limits; picking one sends the original back with a link to open the app. For a fixture library, the bot's top result is the same item and location the app's own search returns.
+
+**Test:** With pinned real models, the bot indexes `sample-03.pdf` and `sample-01.jpg` sent over WhatsApp; for the queries of the W7 test its top rows are the PDF at page 2 and the photo, and the app, signed in through the bot's link, returns the same item and location first. With a stand-in engine: the list has at most five rows, titles of at most 24 code points, descriptions of at most 72 with the page and an excerpt, a 20-character button and row IDs of the global ID and location; items still being indexed match by title and say so; without an engine, or when it fails, search is by keyword and says so; no match says "only things you sent here are searched"; another sender's items are never found. A picked PDF is uploaded byte for byte and sent as a document with its title and page, a photo as an image, a note as text, each followed by an "Open in app" link that works; another vault's or a deleted item is reported as gone, and a pick is answered once.
+
+### W9 — DELETE ALL
+
+**Statement:** `DELETE ALL` followed by `CONFIRM DELETE` within 10 minutes erases the sender's vault through the same reset as `DELETE /vault` (objects deleted, epoch moves), revokes that vault's app links and sessions, and keeps only what dedupe needs. Nothing is erased without confirmation, and other senders are untouched.
+
+**Test:** Without `CONFIRM DELETE`, with it before any request, or 601 seconds after the request, items stay. Confirmed within 10 minutes: no live items, the epoch moves, the original and index objects are gone, a link-opened session and another session for the vault get 401, an unused link no longer opens, the stored message keeps only its ID and type, the sender's number and consent are cleared, a repeated delivery of an erased message does not bring it back and the next message gets the consent notice again; the other sender's items, session and consent are unchanged.
