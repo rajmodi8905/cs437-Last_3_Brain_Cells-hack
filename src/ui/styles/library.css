@@ -470,3 +470,36 @@
     text-decoration-thickness: 2px;
   }
 }
+/* S17: the IITGN campus pack offer, in the empty library and below a short library. */
+.campus-pack-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  margin-top: 16px;
+}
+.campus-pack-empty .small {
+  max-width: 52ch;
+  margin-top: 10px;
+}
+.campus-pack-offer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px 24px;
+  background: var(--card);
+  border: var(--rule);
+  border-left: 10px solid var(--signal);
+  padding: 16px 20px;
+  margin-top: 24px;
+}
+.campus-pack-offer > div {
+  flex: 1 1 260px;
+}
+.campus-pack-offer strong {
+  font-size: 18px;
+  letter-spacing: -0.01em;
+}
+.campus-pack-offer p {
+  font-size: 15px;
+  margin: 4px 0 0;
+}

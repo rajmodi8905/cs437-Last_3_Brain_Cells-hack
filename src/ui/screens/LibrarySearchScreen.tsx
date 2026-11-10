@@ -1,5 +1,6 @@
-import { ArrowUpRight, ChevronRight, LoaderCircle, X } from 'lucide-react';
+import { ArrowUpRight, ChevronRight, GraduationCap, LoaderCircle, X } from 'lucide-react';
 import type { CampusRecallModel } from '../../app/useCampusRecall';
+import { useCampusPack } from '../../app/useCampusPack';
 import { kinds, kindLabels } from '../presentation';
 import { ItemRow } from '../ItemRow';
 import { CloudResultRow } from '../../../pilot/ui/CloudResultRow';
@@ -33,6 +34,15 @@ export function LibrarySearchScreen({ model }: { model: CampusRecallModel }) {
   };
   // App shows the install offer here instead of this banner, so the two never stack.
   const offering = model.installOffer && !model.update && !model.error;
+  const pack = useCampusPack(model);
+  const packButton = (
+    <button className="button secondary" onClick={pack.add} disabled={pack.adding}>
+      {pack.adding ? <LoaderCircle size={17} className="spin" /> : <GraduationCap size={17} />} Add
+      the IITGN campus pack
+    </button>
+  );
+  const packAbout =
+    'Contacts, hostels, rooms, 2026-27 exam dates and links, checked on official IITGN pages. Saved on this device like your own notes.';
   return (
     <>
       <div className="page-heading">
@@ -125,9 +135,24 @@ export function LibrarySearchScreen({ model }: { model: CampusRecallModel }) {
               <a className="button primary" href="#/add">
                 Add your first item
               </a>
+              {pack.offered && !filter && !statusFilter && (
+                <div className="campus-pack-empty">
+                  {packButton}
+                  <span className="small muted">{packAbout}</span>
+                </div>
+              )}
               <span className="small muted">
                 Local only needs no account. Auto-sync is optional.
               </span>
+            </div>
+          )}
+          {visible.length > 0 && pack.offered && (
+            <div className="campus-pack-offer">
+              <div>
+                <strong>New at IITGN?</strong>
+                <p>{packAbout}</p>
+              </div>
+              {packButton}
             </div>
           )}
           <div className="library-footer">

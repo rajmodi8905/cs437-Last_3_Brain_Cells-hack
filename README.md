@@ -10,6 +10,7 @@ https://github.com/user-attachments/assets/2947f113-1e72-4074-8d47-2b43daa21dfe
 
 - **Save the original.** Keep supported files and notes together, with a visible save confirmation and recent-saves library.
 - **Search from memory.** Describe the topic or visual appearance; results lead back to the saved source.
+- **Start with campus basics.** One tap adds the IITGN campus pack: contacts, hostels, rooms, 2026–27 exam dates and links, each with its official source page. Save your own seating notice, timetable and mess menu next to it.
 - **Work offline.** After the one-time search setup, processing and retrieval run locally without inference API keys.
 - **Choose how to store it.** Local only needs no account. Optional IITGN Google sign-in enables account Auto-sync through Azure.
 

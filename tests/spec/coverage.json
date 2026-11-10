@@ -1096,6 +1096,43 @@
         "Policy/source factual review completed under Raj delegation; deployment-specific facts are reviewed when a host is selected."
       ],
       "remaining": []
+    },
+    {
+      "id": "S17",
+      "scope": "One-tap IITGN campus pack: sourced notes saved locally without network, no duplicates or resurrection, partial-failure retry, UI offer, and real-model retrieval of campus questions",
+      "tests": [
+        {
+          "suite": "fast",
+          "file": "tests/spec/campus-pack.test.ts",
+          "title": "[S17] the campus pack saves every note locally with its official source and fetches nothing"
+        },
+        {
+          "suite": "fast",
+          "file": "tests/spec/campus-pack.test.ts",
+          "title": "[S17] adding the pack again saves nothing new and a deleted pack note is never saved again"
+        },
+        {
+          "suite": "fast",
+          "file": "tests/spec/campus-pack.test.ts",
+          "title": "[S17] a pack save that fails part way saves only the missing notes on retry"
+        },
+        {
+          "suite": "fast",
+          "file": "tests/app/campus-pack.test.tsx",
+          "title": "[S17] a fresh library offers the campus pack and one tap saves it"
+        },
+        {
+          "suite": "browser",
+          "file": "tests/e2e/campus-pack.spec.ts",
+          "title": "[S17] a fresh profile adds the campus pack in one tap and keeps it after reload"
+        },
+        {
+          "suite": "acceptance",
+          "file": "tests/acceptance/campus-pack.spec.ts",
+          "title": "[S17] campus questions find their pack notes with the real search model"
+        }
+      ],
+      "remaining": []
     }
   ],
   "releaseStatus": {

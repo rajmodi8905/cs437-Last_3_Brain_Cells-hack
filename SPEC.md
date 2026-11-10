@@ -223,6 +223,14 @@ Each statement needs its own automated test using a fresh library/fixtures. The 
 
 **Trace:** From our team's product-transparency requirements and the agreed UI instructions.
 
+### S17 — IITGN campus pack
+
+**Statement:** The library offers an IITGN campus pack until all of it is saved. One tap saves its built-in notes through the normal local save, with no network request. The notes cover important contacts, links, hostels, buildings and rooms, the 2026–27 academic calendar, and where exam seating, timetable and mess information comes from. Each note names the official IITGN page it came from and the date it was checked, and gives no seating plan, timetable or menu the app cannot know. Adding the pack again saves nothing new, a pack note the student deletes is never saved again, and a save that fails part way saves only the missing notes on retry. Pack notes are indexed like any note, so after search setup a campus question finds its note.
+
+**Test:** With a fresh repository and network requests watched, add the pack and check every note is a saved note with an iitgn.ac.in source and check date, and that nothing was fetched. Add it again, delete one note, reopen and add again: no new or restored item. Force a failure part way, then retry and check each note exists once. In the UI and a production browser, a fresh library shows the offer, one tap saves the notes, and the offer is gone after reload. With the real pinned models, campus questions retrieve their expected pack notes among the top three.
+
+**Trace:** From Bhavya's interview ("it would help only when all the info is there in it already") and a team request on 10 November 2026: a student opening the phone at 8 am to find which hall their exam is in. Facts were checked on official IITGN pages on 10 November 2026; the pages checked publish no seating plan, timetable or mess menu, so the pack says where those come from instead.
+
 ## Executable test coverage and October checkpoints
 
 Every S1–S15 statement now maps to executable suites in [tests/spec/coverage.json](tests/spec/coverage.json). `npm run check` checks that mapping; `npm test` executes the actual behavior. Storage/vector fixtures test code-controlled invariants; semantic/visual/speech outcomes use the pinned real models.
