@@ -7,6 +7,9 @@ import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import { createServer, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { afterEach, describe, expect, it } from 'vitest';
+import { createApiClient } from '../client/api';
+import { MemoryLocalLibrary, MemoryRemoteIndexStore, MemorySyncStateStore } from '../client/memory';
+import { SyncEngine } from '../client/sync';
 import { createPilotHandler } from '../server/app';
 import { AzureBlobObjectStore } from '../server/blob';
 import { MemoryObjectStore, MemoryPilotStore } from '../server/memory';
@@ -919,6 +922,53 @@ describe.each(backends)('WhatsApp conversation: %s', (name, available, open) => 
       expect(await (await t.get(`/whatsapp/open/${token}`)).text()).toContain(
         'your WhatsApp account',
       );
+    });
+
+    it('the app lists and can search the vault without sending the device library (P02)', async () => {
+      const t = await setup();
+      await t.agree();
+      await t.send([t.pdf('Guest rules.pdf')]);
+      const cookie = cookieOf(await t.follow(await t.openLink()))!;
+      const log: string[] = [];
+      const api = createApiClient({
+        base: t.base,
+        fetch: async (input, init) => {
+          log.push(`${init?.method ?? 'GET'} ${String(input).replace(t.base, '')}`);
+          const headers = new Headers(init?.headers);
+          headers.set('cookie', `recall_session=${cookie}`);
+          headers.set('origin', ORIGIN);
+          return fetch(input, { ...init, headers });
+        },
+      });
+      const session = (await api.restoreSession())!;
+      expect(session.kind).toBe('whatsapp');
+      const library = new MemoryLocalLibrary();
+      library.add(
+        { kind: 'note', title: 'Device only', mimeType: 'text/plain;charset=utf-8' },
+        new TextEncoder().encode('stays here'),
+      );
+      const remoteIndex = new MemoryRemoteIndexStore();
+      const engine = new SyncEngine({
+        api,
+        library,
+        state: new MemorySyncStateStore(),
+        remoteIndex,
+        libraryId: 'laptop',
+      });
+      await engine.browse(session.vault.epoch);
+      expect((await engine.catalogue()).map((item) => item.title)).toEqual(['Guest rules.pdf']);
+      const segments = await engine.cloudSegments();
+      expect(segments.length).toBeGreaterThan(0);
+      expect(log.every((line) => line.startsWith('GET '))).toBe(true);
+      expect(log.some((line) => /\/items|\/uploads/.test(line) && !line.startsWith('GET'))).toBe(
+        false,
+      );
+      // Running the normal pass without inclusion still sends nothing.
+      await engine.runOnce();
+      expect(log.every((line) => line.startsWith('GET '))).toBe(true);
+      // A Google-style session body has no kind.
+      const plain = await t.sessionFor('google:someone');
+      expect((await (await t.get('/session', plain)).json()).kind).toBeUndefined();
     });
 
     it('does not exist without the WhatsApp channel', async () => {

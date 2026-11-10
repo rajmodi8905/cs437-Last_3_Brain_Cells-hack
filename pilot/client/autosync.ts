@@ -274,6 +274,7 @@ export class AutoSyncController {
     this.set({ status: 'signed-in', email: session.email, error: undefined });
     await this.refresh(snapshot);
     if (snapshot.included) this.startLoop();
+    else if (session.kind === 'whatsapp') void this.syncNow();
   }
 
   /** Opens an account's sync state on this device and the engine over it. */
@@ -334,7 +335,13 @@ export class AutoSyncController {
       if (!this.engine || !this.state) return undefined;
       this.set({ syncing: true });
       try {
-        const result = await this.withSyncLock(() => this.engine!.runOnce());
+        const session = this.session;
+        const result = await this.withSyncLock(() =>
+          // A WhatsApp vault lists its items before (and without) including this device.
+          session?.kind === 'whatsapp' && !this.view.included
+            ? this.engine!.browse(session.vault.epoch)
+            : this.engine!.runOnce(),
+        );
         if (!result) return undefined;
         this.set({
           blocked: result.blocked === 'library-mismatch',

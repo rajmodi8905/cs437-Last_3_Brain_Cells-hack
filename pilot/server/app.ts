@@ -352,6 +352,8 @@ export function createPilotHandler(options: PilotServerOptions): RequestListener
     // Opaque per-account ID so devices can keep each account's state apart.
     account: createHash('sha256').update(session.ownerKey).digest('hex').slice(0, 32),
     vault: await store.vault(session.ownerKey),
+    // A WhatsApp vault (opened from a bot link) says so; other sessions are unchanged.
+    ...(session.ownerKey.startsWith('wa:') ? { kind: 'whatsapp' } : {}),
   });
 
   const sessionCookie = (opened: OpenedSession) =>

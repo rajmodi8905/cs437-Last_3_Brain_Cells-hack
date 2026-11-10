@@ -22,6 +22,8 @@ export interface SessionInfo {
   email: string;
   account: string;
   vault: { epoch: number };
+  /** Set for a WhatsApp vault opened from a bot link. */
+  kind?: 'whatsapp';
 }
 
 export interface ApiClient {

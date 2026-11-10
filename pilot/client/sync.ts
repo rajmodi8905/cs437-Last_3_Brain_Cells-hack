@@ -92,6 +92,41 @@ export class SyncEngine {
     await this.state.save({ ...snapshot, included: true, epoch, libraryId: this.libraryId });
   }
 
+  /**
+   * Read only, for an account whose device library is not included: fetches the cloud
+   * catalogue and the usable index bundles so cloud items are listed and searchable. Nothing is
+   * planned or sent, so this device's library stays on the device (P02).
+   */
+  async browse(epoch: number): Promise<SyncResult> {
+    const result: SyncResult = {
+      uploaded: 0,
+      renamed: 0,
+      deleted: 0,
+      conflicts: 0,
+      failed: 0,
+      indexed: 0,
+    };
+    const snapshot = await this.state.load();
+    if (snapshot.included) return result;
+    const restart = () => {
+      snapshot.epoch = epoch;
+      snapshot.cursor = 0;
+      snapshot.catalogue = {};
+    };
+    if (snapshot.epoch !== epoch) restart();
+    try {
+      await this.pull(snapshot, result);
+      await this.syncRemoteIndexes(snapshot, result);
+      await this.cleanOffline(snapshot);
+    } catch (cause) {
+      result.failed++;
+      // Nothing of this device is mapped yet, so a reset library is simply listed again.
+      if (cause instanceof ApiFailure && cause.code === 'RESYNC_REQUIRED') restart();
+    }
+    await this.state.save(snapshot);
+    return result;
+  }
+
   async catalogue(): Promise<ChangeItem[]> {
     const { catalogue } = await this.state.load();
     return Object.values(catalogue).sort((a, b) => (a.title ?? '').localeCompare(b.title ?? ''));
