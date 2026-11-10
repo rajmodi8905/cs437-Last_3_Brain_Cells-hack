@@ -201,5 +201,5 @@ label > .muted {
   margin: 6px 0 0;
   padding-left: 20px;
   font-size: 14px;
-  color: var(--ink-2);
+  color: var(--muted);
 }

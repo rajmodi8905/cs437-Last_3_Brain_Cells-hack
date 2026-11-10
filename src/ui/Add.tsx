@@ -23,10 +23,15 @@ const typingIn = (target: EventTarget | null) =>
 /** Folders can be picked only where the browser supports it; elsewhere Add looks as before. */
 const canPickFolder = () =>
   typeof HTMLInputElement !== 'undefined' && 'webkitdirectory' in HTMLInputElement.prototype;
-/** What the last added folder brought in, shown as a summary above the file list. */
+/**
+ * What one added folder brought in, shown as a summary above the file list. The summary is
+ * worked out again from the files of that folder still selected, so removing them keeps it
+ * true, and removing all of them removes the summary and its skipped files with it.
+ */
 interface FolderNote {
+  id: number;
   name?: string;
-  added: number;
+  ready: File[];
   skipped: SkippedFile[];
   overLimit: number;
   truncated: boolean;
@@ -52,7 +57,8 @@ export function Add({
   const [drag, setDrag] = useState(false);
   const input = useRef<HTMLInputElement>(null);
   const folderInput = useRef<HTMLInputElement>(null);
-  const [folderNote, setFolderNote] = useState<FolderNote>();
+  const [folderNotes, setFolderNotes] = useState<FolderNote[]>([]);
+  const nextFolder = useRef(0);
   const [reading, setReading] = useState(false);
   const lastCapture = useRef<{ url: string; title: string } | undefined>(undefined);
   const [shareNotice, setShareNotice] = useState('');
@@ -71,10 +77,16 @@ export function Add({
       ),
     ]);
   /** Adds a folder's files that can be saved; the rest are listed as skipped, with reasons. */
-  const addFolder = (folderFiles: File[], name = folderName(folderFiles), truncated = false) => {
+  const addFolder = (
+    folderFiles: File[],
+    name = folderName(folderFiles),
+    truncated = false,
+    unread: SkippedFile[] = [],
+  ) => {
     const { ready, skipped, overLimit } = sortFolder(folderFiles);
     addFiles(ready);
-    setFolderNote({ name, added: ready.length, skipped, overLimit, truncated });
+    const note = { name, ready, skipped: [...unread, ...skipped], overLimit, truncated };
+    setFolderNotes((current) => [...current, { id: nextFolder.current++, ...note }]);
   };
   const removeFile = (index: number) => {
     focusAfterRemove.current = index;
@@ -91,6 +103,15 @@ export function Add({
   const problems = files.map(fileProblem);
   const valid = files.filter((_, i) => !problems[i]);
   const invalid = problems.filter((problem): problem is string => !!problem);
+  // Each folder's summary counts only its files still selected. A folder that brought nothing
+  // savable keeps its summary, so its skipped files are still explained.
+  const liveFolders = folderNotes
+    .map((note) => ({
+      ...note,
+      added: note.ready.length,
+      ready: note.ready.filter((file) => files.some((kept) => sameFile(kept, file))),
+    }))
+    .filter((note) => note.ready.length > 0 || note.added === 0);
   // Pasting on Add: an image joins Files; text starts a note. A paste into a field stays there.
   const pasteBlocked = useRef(false);
   pasteBlocked.current = busy || capturing;
@@ -195,7 +216,8 @@ export function Add({
       }
       for (const value of inputs) saved.push(await repository.save(value));
       // Files that cannot be saved were listed with the reason; say so again on the Library.
-      const folderSkipped = tab === 'file' ? (folderNote?.skipped.length ?? 0) : 0;
+      const folderSkipped =
+        tab === 'file' ? liveFolders.reduce((sum, note) => sum + note.skipped.length, 0) : 0;
       const skipped =
         [
           tab === 'file' && invalid.length
@@ -206,7 +228,7 @@ export function Add({
           .filter(Boolean)
           .join(' ') || undefined;
       setFiles([]);
-      setFolderNote(undefined);
+      setFolderNotes([]);
       setText('');
       setTitle('');
       setUrl('');
@@ -319,11 +341,12 @@ export function Add({
                   }
                   setReading(true);
                   void walkEntries(entries)
-                    .then(({ files: found, truncated }) =>
+                    .then(({ files: found, skipped, truncated }) =>
                       addFolder(
                         found,
                         folders.length === 1 ? folders[0].name : undefined,
                         truncated,
+                        skipped,
                       ),
                     )
                     .catch((cause) =>
@@ -376,29 +399,29 @@ export function Add({
                   </button>
                 </>
               )}
-              {folderNote && (
-                <div className="folder-summary" role="status">
+              {liveFolders.map((note) => (
+                <div className="folder-summary" role="status" key={note.id}>
                   <p>
-                    {folderNote.name ? `From “${folderNote.name}”: ` : 'From the folder: '}
-                    {folderNote.added} file{folderNote.added === 1 ? '' : 's'} ready to save
-                    {folderNote.skipped.length ? `, ${folderNote.skipped.length} skipped` : ''}.
-                    {folderNote.overLimit > 0 &&
-                      ` ${folderNote.overLimit} more could be saved, but one folder adds at most ${MAX_FOLDER_FILES} files. Add the rest in another go.`}
-                    {folderNote.truncated &&
+                    {note.name ? `From “${note.name}”: ` : 'From the folder: '}
+                    {note.ready.length} file{note.ready.length === 1 ? '' : 's'} ready to save
+                    {note.skipped.length ? `, ${note.skipped.length} skipped` : ''}.
+                    {note.overLimit > 0 &&
+                      ` ${note.overLimit} more could be saved, but one folder adds at most ${MAX_FOLDER_FILES} files. Add the rest in another go.`}
+                    {note.truncated &&
                       ' This folder is very large, so only part of it was read. Add its subfolders one at a time.'}
                   </p>
-                  {folderNote.skipped.length > 0 && (
+                  {note.skipped.length > 0 && (
                     <details>
                       <summary>Show skipped</summary>
                       <ul className="skipped-files" aria-label="Skipped files">
-                        {folderNote.skipped.map((skip, i) => (
+                        {note.skipped.map((skip, i) => (
                           <li key={`${skip.name}-${i}`}>{skip.reason}</li>
                         ))}
                       </ul>
                     </details>
                   )}
                 </div>
-              )}
+              ))}
               {files.length > 0 && (
                 <ul className="selected-files" aria-label="Selected files" ref={fileList}>
                   {files.map((f, i) => (

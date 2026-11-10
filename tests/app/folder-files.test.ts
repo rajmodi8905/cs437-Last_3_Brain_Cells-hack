@@ -105,3 +105,70 @@ it('[S1] one folder adds at most the folder limit and counts the rest', () => {
   expect(ready).toHaveLength(MAX_FOLDER_FILES);
   expect(overLimit).toBe(5);
 });
+
+it('[S1] a file or folder that cannot be read is skipped with a reason and the rest still come in', async () => {
+  const broken = {
+    name: 'locked.pdf',
+    isFile: true,
+    isDirectory: false,
+    file: (_: unknown, failure: (error: unknown) => void) => failure(new Error('denied')),
+  };
+  const unreadable = {
+    name: 'Private',
+    isFile: false,
+    isDirectory: true,
+    createReader: () => ({
+      readEntries: (_: unknown, failure: (error: unknown) => void) => failure(new Error('denied')),
+    }),
+  };
+  const tree = folder('Sem5', [broken, unreadable, fileEntry(file('ok.png', 'image/png'))]);
+  const { files, skipped } = await walkEntries([tree]);
+  expect(files.map((f) => f.name)).toEqual(['ok.png']);
+  expect(skipped).toEqual([
+    { name: 'locked.pdf', reason: '“locked.pdf” could not be read.' },
+    {
+      name: 'Private',
+      reason: 'The folder “Private” could not be read, so the files still in it were skipped.',
+    },
+  ]);
+});
+
+it('[S1] the folder walker stops reading as soon as it passes its limit', async () => {
+  let reads = 0;
+  const counted = (name: string, ...batches: FolderEntry[][]) => {
+    const inner = folder(name, ...batches);
+    return {
+      ...inner,
+      createReader: () => {
+        const reader = inner.createReader();
+        return {
+          readEntries: (success: (entries: FolderEntry[]) => void) => {
+            reads++;
+            reader.readEntries(success);
+          },
+        };
+      },
+    };
+  };
+  const tree = counted(
+    'Sem5',
+    [fileEntry(file('a.png', 'image/png')), fileEntry(file('b.png', 'image/png'))],
+    [counted('Later', [fileEntry(file('c.png', 'image/png'))])],
+  );
+  const { files, truncated } = await walkEntries([tree], 1);
+  expect(files.map((f) => f.name)).toEqual(['a.png']);
+  expect(truncated).toBe(true);
+  // Only the first batch of the top folder was read; "Later" was never opened.
+  expect(reads).toBe(1);
+});
+
+it('[S1] a picked folder named with a dot keeps its files, and a hidden folder inside it is named', async () => {
+  const dropped = await walkEntries([folder('.notes', [fileEntry(file('one.png', 'image/png'))])]);
+  expect(dropped.files.map((f) => f.name)).toEqual(['one.png']);
+  const { ready, skipped } = sortFolder([
+    file('one.png', 'image/png', '.notes/one.png'),
+    file('config', '', '.notes/.git/config'),
+  ]);
+  expect(ready.map((f) => f.name)).toEqual(['one.png']);
+  expect(skipped).toEqual([{ name: 'config', reason: '“config” is in the hidden folder “.git”.' }]);
+});

@@ -35,45 +35,67 @@ const SYSTEM_FILES = new Set(['thumbs.db', 'ehthumbs.db', 'desktop.ini', 'icon\r
 export const isHiddenOrSystem = (name: string) =>
   name.startsWith('.') || SYSTEM_FILES.has(name.toLowerCase());
 
+export interface SkippedFile {
+  name: string;
+  /** One sentence that names the file and says why it was skipped. */
+  reason: string;
+}
+
 /**
- * Every file in the dropped entries, folders walked recursively. Hidden folders are not
- * entered. A folder reader returns its entries in batches, so it is read until it returns none.
+ * Every file in the dropped entries, folders walked recursively. Hidden folders inside the
+ * dropped ones are not entered; a dropped folder is read whatever its own name. A folder reader
+ * returns its entries in batches, so it is read until it returns none. A file or folder that
+ * cannot be read is skipped with a reason, and the walk stops as soon as it passes `limit`.
  */
 export async function walkEntries(
   entries: FolderEntry[],
   limit = MAX_WALKED_FILES,
-): Promise<{ files: File[]; truncated: boolean }> {
+): Promise<{ files: File[]; skipped: SkippedFile[]; truncated: boolean }> {
   const files: File[] = [];
+  const skipped: SkippedFile[] = [];
   let truncated = false;
-  const visit = async (entry: FolderEntry): Promise<void> => {
+  const visit = async (entry: FolderEntry, top: boolean): Promise<void> => {
     if (files.length >= limit) {
       truncated = true;
       return;
     }
     if (entry.isFile) {
-      files.push(
-        await new Promise<File>((resolve, reject) => (entry as FileEntry).file(resolve, reject)),
-      );
+      try {
+        files.push(
+          await new Promise<File>((resolve, reject) => (entry as FileEntry).file(resolve, reject)),
+        );
+      } catch {
+        skipped.push({ name: entry.name, reason: `“${entry.name}” could not be read.` });
+      }
       return;
     }
-    if (!entry.isDirectory || isHiddenOrSystem(entry.name)) return;
+    if (!entry.isDirectory || (!top && isHiddenOrSystem(entry.name))) return;
     const reader = (entry as DirectoryEntry).createReader();
     for (;;) {
-      const batch = await new Promise<FolderEntry[]>((resolve, reject) =>
-        reader.readEntries(resolve, reject),
-      );
+      let batch: FolderEntry[];
+      try {
+        batch = await new Promise<FolderEntry[]>((resolve, reject) =>
+          reader.readEntries(resolve, reject),
+        );
+      } catch {
+        skipped.push({
+          name: entry.name,
+          reason: `The folder “${entry.name}” could not be read, so the files still in it were skipped.`,
+        });
+        return;
+      }
       if (!batch.length) return;
-      for (const child of batch) await visit(child);
+      for (const child of batch) {
+        await visit(child, false);
+        if (truncated) return;
+      }
     }
   };
-  for (const entry of entries) await visit(entry);
-  return { files, truncated };
-}
-
-export interface SkippedFile {
-  name: string;
-  /** One sentence that names the file and says why it was skipped. */
-  reason: string;
+  for (const entry of entries) {
+    await visit(entry, true);
+    if (truncated) break;
+  }
+  return { files, skipped, truncated };
 }
 export interface FolderBatch {
   /** Files that can be saved, at most MAX_FOLDER_FILES. */
@@ -83,8 +105,12 @@ export interface FolderBatch {
   overLimit: number;
 }
 
-/** A file's path inside the picked folder, when the browser gives one. */
-const pathOf = (file: File) => file.webkitRelativePath || file.name;
+/**
+ * The folders between the picked folder and the file, when the browser gives the file's path
+ * (Sem5/CS437/notes.pdf gives CS437). The picked folder itself is left out: picking a folder
+ * means its files are wanted, whatever its name.
+ */
+const innerFolders = (file: File) => (file.webkitRelativePath ?? '').split('/').slice(1, -1);
 
 /**
  * Sorts a folder's files: hidden and system files and files the library cannot save are
@@ -95,9 +121,18 @@ export function sortFolder(files: File[], limit = MAX_FOLDER_FILES): FolderBatch
   const skipped: SkippedFile[] = [];
   let overLimit = 0;
   for (const file of files) {
-    // A file inside a hidden folder (for example .git) counts as hidden too.
-    if (pathOf(file).split('/').some(isHiddenOrSystem)) {
-      skipped.push({ name: file.name, reason: `“${file.name}” is a hidden or system file.` });
+    const name = `“${file.name}”`;
+    // A file inside a hidden folder (for example .git) is skipped too, naming that folder.
+    const hiddenFolder = innerFolders(file).find(isHiddenOrSystem);
+    if (hiddenFolder) {
+      skipped.push({
+        name: file.name,
+        reason: `${name} is in the hidden folder “${hiddenFolder}”.`,
+      });
+      continue;
+    }
+    if (isHiddenOrSystem(file.name)) {
+      skipped.push({ name: file.name, reason: `${name} is a hidden or system file.` });
       continue;
     }
     const problem = fileProblem(file);
