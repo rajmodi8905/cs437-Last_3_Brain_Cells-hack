@@ -137,6 +137,14 @@ export class AutoSyncController {
     const entry = typeof location !== 'undefined' ? applyEntry() : undefined;
     if (entry?.from === 'insiit') this.set({ entry: 'insiit' });
     if (entry?.signIn) this.set({ signInResult: SIGN_IN_MESSAGES[entry.signIn] });
+    if (entry?.signedIn === 'whatsapp') {
+      // Following a WhatsApp link is an explicit choice to use Auto-sync, like returning from
+      // Google. The server replaced any earlier session on this browser, so an unfinished
+      // sign-out has nothing left to end. Including this device's library stays a separate
+      // choice (P02): only the WhatsApp vault's items are listed until then.
+      await this.services.preferences.set(SIGN_OUT_PENDING_KEY, false);
+      await this.services.preferences.set(ACTIVATED_KEY, true);
+    }
     if (await this.services.preferences.get<boolean>(SIGN_OUT_PENDING_KEY)) {
       this.set({ signOutPending: true, error: SIGN_OUT_PENDING_MESSAGE });
       // Finishing an earlier sign-out does not wait for the user to turn sync on again.
