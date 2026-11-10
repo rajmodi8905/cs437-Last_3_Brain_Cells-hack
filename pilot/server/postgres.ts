@@ -87,6 +87,38 @@ const MIGRATIONS = [
   CREATE INDEX sessions_expiry ON sessions (expires_at);
   CREATE INDEX login_attempts_expiry ON login_attempts (expires_at);
   `,
+  // 3: the WhatsApp channel (docs/pilot/whatsapp.md). Times in seconds.
+  `
+  CREATE TABLE wa_senders (
+    user_id text PRIMARY KEY,
+    owner_key text NOT NULL,
+    wa_id text,
+    first_seen bigint NOT NULL,
+    last_seen bigint NOT NULL
+  );
+  CREATE INDEX wa_senders_owner ON wa_senders (owner_key);
+  CREATE TABLE wa_inbound (
+    wamid text PRIMARY KEY,
+    sender_id text NOT NULL,
+    owner_key text NOT NULL,
+    received_at bigint NOT NULL,
+    message jsonb NOT NULL,
+    replied boolean NOT NULL DEFAULT false
+  );
+  CREATE TABLE wa_jobs (
+    id text PRIMARY KEY,
+    kind text NOT NULL,
+    wamid text NOT NULL,
+    owner_key text NOT NULL,
+    state text NOT NULL,
+    attempts integer NOT NULL DEFAULT 0,
+    run_after bigint NOT NULL,
+    locked_until bigint,
+    last_error text,
+    created_at bigint NOT NULL
+  );
+  CREATE INDEX wa_jobs_due ON wa_jobs (run_after, created_at) WHERE state IN ('pending', 'running');
+  `,
 ];
 
 const SCHEMA = /^[a-z_][a-z0-9_]{0,62}$/;
@@ -100,11 +132,14 @@ export const BACKUP_TABLES = [
   'upload_chunks',
   'sessions',
   'login_attempts',
+  'wa_senders',
+  'wa_inbound',
+  'wa_jobs',
 ] as const;
 export type BackupTable = (typeof BACKUP_TABLES)[number];
 /** The database version this code writes and can restore. */
 export const DATABASE_VERSION = MIGRATIONS.length;
-type Query = Pick<pg.PoolClient, 'query'>;
+export type Query = Pick<pg.PoolClient, 'query'>;
 
 export class PostgresPilotStore implements PilotStore {
   // Each API mutation reuses one connection through all nested store calls.
@@ -173,6 +208,14 @@ export class PostgresPilotStore implements PilotStore {
         await db.query('INSERT INTO schema_migrations (version) VALUES ($1)', [version]);
       }
     });
+  }
+
+  /**
+   * Runs `run` in a transaction on this store's schema, joining the one already open in this
+   * call chain (for example inside `withOwnerLock`). For stores that share the schema.
+   */
+  inTransaction<T>(run: (db: Query) => Promise<T>): Promise<T> {
+    return this.transaction(run);
   }
 
   private async transaction<T>(run: (db: pg.PoolClient) => Promise<T>): Promise<T> {
