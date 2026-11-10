@@ -13,7 +13,6 @@ import { ModelClient } from '../app/model-client';
 import { assetsFor, getManifest, offlineStatus, setupAssets, type AssetManifest } from './assets';
 import {
   GEMMA,
-  MIN_CALIBRATION_CORRECT,
   activeSearchModel,
   customSearchModel,
   saveSearchModel,
@@ -22,7 +21,7 @@ import {
   type SearchModel,
 } from '../shared/searchModels';
 import { pinCustomModel } from './customModel';
-import { calibrate } from './calibration';
+import { calibrate, calibrationProblem } from './calibration';
 import {
   assertDecodableImage,
   extractMedia,
@@ -133,7 +132,7 @@ export class LocalEngine implements EngineClient {
       ...spec,
       dimension: 1,
       threshold: 0,
-      calibration: { correct: 0, total: 0 },
+      calibration: { correct: 0, total: 0, unrelatedMatched: 0, unrelatedTotal: 0 },
     });
     await setupAssets(
       this.manifest,
@@ -160,17 +159,19 @@ export class LocalEngine implements EngineClient {
     } finally {
       await tester.dispose();
     }
-    if (result.correct < MIN_CALIBRATION_CORRECT)
-      throw new AppOperationError({
-        code: 'INVALID_INPUT',
-        message: `${spec.repo} found only ${result.correct} of ${result.total} sample questions, so search with it would be unreliable. Try another model, or check its query and document prefixes.`,
-        retryable: false,
-      });
+    const problem = calibrationProblem(spec.repo, result);
+    if (problem)
+      throw new AppOperationError({ code: 'INVALID_INPUT', message: problem, retryable: false });
     return customSearchModel({
       ...spec,
       dimension: result.dimension,
       threshold: result.threshold,
-      calibration: { correct: result.correct, total: result.total },
+      calibration: {
+        correct: result.correct,
+        total: result.total,
+        unrelatedMatched: result.unrelatedMatched,
+        unrelatedTotal: result.unrelatedTotal,
+      },
     });
   }
   /**

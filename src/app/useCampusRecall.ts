@@ -255,7 +255,7 @@ export function useCampusRecall(services: CampusRecallServices) {
       );
       setCustomModel(added);
       notify(
-        `${added.label} found ${added.custom!.calibration.correct} of ${added.custom!.calibration.total} sample questions. Choose it below to switch.`,
+        `${added.label} found ${added.custom!.calibration.correct} of ${added.custom!.calibration.total} sample questions and wrongly matched ${added.custom!.calibration.unrelatedMatched} of ${added.custom!.calibration.unrelatedTotal} unrelated ones. Choose it below to switch.`,
       );
     } catch (cause) {
       setAddModelError(plainError(cause).message);

@@ -1124,6 +1124,11 @@
         {
           "suite": "fast",
           "file": "tests/spec/search-models.test.ts",
+          "title": "[S16] calibration counts unrelated campus questions a model wrongly matches, and refuses most"
+        },
+        {
+          "suite": "fast",
+          "file": "tests/spec/search-models.test.ts",
           "title": "[S16] each model downloads and verifies only its own files and has its own readiness"
         },
         {

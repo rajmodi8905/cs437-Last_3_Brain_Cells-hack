@@ -15,7 +15,13 @@ import { INDEX_VERSION, LocalEngine } from '../../src/engine/index';
 import { THRESHOLDS, rankSegments } from '../../src/engine/ranking';
 import { rankByThresholds, rankForModel } from '../../src/engine/modelRanking';
 import { pinCustomModel } from '../../src/engine/customModel';
-import { CALIBRATION_SET, chooseThreshold } from '../../src/engine/calibration';
+import {
+  CALIBRATION_SET,
+  CAMPUS_CHECK,
+  calibrate,
+  calibrationProblem,
+  chooseThreshold,
+} from '../../src/engine/calibration';
 import { assetsFor, offlineStatus, setupAssets, type AssetManifest } from '../../src/engine/assets';
 import { CampusRecallDatabase, DexieLibraryRepository } from '../../src/storage/index';
 import type { IndexedSegment, SearchableSegment } from '../../src/shared';
@@ -47,7 +53,7 @@ async function config(extra: Partial<CustomModelConfig> = {}): Promise<CustomMod
     ],
     dimension: 384,
     threshold: 0.52,
-    calibration: { correct: 8, total: 8 },
+    calibration: { correct: 8, total: 8, unrelatedMatched: 1, unrelatedTotal: 8 },
     ...extra,
   };
 }
@@ -100,7 +106,21 @@ it("[S16] a student's own model is remembered only when it is well formed and ca
   saveSearchModel(GEMMA);
   expect(activeSearchModel()).toBe(GEMMA);
   // A damaged or under-calibrated stored model is ignored.
-  saveSearchModel(customSearchModel(await config({ calibration: { correct: 5, total: 8 } })));
+  saveSearchModel(
+    customSearchModel(
+      await config({
+        calibration: { correct: 5, total: 8, unrelatedMatched: 0, unrelatedTotal: 8 },
+      }),
+    ),
+  );
+  expect(activeSearchModel()).toBe(GEMMA);
+  saveSearchModel(
+    customSearchModel(
+      await config({
+        calibration: { correct: 8, total: 8, unrelatedMatched: 5, unrelatedTotal: 8 },
+      }),
+    ),
+  );
   expect(activeSearchModel()).toBe(GEMMA);
   saveSearchModel(custom);
   for (const key of store.keys()) if (key.includes('custom')) store.set(key, '{"repo":1}');
@@ -199,6 +219,59 @@ it('[S16] calibration uses the separate set and the same grid rule as EmbeddingG
   expect(chooseThreshold(scores, [[0.1, 0.5]])).toEqual({ threshold: 0.55, correct: 2 });
   // If every threshold that finds question 2 admits a negative, question 2 is given up.
   expect(chooseThreshold(scores, [[0.1, 0.6]])).toEqual({ threshold: 0.8, correct: 1 });
+});
+
+it('[S16] calibration counts unrelated campus questions a model wrongly matches, and refuses most', async () => {
+  // The campus check is separate from the frozen calibration set and from itself.
+  const fixed = new Set([
+    ...CALIBRATION_SET.texts.flatMap((t) => [t.text, t.query]),
+    ...CALIBRATION_SET.negatives,
+  ]);
+  for (const text of [
+    ...CAMPUS_CHECK.selectionNegatives,
+    ...CAMPUS_CHECK.notes,
+    ...CAMPUS_CHECK.unrelated,
+  ])
+    expect(fixed.has(text)).toBe(false);
+  expect(CAMPUS_CHECK.unrelated).toHaveLength(8);
+  // A fake model: each text gets its own direction, except that every question in
+  // "matching" shares a direction with the first campus note.
+  const names = new Map<string, number>();
+  const axis = (text: string) => names.get(text) ?? names.set(text, names.size).get(text)!;
+  const fake = (matching: string[]) => {
+    const vector = (text: string) => {
+      const v = new Float32Array(64);
+      v[matching.includes(text) ? axis(CAMPUS_CHECK.notes[0]!) : axis(text)] = 1;
+      const pair = CALIBRATION_SET.texts.find((t) => t.query === text);
+      if (pair) {
+        v.fill(0);
+        v[axis(pair.text)] = 1;
+      }
+      return v;
+    };
+    return {
+      documents: async (text: string) => [{ vector: vector(text) }],
+      query: async (text: string) => vector(text),
+    };
+  };
+  const clean = await calibrate(fake([]));
+  expect(clean).toMatchObject({ correct: 8, total: 8, unrelatedMatched: 0, unrelatedTotal: 8 });
+  const loose = await calibrate(fake(CAMPUS_CHECK.unrelated.slice(0, 5)));
+  expect(loose.unrelatedMatched).toBe(5);
+  expect(calibrationProblem('Example/loose', loose)).toMatch(/matched 5 of 8 unrelated questions/);
+  expect(calibrationProblem('Example/clean', clean)).toBeUndefined();
+  expect(calibrationProblem('Example/weak', { ...clean, correct: 5 })).toMatch(/found only 5 of 8/);
+  // The campus negatives take part in choosing the threshold: one that points exactly at a
+  // calibration note is admitted at every threshold, so nothing can be found safely.
+  const target = CALIBRATION_SET.texts[0]!.text;
+  const poisoned = {
+    documents: async (text: string) => await fake([]).documents(text),
+    query: async (text: string) =>
+      text === CAMPUS_CHECK.selectionNegatives[0]
+        ? (await fake([]).documents(target))[0]!.vector
+        : fake([]).query(text),
+  };
+  expect((await calibrate(poisoned)).correct).toBe(0);
 });
 
 async function manifest(): Promise<AssetManifest> {

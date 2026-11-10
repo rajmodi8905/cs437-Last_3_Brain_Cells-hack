@@ -84,7 +84,7 @@ export function SearchModelPicker({
               <p id={id} className="field-help">
                 {size ? `About ${downloadSize(size)} to set up. ` : ''}
                 {model.custom
-                  ? `Found ${model.custom.calibration.correct} of ${model.custom.calibration.total} sample questions on this device. `
+                  ? `On this device it found ${model.custom.calibration.correct} of ${model.custom.calibration.total} sample questions and wrongly matched ${model.custom.calibration.unrelatedMatched} of ${model.custom.calibration.unrelatedTotal} unrelated ones. `
                   : ''}
                 {model.summary}
               </p>

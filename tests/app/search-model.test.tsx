@@ -43,7 +43,7 @@ const added = customSearchModel({
   ],
   dimension: 384,
   threshold: 0.52,
-  calibration: { correct: 7, total: 8 },
+  calibration: { correct: 7, total: 8, unrelatedMatched: 3, unrelatedTotal: 8 },
 });
 
 function stubServices(items: LibraryItem[], addCustomModel: (...args: any[]) => Promise<any>) {
@@ -131,7 +131,9 @@ it('[S16] Settings keeps EmbeddingGemma by default, adds a tested model, and swi
   // The added model is offered with its test result, but EmbeddingGemma is still in use.
   const own = await within(group).findByRole('radio', { name: /Xenova\/bge-small-en-v1\.5/ });
   expect((own as HTMLInputElement).checked).toBe(true);
-  expect(group.textContent).toContain('Found 7 of 8 sample questions');
+  expect(group.textContent).toContain(
+    'found 7 of 8 sample questions and wrongly matched 3 of 8 unrelated ones',
+  );
   expect(group.textContent).toMatch(/experimental/);
   expect(group.textContent).toMatch(/not what is in a picture or video/);
   expect(engine.setSearchModel).not.toHaveBeenCalled();

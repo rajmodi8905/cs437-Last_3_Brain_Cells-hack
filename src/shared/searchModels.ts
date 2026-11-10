@@ -25,7 +25,8 @@ export interface CustomModelConfig {
   files: CustomModelFile[];
   dimension: number;
   threshold: number;
-  calibration: { correct: number; total: number };
+  /** Sample questions found, and unrelated campus questions wrongly matched (S16). */
+  calibration: { correct: number; total: number; unrelatedMatched: number; unrelatedTotal: number };
 }
 
 export interface SearchModel {
@@ -59,6 +60,11 @@ export const GEMMA: SearchModel = {
 
 /** The fewest calibration questions (of eight) a student's model must find. */
 export const MIN_CALIBRATION_CORRECT = 6;
+/**
+ * The most unrelated campus questions (of eight) a student's model may wrongly match: more than
+ * half means most searches would show wrong results. The count is always shown to the student.
+ */
+export const MAX_UNRELATED_MATCHED = 4;
 /** The largest model a student can add, all files together. */
 export const MAX_CUSTOM_MODEL_BYTES = 400_000_000;
 
@@ -147,7 +153,12 @@ export function readCustomModel(value: unknown): CustomModelConfig | undefined {
     typeof c.threshold !== 'number' ||
     !(c.threshold >= 0 && c.threshold <= 1) ||
     !c.calibration ||
-    !(c.calibration.correct >= MIN_CALIBRATION_CORRECT)
+    !(c.calibration.correct >= MIN_CALIBRATION_CORRECT) ||
+    !Number.isInteger(c.calibration.unrelatedMatched) ||
+    !Number.isInteger(c.calibration.unrelatedTotal) ||
+    !(
+      c.calibration.unrelatedMatched >= 0 && c.calibration.unrelatedMatched <= MAX_UNRELATED_MATCHED
+    )
   )
     return undefined;
   return c;
