@@ -245,6 +245,25 @@ For a migration-bearing release, stop the automatic path and use a reviewed main
 
 Similarly, use a reviewed manual process for changes to Compose topology, Caddy, secrets, hostname, storage identity, database credentials, data retention, or the pilot cutoff. These are not safe app-image-only releases.
 
+### Applying a Caddyfile change
+
+The release script switches only the app image. A merged change to `pilot/deploy/Caddyfile` (for example its security headers) reaches the VM only when someone applies it by hand:
+
+1. Merge the change normally and let the app release finish first.
+2. Copy the merged file over `/opt/campus-recall/Caddyfile` **in place** (for example with `cp`, after keeping a dated copy of the old file). Compose bind-mounts that single file, so replacing it with `mv` would leave Caddy reading the old inode.
+3. Check it, then reload Caddy without restarting the app or the database:
+
+   ```sh
+   cd /opt/campus-recall
+   docker compose exec caddy caddy validate --config /etc/caddy/Caddyfile
+   docker compose exec caddy caddy reload --config /etc/caddy/Caddyfile
+   ```
+
+4. Confirm the new headers with `curl -sI https://campusrecall.indiasouthcentral.cloudapp.azure.com/`, then open the site on a phone and a laptop: sign-in, search setup, search, and opening a PDF and an image.
+5. If anything is blocked, copy the old file back in place and reload again.
+
+Azure Run Command (`az vm run-command invoke … --command-id RunShellScript`) can run these steps without opening SSH.
+
 ## Failure handling and rollback
 
 | Symptom                                          | Meaning and response                                                                                                                                                             |
