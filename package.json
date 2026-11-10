@@ -11,6 +11,7 @@
     "test": "npm run test:fast && npm run test:browser && npm run test:acceptance",
     "test:fast": "node scripts/run-suite.mjs fast",
     "build": "tsc --noEmit && vite build",
+    "build:engine-host": "node pilot/scripts/build-engine-host.mjs",
     "check": "tsc --noEmit && eslint src tests pilot && node scripts/check-product.mjs && node scripts/check-spec-coverage.mjs",
     "predev": "node scripts/prepare-assets.mjs",
     "prebuild": "node scripts/prepare-assets.mjs",

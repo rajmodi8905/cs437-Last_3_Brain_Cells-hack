@@ -67,7 +67,7 @@ Every stored item has an `index:<wamid>` job. `createWhatsAppIndexer({ store, ob
 
 ### The page
 
-`pilot/engine-host/index.html` and `main.ts` are a second Vite entry, so `npm run build` emits `dist/pilot/engine-host/index.html` and `assets/engine-host-*.js` next to the app. The app never links it, and the service worker's precache ignores both (`globIgnores` in `vite.config.ts`), so the installed app and its offline behaviour are unchanged. Building two entries moves code the two share into one more app chunk; the app loads it as before. Because it is in `dist/`, the pilot's static handler also serves it unlinked at `/pilot/engine-host/index.html`; opening it there would set up offline search in that browser like Settings does, so the deployment slice may want to stop serving it.
+`pilot/engine-host/index.html` and `main.ts` are built on their own with `npm run build:engine-host` (`ENGINE_HOST_BUILD=1`), into `.cache/engine-host-dist/`, from the same engine source as the app. The published app build in `dist/` is unchanged: it does not contain the page, so the release check still passes and the pilot site never serves it, and the service worker precache is as before.
 
 The page (`pilot/engine-host/host.ts`) opens its own library database, `campus-recall-engine-host`, never the app's `campus-recall`, removes anything an interrupted run left there, sets the default model (`saveSearchModel(GEMMA)`; a student's own S16 model is never used, because custom-model indexes never sync) and runs the app's `setupModels`, which fetches every pinned file once, checks its SHA-256 and keeps it in the asset cache the model worker reads. It then exposes `window.engineHost`:
 
@@ -116,7 +116,7 @@ Peak resident memory, summed over Chromium's processes (which counts shared page
 ## Seams for later slices
 
 - `startWhatsAppWorker(options)` runs the worker in the server process and returns `{ runOnce, drain, reply, wake, stop }`; pass `wake` as the webhook's `onRecorded` so new messages start at once. `createWhatsAppIngest(options)` gives the same functions without the loop.
-- Indexing: pass `onIndexJob: createWhatsAppIndexer({ store, objects, engine, quotaBytes })` with a started `PlaywrightEngineHost({ distDir: 'dist', modelsDir: '.models' })`; close the host on shutdown. The deploy image needs Playwright's Chromium and the `.models` files.
+- Indexing: pass `onIndexJob: createWhatsAppIndexer({ store, objects, engine, quotaBytes })` with a started `PlaywrightEngineHost({ distDir: '.cache/engine-host-dist', modelsDir: '.models' })`; close the host on shutdown. The deploy image needs Playwright's Chromium, the `.models` files and the engine host build (`npm run build:engine-host`).
 - Search: `engineHost.search(query, ownerItems, kind?)` returns `EngineSearchHit[]` (`{ globalId, itemId, segmentId, location, matchKind, excerpt?, score }`, best first, at most five), where `ownerItems = await ownerSearchItems(store, objects, ownerKey)` (`whatsapp/indexer.ts`) lists one `{ globalId, kind, indexVersion, segments }` per live item whose stored bundle still matches its original, title and a supported index version, as the app checks before it uses a synced bundle.
 - Text: typed text that is not saved goes to `onText(sender, text, message)` when it is set, and then gets no help reply; the search slice answers there.
 - Replies: `reply(sender, text)` sends one plain text message; `GraphClient` leaves room for `sendInteractive`, `uploadMedia` and `sendMedia`.

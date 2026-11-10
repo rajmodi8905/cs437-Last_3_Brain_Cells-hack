@@ -83,7 +83,7 @@ interface ManifestAsset {
 }
 
 export interface PlaywrightEngineHostOptions {
-  /** The built app (`npm run build`), which includes `pilot/engine-host/index.html`. */
+  /** The engine host build (`npm run build:engine-host`, `.cache/engine-host-dist`). */
   distDir: string;
   /** Pinned model files named by SHA-256, as `npm run models:download` writes them. */
   modelsDir: string;

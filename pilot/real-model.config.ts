@@ -31,7 +31,7 @@ export default defineConfig({
       timeout: 10_000,
     },
     {
-      command: `node pilot/scripts/dev-key.mjs && npm run build && PILOT_SIGN_IN_PER_MINUTE=1000 PILOT_DEV_KEY_FILE=.cache/pilot-dev-key/dev-private.pem PILOT_PORT=${port} npm run pilot:server`,
+      command: `node pilot/scripts/dev-key.mjs && npm run build && npm run build:engine-host && PILOT_SIGN_IN_PER_MINUTE=1000 PILOT_DEV_KEY_FILE=.cache/pilot-dev-key/dev-private.pem PILOT_PORT=${port} npm run pilot:server`,
       cwd: '..',
       url: `http://127.0.0.1:${port}`,
       reuseExistingServer: false,

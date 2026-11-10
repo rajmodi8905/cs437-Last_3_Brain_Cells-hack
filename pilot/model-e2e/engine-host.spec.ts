@@ -228,7 +228,7 @@ test('W7: the engine host indexes with the app engine and default model, and sea
 
   // Two jobs per browser, so the first search and the second PDF run on restarted browsers.
   const host = new PlaywrightEngineHost({
-    distDir: 'dist',
+    distDir: '.cache/engine-host-dist',
     modelsDir: '.models',
     maxJobsPerBrowser: 2,
     log: (message, detail) => console.log(message, detail ?? ''),
@@ -405,7 +405,11 @@ test('W7: the engine host indexes with the app engine and default model, and sea
 
 test('W7: a job over its time limit fails as transient and the next job gets a fresh browser', async () => {
   test.setTimeout(600_000);
-  const host = new PlaywrightEngineHost({ distDir: 'dist', modelsDir: '.models', jobTimeoutMs: 1 });
+  const host = new PlaywrightEngineHost({
+    distDir: '.cache/engine-host-dist',
+    modelsDir: '.models',
+    jobTimeoutMs: 1,
+  });
   try {
     await host.start();
     const first = host.browserProcessId;
@@ -430,7 +434,10 @@ test('W7: a job over its time limit fails as transient and the next job gets a f
 
 test('W7: an original the engine cannot read is refused as permanent', async () => {
   test.setTimeout(600_000);
-  const host = new PlaywrightEngineHost({ distDir: 'dist', modelsDir: '.models' });
+  const host = new PlaywrightEngineHost({
+    distDir: '.cache/engine-host-dist',
+    modelsDir: '.models',
+  });
   try {
     const refused = await host
       .index({
