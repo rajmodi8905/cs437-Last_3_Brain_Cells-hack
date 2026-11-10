@@ -96,7 +96,7 @@ The wire format, states and limits referred to below are defined in [protocol.md
 
 ## WhatsApp channel (opt-in)
 
-These statements cover the optional WhatsApp channel ([whatsapp.md](whatsapp.md)): students message the bot's number and the pilot server stores what they send in a vault for that sender. A student who never messages the bot sees no change, and P01 to P15 are unchanged. Tests run against a stand-in for Meta's Graph API with webhook deliveries in Meta's documented format; claims about the real Meta number need their own evidence.
+These statements cover the optional WhatsApp channel ([whatsapp.md](whatsapp.md)): students message the bot's number and the pilot server stores what they send in a vault for that sender and indexes it for search. A student who never messages the bot sees no change, and P01 to P15 are unchanged. Tests run against a stand-in for Meta's Graph API with webhook deliveries in Meta's documented format; claims about the real Meta number need their own evidence.
 
 ### W2 — Exact original
 
@@ -121,3 +121,9 @@ These statements cover the optional WhatsApp channel ([whatsapp.md](whatsapp.md)
 **Statement:** Each sender's items are stored only in that sender's vault (`wa:<business-scoped user ID>`), and cannot be read with another sender's session or a Google account's session.
 
 **Test:** Two senders each save a note; each vault holds only its own item and storage key; reading the first sender's original with the second sender's or a Google account's session returns `NOT_FOUND`, and their change feeds do not list it.
+
+### W7 — Server indexing with the app's engine
+
+**Statement:** The server indexes an opted-in WhatsApp item with the app's own engine and default model and publishes a bundle with the current `INDEX_VERSION` that passes the P05 checks; the app's cloud search then finds it.
+
+**Test:** With pinned real models, the engine host indexes `sample-03.pdf` and `sample-01.jpg`; both bundles pass `validateIndexBundle` with the app's `INDEX_VERSION`, their segments equal what the app stores for the same files, and the app's search over them returns the PDF at page 2 for its fixture question. With a stand-in engine, a stored item's bundle is published like `PUT /items/{id}/index` (same checks, quota, object key and change feed); a deleted item gets none, a renamed one is indexed with its new title, failures are retried with the job backoff, and a refused original or full quota fails the job once and tells the student once.
