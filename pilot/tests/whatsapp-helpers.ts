@@ -41,6 +41,9 @@ export async function startFakeGraph() {
     /** Every URL issued by a lookup is already expired. */
     expireLookups: false,
     failSends: 0,
+    /** Files uploaded for sending, by media ID. */
+    uploads: new Map<string, { bytes: Uint8Array; mimeType: string; filename: string }>(),
+    failUploads: 0,
   };
   let base = '';
   const issue = (mediaId: string, expired = false) => {
@@ -79,6 +82,26 @@ export async function startFakeGraph() {
         'content-length': String(bytes.length),
       });
       return res.end(bytes);
+    }
+    if ((match = /^\/v[\d.]+\/([^/]+)\/media$/.exec(url.pathname)) && req.method === 'POST') {
+      if (match[1] !== PHONE_NUMBER_ID) return json(400, { error: { code: 100 } });
+      if (state.failUploads > 0) {
+        state.failUploads--;
+        return json(500, { error: { code: 131000 } });
+      }
+      const form = await new Response(Buffer.concat(chunks), {
+        headers: { 'content-type': req.headers['content-type'] ?? '' },
+      }).formData();
+      const file = form.get('file');
+      if (form.get('messaging_product') !== 'whatsapp' || !(file instanceof Blob))
+        return json(400, { error: { code: 100 } });
+      const id = `out-media-${state.uploads.size + 1}`;
+      state.uploads.set(id, {
+        bytes: new Uint8Array(await file.arrayBuffer()),
+        mimeType: String(form.get('type')),
+        filename: file instanceof File ? file.name : '',
+      });
+      return json(200, { id });
     }
     if ((match = /^\/v[\d.]+\/([^/]+)\/messages$/.exec(url.pathname)) && req.method === 'POST') {
       if (match[1] !== PHONE_NUMBER_ID) return json(400, { error: { code: 100 } });
@@ -127,6 +150,9 @@ export async function startFakeGraph() {
       state.sent
         .filter((sent) => sent.recipient === recipient || sent.to === recipient)
         .map((sent) => (sent.text as { body: string }).body),
+    /** Every message sent to a recipient (BSUID or number), of any type. */
+    messagesTo: (recipient: string) =>
+      state.sent.filter((sent) => sent.recipient === recipient || sent.to === recipient),
     close: () => new Promise<void>((resolve) => server.close(() => resolve())),
   };
 }

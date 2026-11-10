@@ -1,6 +1,6 @@
 /// <reference types="node" />
-// The few WhatsApp Cloud API (Graph API) calls the channel makes. Later slices add
-// interactive messages and sending media through the same client.
+// The few WhatsApp Cloud API (Graph API) calls the channel makes: reading inbound media,
+// uploading media to send back, and text, media and interactive messages.
 
 /** Where a reply goes: the BSUID when known (Meta accepts it since July 2026), else the number. */
 export type WhatsAppAddress = { bsuid: string } | { waId: string };
@@ -18,6 +18,20 @@ export interface GraphClient {
   /** The file at a media URL, read with the access token; refused beyond `maxBytes`. */
   download(url: string, maxBytes: number): Promise<Uint8Array>;
   sendText(to: WhatsAppAddress, text: string): Promise<void>;
+  /** Uploads a file for sending (`POST /{phone-number-id}/media`); returns its media ID. */
+  uploadMedia(bytes: Uint8Array, mimeType: string, filename: string): Promise<string>;
+  /** Sends uploaded media as a photo or a document, with an optional caption. */
+  sendMedia(to: WhatsAppAddress, media: OutgoingMedia): Promise<void>;
+  /** Sends an interactive message (`list`, `button` or `cta_url`) as Meta defines it. */
+  sendInteractive(to: WhatsAppAddress, interactive: Record<string, unknown>): Promise<void>;
+}
+
+export interface OutgoingMedia {
+  type: 'image' | 'document';
+  mediaId: string;
+  caption?: string;
+  /** Shown for documents. */
+  filename?: string;
 }
 
 /** A Graph API answer other than success; `status` 404 on a media URL means it expired. */
@@ -58,6 +72,7 @@ export function createGraphClient(options: GraphClientOptions): GraphClient {
   const api = `${(options.baseUrl ?? 'https://graph.facebook.com').replace(/\/$/, '')}/${
     options.version ?? GRAPH_API_VERSION
   }`;
+  const phone = `${api}/${encodeURIComponent(options.phoneNumberId)}`;
   const auth = { authorization: `Bearer ${options.accessToken}` };
   const failed = async (res: Response, what: string) => {
     await res.body?.cancel().catch(() => undefined);
@@ -109,21 +124,52 @@ export function createGraphClient(options: GraphClientOptions): GraphClient {
       return bytes;
     },
 
-    async sendText(to, text) {
-      const res = await fetchImpl(`${api}/${encodeURIComponent(options.phoneNumberId)}/messages`, {
-        method: 'POST',
-        headers: { ...auth, 'content-type': 'application/json' },
-        body: JSON.stringify({
-          messaging_product: 'whatsapp',
-          recipient_type: 'individual',
-          // Meta reads `recipient` as a BSUID and `to` as a phone number.
-          ...('bsuid' in to ? { recipient: to.bsuid } : { to: to.waId }),
-          type: 'text',
-          text: { body: text, preview_url: false },
-        }),
-      });
-      if (!res.ok) throw await failed(res, 'Sending a message');
-      await res.body?.cancel().catch(() => undefined);
+    sendText(to, text) {
+      return sendMessage(to, { type: 'text', text: { body: text, preview_url: false } });
+    },
+
+    async uploadMedia(bytes, mimeType, filename) {
+      const form = new FormData();
+      form.set('messaging_product', 'whatsapp');
+      form.set('type', mimeType);
+      form.set('file', new Blob([new Uint8Array(bytes)], { type: mimeType }), filename);
+      const res = await fetchImpl(`${phone}/media`, { method: 'POST', headers: auth, body: form });
+      if (!res.ok) throw await failed(res, 'Uploading media');
+      const body = (await res.json()) as Record<string, unknown>;
+      if (typeof body.id !== 'string') throw new GraphError(502, 'Media upload gave no ID.');
+      return body.id;
+    },
+
+    sendMedia(to, media) {
+      const content =
+        media.type === 'document'
+          ? {
+              id: media.mediaId,
+              ...(media.caption ? { caption: media.caption } : {}),
+              ...(media.filename ? { filename: media.filename } : {}),
+            }
+          : { id: media.mediaId, ...(media.caption ? { caption: media.caption } : {}) };
+      return sendMessage(to, { type: media.type, [media.type]: content });
+    },
+
+    sendInteractive(to, interactive) {
+      return sendMessage(to, { type: 'interactive', interactive });
     },
   };
+
+  async function sendMessage(to: WhatsAppAddress, message: Record<string, unknown>) {
+    const res = await fetchImpl(`${phone}/messages`, {
+      method: 'POST',
+      headers: { ...auth, 'content-type': 'application/json' },
+      body: JSON.stringify({
+        messaging_product: 'whatsapp',
+        recipient_type: 'individual',
+        // Meta reads `recipient` as a BSUID and `to` as a phone number.
+        ...('bsuid' in to ? { recipient: to.bsuid } : { to: to.waId }),
+        ...message,
+      }),
+    });
+    if (!res.ok) throw await failed(res, 'Sending a message');
+    await res.body?.cancel().catch(() => undefined);
+  }
 }
