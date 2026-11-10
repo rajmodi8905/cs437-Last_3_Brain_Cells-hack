@@ -22,7 +22,13 @@ export default defineConfig({
           outDir: '.cache/acceptance-dist',
           rollupOptions: { input: ['index.html', 'tests/harness.html'] },
         }
-      : undefined,
+      : {
+          // The pilot's engine host page (docs/pilot/whatsapp.md) is built with the app so it runs
+          // the same engine code, but it is never linked from the app or precached.
+          rollupOptions: {
+            input: { index: 'index.html', 'engine-host': 'pilot/engine-host/index.html' },
+          },
+        },
   plugins: [
     react(),
     VitePWA({
@@ -85,7 +91,7 @@ export default defineConfig({
       },
       injectManifest: {
         globPatterns: ['**/*.{js,css,html,svg,png,json}'],
-        globIgnores: ['runtime/**'],
+        globIgnores: ['runtime/**', 'pilot/**', 'assets/engine-host-*'],
         additionalManifestEntries: appShellRuntime,
         maximumFileSizeToCacheInBytes: 6_000_000,
       },
