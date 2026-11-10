@@ -240,13 +240,13 @@ export function useCampusRecall(services: CampusRecallServices) {
   /** Pins, downloads and calibrates a student's own model; nothing switches yet. */
   const addCustomModel = async (
     repo: string,
-    options: Pick<CustomModelConfig, 'pooling' | 'queryPrefix' | 'documentPrefix'>,
+    overrides: Partial<Pick<CustomModelConfig, 'pooling' | 'queryPrefix' | 'documentPrefix'>>,
   ) => {
     if (!engine.addCustomModel || addingModel) return;
     setAddModelError('');
     setAddingModel('Checking the model on Hugging Face…');
     try {
-      const added = await engine.addCustomModel(repo, options, (event) =>
+      const added = await engine.addCustomModel(repo, overrides, (event) =>
         setAddingModel(
           event.totalBytes
             ? `Downloading and verifying… ${Math.round((event.loadedBytes ?? 0) / 1e6)} of ${Math.round(event.totalBytes / 1e6)} MB`

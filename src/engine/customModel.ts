@@ -3,7 +3,11 @@
 // SHA-256 that Hugging Face publishes; small files are downloaded once and hashed here. Setup then
 // downloads and verifies those exact bytes, like EmbeddingGemma's files.
 import { AppOperationError } from '../shared';
-import { MAX_CUSTOM_MODEL_BYTES, type CustomModelFile } from '../shared/searchModels';
+import {
+  MAX_CUSTOM_MODEL_BYTES,
+  type CustomModelConfig,
+  type CustomModelFile,
+} from '../shared/searchModels';
 
 const HUB = 'https://huggingface.co';
 const MODEL_ID = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}\/[A-Za-z0-9][A-Za-z0-9._-]{0,95}$/;
@@ -16,6 +20,8 @@ export interface PinnedModel {
   revision: string;
   dtype: 'q8' | 'fp32';
   files: CustomModelFile[];
+  /** Pooling and prompts the repository publishes for sentence-transformers, when it does. */
+  published: Partial<Pick<CustomModelConfig, 'pooling' | 'queryPrefix' | 'documentPrefix'>>;
 }
 
 const refuse = (message: string) =>
@@ -101,5 +107,48 @@ export async function pinCustomModel(
     throw refuse(
       `${repo} is ${Math.round(total / 1e6)} MB. Models up to ${MAX_CUSTOM_MODEL_BYTES / 1e6} MB can be added.`,
     );
-  return { repo, revision, dtype: onnx.dtype, files };
+  return { repo, revision, dtype: onnx.dtype, files, published: await published() };
+
+  /** Reads 1_Pooling/config.json and config_sentence_transformers.json when present. */
+  async function published(): Promise<PinnedModel['published']> {
+    const read = async (name: string) => {
+      const entry = siblings.get(name);
+      if (!entry || !(entry.size! > 0) || entry.size! > 100_000) return undefined;
+      try {
+        const response = await fetcher(`${HUB}/${repo}/resolve/${revision}/${name}`, {
+          credentials: 'omit',
+        });
+        return response.ok ? ((await response.json()) as Record<string, any>) : undefined;
+      } catch {
+        return undefined;
+      }
+    };
+    const result: PinnedModel['published'] = {};
+    const pooling = await read('1_Pooling/config.json');
+    if (pooling?.pooling_mode_cls_token === true) result.pooling = 'cls';
+    else if (pooling?.pooling_mode_mean_tokens === true) result.pooling = 'mean';
+    const prompts = (await read('config_sentence_transformers.json'))?.prompts;
+    const text = (value: unknown) =>
+      typeof value === 'string' && value.length <= 200 ? value : undefined;
+    if (prompts && typeof prompts === 'object') {
+      const query = text(prompts.query);
+      const document = text(prompts.document) ?? text(prompts.passage);
+      if (query !== undefined) result.queryPrefix = query;
+      if (document !== undefined) result.documentPrefix = document;
+    }
+    return result;
+  }
+}
+
+type Settings = Pick<CustomModelConfig, 'pooling' | 'queryPrefix' | 'documentPrefix'>;
+/** The student's choices win; otherwise what the model publishes; otherwise mean and none. */
+export function modelSettings(
+  published: Partial<Settings>,
+  overrides: Partial<Settings>,
+): Settings {
+  return {
+    pooling: overrides.pooling ?? published.pooling ?? 'mean',
+    queryPrefix: overrides.queryPrefix ?? published.queryPrefix ?? '',
+    documentPrefix: overrides.documentPrefix ?? published.documentPrefix ?? '',
+  };
 }

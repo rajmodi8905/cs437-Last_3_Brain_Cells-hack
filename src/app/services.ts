@@ -14,7 +14,7 @@ export interface ApplicationEngine extends EngineClient {
   downloadBytesFor?(model: SearchModel): number;
   addCustomModel?(
     repo: string,
-    options: Pick<CustomModelConfig, 'pooling' | 'queryPrefix' | 'documentPrefix'>,
+    overrides: Partial<Pick<CustomModelConfig, 'pooling' | 'queryPrefix' | 'documentPrefix'>>,
     onProgress?: ProgressListener,
   ): Promise<SearchModel>;
   setSearchModel?(model: SearchModel): Promise<void>;

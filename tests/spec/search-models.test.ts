@@ -14,7 +14,7 @@ import {
 import { INDEX_VERSION, LocalEngine } from '../../src/engine/index';
 import { THRESHOLDS, rankSegments } from '../../src/engine/ranking';
 import { rankByThresholds, rankForModel } from '../../src/engine/modelRanking';
-import { pinCustomModel } from '../../src/engine/customModel';
+import { modelSettings, pinCustomModel } from '../../src/engine/customModel';
 import {
   CALIBRATION_SET,
   CAMPUS_CHECK,
@@ -127,6 +127,12 @@ it("[S16] a student's own model is remembered only when it is well formed and ca
   expect(activeSearchModel()).toBe(GEMMA);
 });
 
+const PUBLISHED: Record<string, unknown> = {
+  '1_Pooling/config.json': { pooling_mode_cls_token: true, pooling_mode_mean_tokens: false },
+  'config_sentence_transformers.json': {
+    prompts: { query: 'Represent this sentence for searching relevant passages: ', document: '' },
+  },
+};
 function hub(siblings: any[], options: { status?: number; gated?: boolean } = {}) {
   const fetched: string[] = [];
   const fetcher = vi.fn(async (url: string) => {
@@ -136,6 +142,7 @@ function hub(siblings: any[], options: { status?: number; gated?: boolean } = {}
         ? new Response('', { status: options.status })
         : Response.json({ sha: REVISION, gated: options.gated ?? false, siblings });
     const name = url.split(`/resolve/${REVISION}/`)[1]!;
+    if (name in PUBLISHED) return Response.json(PUBLISHED[name]);
     return new Response(bytes(`contents of ${name}`));
   }) as unknown as typeof fetch;
   return { fetcher, fetched };
@@ -154,7 +161,7 @@ const usable = [
   large('onnx/model_quantized.onnx'),
 ];
 
-it('[S16] a Hugging Face listing becomes pinned files, or a plain refusal', async () => {
+it('[S16] a Hugging Face listing becomes pinned files and published settings, or a plain refusal', async () => {
   const { fetcher, fetched } = hub(usable);
   const pinned = await pinCustomModel(' https://huggingface.co/Example/text-model/ ', fetcher);
   expect(fetched[0]).toBe(
@@ -176,6 +183,29 @@ it('[S16] a Hugging Face listing becomes pinned files, or a plain refusal', asyn
   // Small files are hashed from their bytes; large ones carry Hugging Face's SHA-256.
   expect(pinned.files[0]!.sha256).toBe(await sha(bytes('contents of config.json')));
   expect(pinned.files[3]!.sha256).toBe('a'.repeat(64));
+  // Nothing published: no settings are guessed here.
+  expect(pinned.published).toEqual({});
+  // Published sentence-transformers settings are read, and the student's choices still win.
+  const withSettings = await pinCustomModel(
+    'Example/text-model',
+    hub([...usable, small('1_Pooling/config.json'), small('config_sentence_transformers.json')])
+      .fetcher,
+  );
+  expect(withSettings.published).toEqual({
+    pooling: 'cls',
+    queryPrefix: 'Represent this sentence for searching relevant passages: ',
+    documentPrefix: '',
+  });
+  expect(withSettings.files.map((f) => f.name)).not.toContain('1_Pooling/config.json');
+  expect(modelSettings(withSettings.published, {})).toEqual(withSettings.published);
+  expect(
+    modelSettings(withSettings.published, { pooling: 'mean', queryPrefix: 'query: ' }),
+  ).toEqual({
+    pooling: 'mean',
+    queryPrefix: 'query: ',
+    documentPrefix: '',
+  });
+  expect(modelSettings({}, {})).toEqual({ pooling: 'mean', queryPrefix: '', documentPrefix: '' });
   // Without an 8-bit export, the full-precision file is used.
   const fp32 = await pinCustomModel('Example/text-model', hub(usable.slice(0, 4)).fetcher);
   expect(fp32.dtype).toBe('fp32');

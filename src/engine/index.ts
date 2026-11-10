@@ -20,7 +20,7 @@ import {
   type CustomModelConfig,
   type SearchModel,
 } from '../shared/searchModels';
-import { pinCustomModel } from './customModel';
+import { modelSettings, pinCustomModel } from './customModel';
 import { calibrate, calibrationProblem } from './calibration';
 import {
   assertDecodableImage,
@@ -122,12 +122,12 @@ export class LocalEngine implements EngineClient {
    */
   async addCustomModel(
     repo: string,
-    options: Pick<CustomModelConfig, 'pooling' | 'queryPrefix' | 'documentPrefix'>,
+    overrides: Partial<Pick<CustomModelConfig, 'pooling' | 'queryPrefix' | 'documentPrefix'>>,
     onProgress?: ProgressListener,
   ): Promise<SearchModel> {
-    const pinned = await pinCustomModel(repo);
+    const { published, ...pinned } = await pinCustomModel(repo);
     this.manifest ??= await getManifest();
-    const spec = { ...pinned, ...options };
+    const spec = { ...pinned, ...modelSettings(published, overrides) };
     const draft = customSearchModel({
       ...spec,
       dimension: 1,

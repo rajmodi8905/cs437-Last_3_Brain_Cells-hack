@@ -124,7 +124,7 @@ it('[S16] Settings keeps EmbeddingGemma by default, adds a tested model, and swi
   await waitFor(() =>
     expect(engine.addCustomModel).toHaveBeenCalledWith(
       'Xenova/bge-small-en-v1.5',
-      { pooling: 'cls', queryPrefix: '', documentPrefix: '' },
+      { pooling: 'cls' },
       expect.any(Function),
     ),
   );
@@ -135,6 +135,7 @@ it('[S16] Settings keeps EmbeddingGemma by default, adds a tested model, and swi
     'found 7 of 8 sample questions and wrongly matched 3 of 8 unrelated ones',
   );
   expect(group.textContent).toMatch(/experimental/);
+  expect(group.textContent).toContain('Uses mean pooling.');
   expect(group.textContent).toMatch(/not what is in a picture or video/);
   expect(engine.setSearchModel).not.toHaveBeenCalled();
 

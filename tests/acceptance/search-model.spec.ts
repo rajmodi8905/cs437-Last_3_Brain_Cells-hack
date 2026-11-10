@@ -165,6 +165,8 @@ test("[S16] a student's own model is pinned, verified, calibrated and used offli
   // Calibrated on this device with the shared grid rule, and only then switched to.
   expect(added.model.custom.calibration.total).toBe(8);
   expect(added.model.custom.calibration.correct).toBeGreaterThanOrEqual(6);
+  expect(added.model.custom.calibration.unrelatedTotal).toBe(8);
+  expect(added.model.custom.calibration.unrelatedMatched).toBeLessThanOrEqual(4);
   expect(added.model.experimental).toBe(true);
   expect(added.after).toBe(added.model.indexVersion);
   expect(added.after).not.toBe(added.before);

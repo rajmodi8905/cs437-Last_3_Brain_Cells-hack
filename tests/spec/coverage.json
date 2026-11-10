@@ -1114,7 +1114,7 @@
         {
           "suite": "fast",
           "file": "tests/spec/search-models.test.ts",
-          "title": "[S16] a Hugging Face listing becomes pinned files, or a plain refusal"
+          "title": "[S16] a Hugging Face listing becomes pinned files and published settings, or a plain refusal"
         },
         {
           "suite": "fast",

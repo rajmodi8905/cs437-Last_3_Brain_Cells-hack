@@ -10,7 +10,7 @@ import {
 } from '../shared/searchModels';
 import { downloadSize } from './SetupProgress';
 
-type AddOptions = Pick<CustomModelConfig, 'pooling' | 'queryPrefix' | 'documentPrefix'>;
+type AddOptions = Partial<Pick<CustomModelConfig, 'pooling' | 'queryPrefix' | 'documentPrefix'>>;
 
 export function SearchModelPicker({
   current,
@@ -46,12 +46,18 @@ export function SearchModelPicker({
   }
   const target = options.find((model) => model.indexVersion === chosen) ?? GEMMA;
   const [repo, setRepo] = useState('');
-  const [pooling, setPooling] = useState<AddOptions['pooling']>('mean');
+  // Empty means automatic: use what the model publishes.
+  const [pooling, setPooling] = useState<'' | 'mean' | 'cls'>('');
   const [queryPrefix, setQueryPrefix] = useState('');
   const [documentPrefix, setDocumentPrefix] = useState('');
   const submit = (event: FormEvent) => {
     event.preventDefault();
-    if (repo.trim()) onAdd(repo.trim(), { pooling, queryPrefix, documentPrefix });
+    if (!repo.trim()) return;
+    onAdd(repo.trim(), {
+      ...(pooling ? { pooling } : {}),
+      ...(queryPrefix ? { queryPrefix } : {}),
+      ...(documentPrefix ? { documentPrefix } : {}),
+    });
   };
   const busy = switching || !!adding;
   return (
@@ -86,6 +92,9 @@ export function SearchModelPicker({
                 {model.custom
                   ? `On this device it found ${model.custom.calibration.correct} of ${model.custom.calibration.total} sample questions and wrongly matched ${model.custom.calibration.unrelatedMatched} of ${model.custom.calibration.unrelatedTotal} unrelated ones. `
                   : ''}
+                {model.custom
+                  ? `Uses ${model.custom.pooling} pooling${model.custom.queryPrefix ? `, query prefix “${model.custom.queryPrefix}”` : ''}${model.custom.documentPrefix ? `, document prefix “${model.custom.documentPrefix}”` : ''}. `
+                  : ''}
                 {model.summary}
               </p>
             </div>
@@ -112,6 +121,11 @@ export function SearchModelPicker({
           device. Your own model searches text only and is experimental: it has not been tested on
           our search corpus. Nothing switches until you choose it.
         </p>
+        <p className="field-help">
+          Leave pooling and prefixes on Automatic to use what the model publishes for
+          sentence-transformers. If it publishes nothing, mean pooling and no prefixes are used.
+          Fill them in only to override, for example a query prefix such as “query: ”.
+        </p>
         <form onSubmit={submit} className="search-model-form">
           <label>
             Hugging Face model ID
@@ -131,8 +145,9 @@ export function SearchModelPicker({
             <select
               value={pooling}
               disabled={busy}
-              onChange={(e) => setPooling(e.target.value as AddOptions['pooling'])}
+              onChange={(e) => setPooling(e.target.value as '' | 'mean' | 'cls')}
             >
+              <option value="">Automatic (from the model)</option>
               <option value="mean">Mean (most models)</option>
               <option value="cls">CLS (for example BGE and Arctic Embed)</option>
             </select>
@@ -142,7 +157,7 @@ export function SearchModelPicker({
             <input
               type="text"
               value={queryPrefix}
-              placeholder="query: "
+              placeholder="Automatic"
               disabled={busy}
               onChange={(e) => setQueryPrefix(e.target.value)}
             />
@@ -152,7 +167,7 @@ export function SearchModelPicker({
             <input
               type="text"
               value={documentPrefix}
-              placeholder="passage: "
+              placeholder="Automatic"
               disabled={busy}
               onChange={(e) => setDocumentPrefix(e.target.value)}
             />
