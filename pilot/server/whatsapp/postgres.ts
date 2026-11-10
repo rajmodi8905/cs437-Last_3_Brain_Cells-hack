@@ -8,10 +8,28 @@ import type {
   InboundMessage,
   JobKind,
   JobState,
+  OpenLink,
+  SenderState,
   WaMessage,
   WhatsAppSender,
 } from './store';
 import { jobId } from './store';
+
+interface LinkRow {
+  token_hash: string;
+  owner_key: string;
+  label: string;
+  created_at: string;
+  expires_at: string;
+}
+const toLink = (row: LinkRow): OpenLink => ({
+  tokenHash: row.token_hash,
+  ownerKey: row.owner_key,
+  label: row.label,
+  createdAt: Number(row.created_at),
+  expiresAt: Number(row.expires_at),
+});
+const optionalNumber = (value: string | null) => (value === null ? undefined : Number(value));
 
 interface JobRow {
   id: string;
@@ -181,5 +199,126 @@ export class PostgresBotStore implements BotStore {
       db.query('UPDATE wa_inbound SET replied = true WHERE wamid = $1 AND NOT replied', [wamid]),
     );
     return rowCount === 1;
+  }
+
+  async senderState(userId: string): Promise<SenderState> {
+    const { rows } = await this.run((db) =>
+      db.query<{
+        notice_sent_at: string | null;
+        consented_at: string | null;
+        notice_version: string | null;
+        stopped_at: string | null;
+        delete_requested_at: string | null;
+      }>(
+        `SELECT notice_sent_at, consented_at, notice_version, stopped_at, delete_requested_at
+           FROM wa_senders WHERE user_id = $1`,
+        [userId],
+      ),
+    );
+    const row = rows[0];
+    if (!row) return {};
+    const state: SenderState = {
+      noticeSentAt: optionalNumber(row.notice_sent_at),
+      consentedAt: optionalNumber(row.consented_at),
+      noticeVersion: row.notice_version ?? undefined,
+      stoppedAt: optionalNumber(row.stopped_at),
+      deleteRequestedAt: optionalNumber(row.delete_requested_at),
+    };
+    for (const key of Object.keys(state) as (keyof SenderState)[])
+      if (state[key] === undefined) delete state[key];
+    return state;
+  }
+
+  async claimNotice(userId: string, now: number) {
+    const { rowCount } = await this.run((db) =>
+      db.query(
+        'UPDATE wa_senders SET notice_sent_at = $2 WHERE user_id = $1 AND notice_sent_at IS NULL',
+        [userId, now],
+      ),
+    );
+    return rowCount === 1;
+  }
+  async setConsent(userId: string, now: number, noticeVersion: string) {
+    await this.run((db) =>
+      db.query(
+        `UPDATE wa_senders SET consented_at = $2, notice_version = $3, stopped_at = NULL
+          WHERE user_id = $1`,
+        [userId, now, noticeVersion],
+      ),
+    );
+  }
+  async setStopped(userId: string, at: number | undefined) {
+    await this.run((db) =>
+      db.query('UPDATE wa_senders SET stopped_at = $2 WHERE user_id = $1', [userId, at ?? null]),
+    );
+  }
+  async setDeleteRequest(userId: string, at: number | undefined) {
+    await this.run((db) =>
+      db.query('UPDATE wa_senders SET delete_requested_at = $2 WHERE user_id = $1', [
+        userId,
+        at ?? null,
+      ]),
+    );
+  }
+  async forgetMessage(wamid: string) {
+    await this.run((db) =>
+      db.query(
+        `UPDATE wa_inbound SET message = jsonb_strip_nulls(jsonb_build_object(
+           'id', message->'id', 'type', message->'type')) WHERE wamid = $1`,
+        [wamid],
+      ),
+    );
+  }
+  async forgetSender(userId: string, ownerKey: string) {
+    await this.run(async (db) => {
+      await db.query(
+        `UPDATE wa_inbound SET message = jsonb_strip_nulls(jsonb_build_object(
+           'id', message->'id', 'type', message->'type')) WHERE owner_key = $1`,
+        [ownerKey],
+      );
+      await db.query(
+        `UPDATE wa_jobs SET state = 'done', locked_until = NULL
+          WHERE owner_key = $1 AND state IN ('pending', 'running')`,
+        [ownerKey],
+      );
+      await db.query('DELETE FROM wa_links WHERE owner_key = $1', [ownerKey]);
+      await db.query(
+        `UPDATE wa_senders SET wa_id = NULL, notice_sent_at = NULL, consented_at = NULL,
+           notice_version = NULL, stopped_at = NULL, delete_requested_at = NULL
+          WHERE user_id = $1`,
+        [userId],
+      );
+    });
+  }
+  async createLink(link: OpenLink) {
+    await this.run((db) =>
+      db.query(
+        `INSERT INTO wa_links (token_hash, owner_key, label, created_at, expires_at)
+         VALUES ($1, $2, $3, $4, $5)`,
+        [link.tokenHash, link.ownerKey, link.label, link.createdAt, link.expiresAt],
+      ),
+    );
+  }
+  async peekLink(tokenHash: string, now: number) {
+    const { rows } = await this.run((db) =>
+      db.query<LinkRow>(
+        `SELECT token_hash, owner_key, label, created_at, expires_at FROM wa_links
+          WHERE token_hash = $1 AND expires_at > $2`,
+        [tokenHash, now],
+      ),
+    );
+    return rows[0] ? toLink(rows[0]) : undefined;
+  }
+  async takeLink(tokenHash: string, now: number) {
+    // DELETE … RETURNING: of two concurrent uses, only one gets the row.
+    const { rows } = await this.run((db) =>
+      db.query<LinkRow>(
+        `DELETE FROM wa_links WHERE token_hash = $1
+         RETURNING token_hash, owner_key, label, created_at, expires_at`,
+        [tokenHash],
+      ),
+    );
+    const link = rows[0] && toLink(rows[0]);
+    return link && link.expiresAt > now ? link : undefined;
   }
 }

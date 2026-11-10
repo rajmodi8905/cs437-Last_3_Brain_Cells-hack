@@ -68,6 +68,8 @@ export interface PilotStore {
   createSession(session: Session): Promise<void>;
   getSession(id: string): Promise<Session | undefined>;
   deleteSession(id: string): Promise<void>;
+  /** Ends every session of one account, as when a WhatsApp sender erases everything. */
+  deleteOwnerSessions(ownerKey: string): Promise<void>;
   createLoginAttempt(attempt: LoginAttempt): Promise<void>;
   /** Returns and removes the attempt in one step, so it can be used only once. */
   takeLoginAttempt(id: string): Promise<LoginAttempt | undefined>;

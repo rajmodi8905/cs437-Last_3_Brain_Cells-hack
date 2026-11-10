@@ -71,6 +71,28 @@ export interface BotJob {
   createdAt: number;
 }
 
+/** Where a sender stands in the conversation (consent, STOP, DELETE ALL); times in seconds. */
+export interface SenderState {
+  noticeSentAt?: number;
+  consentedAt?: number;
+  /** The consent notice version the sender agreed to. */
+  noticeVersion?: string;
+  /** Set while the sender has sent STOP. */
+  stoppedAt?: number;
+  /** When the sender asked to erase everything; `CONFIRM DELETE` must follow within 10 minutes. */
+  deleteRequestedAt?: number;
+}
+
+/** A one-time link that opens a WhatsApp vault in the app; only the token's SHA-256 is kept. */
+export interface OpenLink {
+  tokenHash: string;
+  ownerKey: string;
+  /** What the app shows as the signed-in account, for example `WhatsApp ••••1234`. */
+  label: string;
+  createdAt: number;
+  expiresAt: number;
+}
+
 export interface BotStore {
   /**
    * Records the sender and the message, and queues its ingest job, once per `wamid`. The
@@ -98,6 +120,33 @@ export interface BotStore {
   failJob(job: BotJob, error: string): Promise<void>;
   /** Marks the message as answered; true only for the first caller, so each gets one reply. */
   claimReply(wamid: string): Promise<boolean>;
+
+  /** The sender's conversation state; empty for an unknown sender. */
+  senderState(userId: string): Promise<SenderState>;
+  /** Notes that the consent notice was sent; true only for the first caller. */
+  claimNotice(userId: string, now: number): Promise<boolean>;
+  /** Records consent with the notice version agreed to; ends any STOP. */
+  setConsent(userId: string, now: number, noticeVersion: string): Promise<void>;
+  /** STOP (a time) or START (undefined). */
+  setStopped(userId: string, at: number | undefined): Promise<void>;
+  /** A pending `DELETE ALL` (a time), or none (undefined). */
+  setDeleteRequest(userId: string, at: number | undefined): Promise<void>;
+  /**
+   * Replaces a message's stored content with only its ID and type, which is all that dedupe
+   * needs, for messages that must not be kept (sent before consent, or erased).
+   */
+  forgetMessage(wamid: string): Promise<void>;
+  /**
+   * After `DELETE ALL`: forgets every message's content for this owner, ends its open jobs,
+   * deletes its app links and clears the sender's consent, STOP and phone number. The sender
+   * and message IDs stay, so a repeated delivery is still recognised.
+   */
+  forgetSender(userId: string, ownerKey: string): Promise<void>;
+  createLink(link: OpenLink): Promise<void>;
+  /** The link if it exists and has not expired by `now`; does not use it up. */
+  peekLink(tokenHash: string, now: number): Promise<OpenLink | undefined>;
+  /** Returns and removes the link in one step, so it opens at most one session. */
+  takeLink(tokenHash: string, now: number): Promise<OpenLink | undefined>;
 }
 
 export const jobId = (kind: JobKind, wamid: string) => `${kind}:${wamid}`;
@@ -124,11 +173,19 @@ const due = (job: BotJob, kinds: JobKind[], now: number) =>
   ((job.state === 'pending' && job.runAfter <= now) ||
     (job.state === 'running' && (job.lockedUntil ?? 0) <= now));
 
+/** What is kept of a message that must not be stored: enough to recognise it again. */
+export const forgottenMessage = (message: WaMessage): WaMessage => ({
+  id: message.id,
+  ...(message.type ? { type: message.type } : {}),
+});
+
 /** In-memory BotStore for tests and local development. Not durable. */
 export class MemoryBotStore implements BotStore {
   private senders = new Map<string, WhatsAppSender & { lastSeen: number }>();
   private inbound = new Map<string, InboundMessage & { replied: boolean }>();
   private jobs = new Map<string, BotJob>();
+  private states = new Map<string, SenderState>();
+  private links = new Map<string, OpenLink>();
 
   async recordInbound(sender: WhatsAppSender, message: InboundMessage) {
     const known = this.senders.get(sender.userId);
@@ -216,5 +273,58 @@ export class MemoryBotStore implements BotStore {
     if (!found || found.replied) return false;
     found.replied = true;
     return true;
+  }
+
+  async senderState(userId: string) {
+    return { ...this.states.get(userId) };
+  }
+  private change(userId: string, patch: Partial<SenderState>) {
+    const next = { ...this.states.get(userId), ...patch };
+    for (const key of Object.keys(next) as (keyof SenderState)[])
+      if (next[key] === undefined) delete next[key];
+    this.states.set(userId, next);
+  }
+  async claimNotice(userId: string, now: number) {
+    if (this.states.get(userId)?.noticeSentAt !== undefined) return false;
+    this.change(userId, { noticeSentAt: now });
+    return true;
+  }
+  async setConsent(userId: string, now: number, noticeVersion: string) {
+    this.change(userId, { consentedAt: now, noticeVersion, stoppedAt: undefined });
+  }
+  async setStopped(userId: string, at: number | undefined) {
+    this.change(userId, { stoppedAt: at });
+  }
+  async setDeleteRequest(userId: string, at: number | undefined) {
+    this.change(userId, { deleteRequestedAt: at });
+  }
+  async forgetMessage(wamid: string) {
+    const found = this.inbound.get(wamid);
+    if (found) found.message = forgottenMessage(found.message);
+  }
+  async forgetSender(userId: string, ownerKey: string) {
+    for (const found of this.inbound.values())
+      if (found.ownerKey === ownerKey) found.message = forgottenMessage(found.message);
+    for (const job of this.jobs.values())
+      if (job.ownerKey === ownerKey && (job.state === 'pending' || job.state === 'running')) {
+        job.state = 'done';
+        delete job.lockedUntil;
+      }
+    for (const [hash, link] of this.links) if (link.ownerKey === ownerKey) this.links.delete(hash);
+    this.states.delete(userId);
+    const sender = this.senders.get(userId);
+    if (sender) delete sender.waId;
+  }
+  async createLink(link: OpenLink) {
+    this.links.set(link.tokenHash, { ...link });
+  }
+  async peekLink(tokenHash: string, now: number) {
+    const link = this.links.get(tokenHash);
+    return link && link.expiresAt > now ? { ...link } : undefined;
+  }
+  async takeLink(tokenHash: string, now: number) {
+    const link = this.links.get(tokenHash);
+    this.links.delete(tokenHash);
+    return link && link.expiresAt > now ? link : undefined;
   }
 }

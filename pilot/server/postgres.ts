@@ -119,6 +119,24 @@ const MIGRATIONS = [
   );
   CREATE INDEX wa_jobs_due ON wa_jobs (run_after, created_at) WHERE state IN ('pending', 'running');
   `,
+  // 4: WhatsApp consent, commands and app links (docs/pilot/whatsapp.md). Times in seconds.
+  `
+  ALTER TABLE wa_senders ADD COLUMN notice_sent_at bigint;
+  ALTER TABLE wa_senders ADD COLUMN consented_at bigint;
+  ALTER TABLE wa_senders ADD COLUMN notice_version text;
+  ALTER TABLE wa_senders ADD COLUMN stopped_at bigint;
+  ALTER TABLE wa_senders ADD COLUMN delete_requested_at bigint;
+  CREATE TABLE wa_links (
+    token_hash text PRIMARY KEY,
+    owner_key text NOT NULL,
+    label text NOT NULL,
+    created_at bigint NOT NULL,
+    expires_at bigint NOT NULL
+  );
+  CREATE INDEX wa_links_owner ON wa_links (owner_key);
+  CREATE INDEX wa_inbound_owner ON wa_inbound (owner_key);
+  CREATE INDEX sessions_owner ON sessions (owner_key);
+  `,
 ];
 
 const SCHEMA = /^[a-z_][a-z0-9_]{0,62}$/;
@@ -135,6 +153,7 @@ export const BACKUP_TABLES = [
   'wa_senders',
   'wa_inbound',
   'wa_jobs',
+  'wa_links',
 ] as const;
 export type BackupTable = (typeof BACKUP_TABLES)[number];
 /** The database version this code writes and can restore. */
@@ -353,6 +372,9 @@ export class PostgresPilotStore implements PilotStore {
   }
   async deleteSession(id: string) {
     await this.database.query('DELETE FROM sessions WHERE id = $1', [id]);
+  }
+  async deleteOwnerSessions(ownerKey: string) {
+    await this.database.query('DELETE FROM sessions WHERE owner_key = $1', [ownerKey]);
   }
 
   async createLoginAttempt(attempt: LoginAttempt) {
