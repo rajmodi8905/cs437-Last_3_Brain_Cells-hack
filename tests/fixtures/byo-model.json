@@ -1,0 +1,57 @@
+{
+  "purpose": "S16 acceptance: a pinned public model that plays the part of a student's own model. Served from the local mirror (.models/<sha256>); not part of the app.",
+  "repo": "Xenova/bge-small-en-v1.5",
+  "revision": "ea104dacec62c0de699686887e3f920caeb4f3e3",
+  "listing": {
+    "sha": "ea104dacec62c0de699686887e3f920caeb4f3e3",
+    "gated": false,
+    "siblings": [
+      {
+        "rfilename": "config.json",
+        "size": 683
+      },
+      {
+        "rfilename": "tokenizer.json",
+        "size": 711396
+      },
+      {
+        "rfilename": "tokenizer_config.json",
+        "size": 366
+      },
+      {
+        "rfilename": "onnx/model_quantized.onnx",
+        "size": 34014426,
+        "lfs": {
+          "sha256": "6c9c6101a956d62dfb5e7190c538226c0c5bb9cb27b651234b6df063ee7dbfe4",
+          "size": 34014426
+        }
+      }
+    ]
+  },
+  "files": [
+    {
+      "name": "config.json",
+      "url": "https://huggingface.co/Xenova/bge-small-en-v1.5/resolve/ea104dacec62c0de699686887e3f920caeb4f3e3/config.json",
+      "bytes": 683,
+      "sha256": "fa73f90bf92c8cace1fbcb709626306f2bdbc9ea3e5b5f94b440df9b6aa56350"
+    },
+    {
+      "name": "tokenizer.json",
+      "url": "https://huggingface.co/Xenova/bge-small-en-v1.5/resolve/ea104dacec62c0de699686887e3f920caeb4f3e3/tokenizer.json",
+      "bytes": 711396,
+      "sha256": "d241a60d5e8f04cc1b2b3e9ef7a4921b27bf526d9f6050ab90f9267a1f9e5c66"
+    },
+    {
+      "name": "tokenizer_config.json",
+      "url": "https://huggingface.co/Xenova/bge-small-en-v1.5/resolve/ea104dacec62c0de699686887e3f920caeb4f3e3/tokenizer_config.json",
+      "bytes": 366,
+      "sha256": "9261e7d79b44c8195c1cada2b453e55b00aeb81e907a6664974b4d7776172ab3"
+    },
+    {
+      "name": "onnx/model_quantized.onnx",
+      "url": "https://huggingface.co/Xenova/bge-small-en-v1.5/resolve/ea104dacec62c0de699686887e3f920caeb4f3e3/onnx/model_quantized.onnx",
+      "bytes": 34014426,
+      "sha256": "6c9c6101a956d62dfb5e7190c538226c0c5bb9cb27b651234b6df063ee7dbfe4"
+    }
+  ]
+}

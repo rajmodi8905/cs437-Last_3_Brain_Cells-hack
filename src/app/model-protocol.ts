@@ -21,8 +21,19 @@ export type ModelRequest = {
     args: ModelCalls[K]['args'];
     base: string;
     forceWasm: boolean;
+    /** S16: the student's own model, for the custom-model worker. */
+    customModel?: CustomWorkerModel;
   };
 }[ModelMethod];
+/** What the custom-model worker needs to load and use a student's own model (S16). */
+export interface CustomWorkerModel {
+  repo: string;
+  revision: string;
+  dtype: 'q8' | 'fp32';
+  pooling: 'mean' | 'cls';
+  queryPrefix: string;
+  documentPrefix: string;
+}
 export type ModelResponse =
   | { id: number; value: unknown; device: 'webgpu' | 'wasm' }
   | { id: number; error: string; retryWasm: boolean };

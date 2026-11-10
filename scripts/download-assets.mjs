@@ -2,7 +2,10 @@ import { mkdir, readFile, writeFile, rename } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
 await mkdir('.models', { recursive: true });
 const { assets } = JSON.parse(await readFile('public/asset-manifest.json', 'utf8'));
-for (const asset of assets.filter((x) => x.url.startsWith('https:'))) {
+// S16 acceptance: the pinned model that plays the part of a student's own model.
+const byo = JSON.parse(await readFile('tests/fixtures/byo-model.json', 'utf8'));
+const testModel = byo.files.map((file) => ({ ...file, name: `S16 test model ${file.name}` }));
+for (const asset of [...assets.filter((x) => x.url.startsWith('https:')), ...testModel]) {
   const path = `.models/${asset.sha256}`;
   let data;
   try {

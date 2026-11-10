@@ -1,4 +1,5 @@
 import { AppOperationError, type ProgressListener } from '../shared';
+import { GEMMA, type SearchModel } from '../shared/searchModels';
 export const ASSET_CACHE = 'campus-recall-assets-v1';
 export interface Asset {
   url: string;
@@ -11,6 +12,23 @@ export interface AssetManifest {
   version: string;
   assets: Asset[];
 }
+/** EmbeddingGemma's own files in the manifest; a student's model replaces them (S16). */
+const GEMMA_GROUP = 'embeddings';
+/** The files one search model needs: the shared files plus that model's own files. */
+export function assetsFor(manifest: AssetManifest, model: SearchModel = GEMMA): Asset[] {
+  if (!model.custom) return manifest.assets;
+  return [
+    ...manifest.assets.filter((asset) => asset.group !== GEMMA_GROUP),
+    ...model.custom.files.map((file) => ({ ...file, group: 'custom-model' })),
+  ];
+}
+// EmbeddingGemma's marker is unchanged, so devices that are already set up stay ready.
+const readyMarker = (manifest: AssetManifest, model: SearchModel) =>
+  localUrl(
+    model.custom
+      ? `./offline-${manifest.version}-${model.indexVersion}`
+      : `./offline-${manifest.version}`,
+  );
 export const localUrl = (path: string) =>
   new URL(path, new URL(import.meta.env.BASE_URL, globalThis.location.href)).href;
 export async function getManifest(): Promise<AssetManifest> {
@@ -25,12 +43,15 @@ export async function getManifest(): Promise<AssetManifest> {
 export function assetUrl(asset: Asset): string {
   return new URL(asset.url, new URL(import.meta.env.BASE_URL, globalThis.location.href)).href;
 }
-export async function offlineStatus(manifest: AssetManifest): Promise<boolean> {
+export async function offlineStatus(
+  manifest: AssetManifest,
+  model: SearchModel = GEMMA,
+): Promise<boolean> {
   const cache = await caches.open(ASSET_CACHE);
-  const marker = await cache.match(localUrl(`./offline-${manifest.version}`));
+  const marker = await cache.match(readyMarker(manifest, model));
   if (!marker) return false;
   // Every start checks presence and exact size. Setup and Verify offline assets check SHA-256.
-  for (const asset of manifest.assets) {
+  for (const asset of assetsFor(manifest, model)) {
     const cached = await cache.match(assetUrl(asset));
     if (!cached || (await cached.blob()).size !== asset.bytes) return false;
   }
@@ -82,13 +103,15 @@ export async function setupAssets(
   manifest: AssetManifest,
   onProgress: ProgressListener,
   signal?: AbortSignal,
+  model: SearchModel = GEMMA,
 ): Promise<void> {
   const cache = await caches.open(ASSET_CACHE);
+  const assets = assetsFor(manifest, model);
   let completed = 0;
-  const total = manifest.assets.reduce((n, a) => n + a.bytes, 0);
+  const total = assets.reduce((n, a) => n + a.bytes, 0);
   const emit = (loaded = 0, message = 'Preparing offline search') =>
     onProgress({ stage: 'setup', loadedBytes: completed + loaded, totalBytes: total, message });
-  for (const asset of manifest.assets) {
+  for (const asset of assets) {
     const url = assetUrl(asset);
     const cached = await cache.match(url);
     // Verify existing entries as well; a previous interrupted setup is resumable.
@@ -119,5 +142,5 @@ export async function setupAssets(
     completed += asset.bytes;
     emit(0, asset.name);
   }
-  await cache.put(localUrl(`./offline-${manifest.version}`), new Response('verified'));
+  await cache.put(readyMarker(manifest, model), new Response('verified'));
 }

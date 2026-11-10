@@ -223,6 +223,14 @@ Each statement needs its own automated test using a fresh library/fixtures. The 
 
 **Trace:** From our team's product-transparency requirements and the agreed UI instructions.
 
+### S16 — Bring your own search model
+
+**Statement:** EmbeddingGemma stays the default search model. In Settings a student can add their own text embedding model by its Hugging Face ID. When the model is added, the app pins its exact revision and the SHA-256 of every file, downloads and verifies those files, and calibrates a threshold on the bundled calibration set with the same grid rule as EmbeddingGemma. It shows how many calibration questions the model found, and refuses a model that finds fewer than six of eight. Only after the student confirms does search switch to it: every saved item is re-indexed with the new model, each becomes searchable again as soon as it is done, and vectors from two models are never compared. A custom model searches text only, is labelled experimental, makes no S9 retrieval promise and never syncs its index. Switching back to EmbeddingGemma restores the default exactly.
+
+**Test:** Unit-test that EmbeddingGemma keeps its index version, 768-dimensional vectors and 0.70/0.69 thresholds; that a Hugging Face listing becomes pinned files (or a plain refusal for a missing ONNX file, a missing tokenizer, an oversized model or an unknown ID); the calibration grid; per-model asset readiness; per-model thresholds, with an equivalence check against the frozen ranking; per-model vector-size validation; and re-indexing after a switch. Check the Settings flow in the UI. In the real-model acceptance run, add a pinned test model served from the local mirror, check that only its pinned files are fetched, calibrate it, index the frozen corpus offline, and check that results contain only its vectors.
+
+**Trace:** From the class 22 usability exchange: Nischay Bhutoria (TreeGPT) asked to choose the embedding model "as per use case" (issue #52). Eight small models were measured on the frozen corpus first. None found R4, the paraphrase with no shared words, at a threshold calibrated on the separate set, so no second model is offered as a vetted default.
+
 ## Executable test coverage and October checkpoints
 
 Every S1–S15 statement now maps to executable suites in [tests/spec/coverage.json](tests/spec/coverage.json). `npm run check` checks that mapping; `npm test` executes the actual behavior. Storage/vector fixtures test code-controlled invariants; semantic/visual/speech outcomes use the pinned real models.

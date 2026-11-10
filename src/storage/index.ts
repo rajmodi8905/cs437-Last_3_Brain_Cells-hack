@@ -1,5 +1,6 @@
 import Dexie, { type Table } from 'dexie';
 import { zipSync, unzipSync, strToU8, strFromU8 } from 'fflate';
+import { dimensionForIndex } from '../shared/searchModels';
 import {
   AppOperationError,
   ARCHIVE_LIMITS,
@@ -541,7 +542,8 @@ export class DexieLibraryRepository implements ProcessingRepository {
           return false;
         if (
           segment.itemId !== claim.item.id ||
-          segment.vector.length !== 768 ||
+          // The vector size the segment's search model produces (S16); 768 as before otherwise.
+          segment.vector.length !== (dimensionForIndex(segment.indexVersion) ?? 768) ||
           !Array.from(segment.vector).every(Number.isFinite)
         )
           return false;

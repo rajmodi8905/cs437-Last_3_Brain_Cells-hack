@@ -18,6 +18,7 @@ import {
   type InstallPromptEvent,
 } from './phone';
 import { navigateFromViewer } from './viewerHistory';
+import { GEMMA, type CustomModelConfig, type SearchModel } from '../shared/searchModels';
 import {
   REMEMBER_RECENT_SEARCHES,
   RECENT_SEARCHES,
@@ -62,6 +63,12 @@ export function useCampusRecall(services: CampusRecallServices) {
   // A plain reason shown in the Search card when a setup started there stopped.
   const [setupError, setSetupError] = useState('');
   const [setup, setSetup] = useState(false);
+  // S16: the search model in use, the student's own model, and adding or switching.
+  const [searchModel, setSearchModel] = useState<SearchModel>(engine.searchModel ?? GEMMA);
+  const [customModel, setCustomModel] = useState<SearchModel | undefined>(engine.customModel);
+  const [switchingModel, setSwitchingModel] = useState(false);
+  const [addingModel, setAddingModel] = useState('');
+  const [addModelError, setAddModelError] = useState('');
   const [progress, setProgress] = useState<EngineProgress>();
   const [itemProgress, setItemProgress] = useState<Record<string, EngineProgress>>({});
   const [introPending, setFirstUse] = useState(false);
@@ -230,6 +237,57 @@ export function useCampusRecall(services: CampusRecallServices) {
     );
   }, [screen, items.length]);
   const notify = (message: string) => setToast(message);
+  /** Pins, downloads and calibrates a student's own model; nothing switches yet. */
+  const addCustomModel = async (
+    repo: string,
+    options: Pick<CustomModelConfig, 'pooling' | 'queryPrefix' | 'documentPrefix'>,
+  ) => {
+    if (!engine.addCustomModel || addingModel) return;
+    setAddModelError('');
+    setAddingModel('Checking the model on Hugging Face…');
+    try {
+      const added = await engine.addCustomModel(repo, options, (event) =>
+        setAddingModel(
+          event.totalBytes
+            ? `Downloading and verifying… ${Math.round((event.loadedBytes ?? 0) / 1e6)} of ${Math.round(event.totalBytes / 1e6)} MB`
+            : (event.message ?? 'Working…'),
+        ),
+      );
+      setCustomModel(added);
+      notify(
+        `${added.label} found ${added.custom!.calibration.correct} of ${added.custom!.calibration.total} sample questions. Choose it below to switch.`,
+      );
+    } catch (cause) {
+      setAddModelError(plainError(cause).message);
+    } finally {
+      setAddingModel('');
+    }
+  };
+  /** Downloads and verifies the chosen model if needed, then re-indexes the library with it. */
+  const switchSearchModel = async (next: SearchModel) => {
+    if (!engine.setSearchModel || switchingModel) return;
+    setSwitchingModel(true);
+    setError('');
+    try {
+      await engine.setSearchModel(next);
+      setSearchModel(engine.searchModel ?? next);
+      setReady(engine.ready);
+      setDownloadBytes(engine.downloadBytes);
+      const count = items.length;
+      notify(
+        `Switched to ${next.label}.${
+          count
+            ? ` Re-indexing your ${count === 1 ? 'item' : `${count} items`}; each one becomes searchable again as soon as it is done.`
+            : ''
+        }`,
+      );
+    } catch (cause) {
+      fail(cause);
+    } finally {
+      setSwitchingModel(false);
+    }
+  };
+
   /** `closingViewer`: the viewer closes on the way, so the new screen takes its history entry. */
   const navigate = (path: string, closingViewer = false) => {
     if (closingViewer && navigateFromViewer(`#/${path}`)) return;
@@ -468,6 +526,15 @@ export function useCampusRecall(services: CampusRecallServices) {
     setError,
     announcement,
     downloadBytes,
+    downloadBytesFor: (model: SearchModel) => engine.downloadBytesFor?.(model) ?? 0,
+    searchModel,
+    customModel,
+    switchingModel,
+    switchSearchModel,
+    addingModel,
+    addModelError,
+    addCustomModel,
+    canChooseSearchModel: !!engine.setSearchModel && !!engine.addCustomModel,
     ready,
     setupKnown,
     setupError,

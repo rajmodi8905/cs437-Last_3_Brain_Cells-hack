@@ -1,4 +1,10 @@
-import type { ModelCalls, ModelMethod, ModelRequest, ModelResponse } from './model-protocol';
+import type {
+  CustomWorkerModel,
+  ModelCalls,
+  ModelMethod,
+  ModelRequest,
+  ModelResponse,
+} from './model-protocol';
 export type { DocumentEmbedding, Transcript } from './model-protocol';
 export class ModelClient {
   private worker?: Worker;
@@ -10,11 +16,18 @@ export class ModelClient {
   private forceWasm = false;
   private disposal?: Promise<void>;
   device?: 'webgpu' | 'wasm';
+  /** S16: the student's own model, sent with each request to the custom-model worker. */
+  customModel?: CustomWorkerModel;
+  constructor(private readonly kind: 'default' | 'custom' = 'default') {}
   private start() {
     if (this.worker) return;
-    this.worker = new Worker(new URL('../engine/model.worker.ts', import.meta.url), {
-      type: 'module',
-    });
+    // S16: a student's own model runs in its own worker, so the frozen model worker is unchanged.
+    this.worker =
+      this.kind === 'custom'
+        ? new Worker(new URL('../engine/custom-model.worker.ts', import.meta.url), {
+            type: 'module',
+          })
+        : new Worker(new URL('../engine/model.worker.ts', import.meta.url), { type: 'module' });
     this.worker.onmessage = ({ data }: MessageEvent<ModelResponse>) => {
       const pending = this.pending.get(data.id);
       if (!pending) return;
@@ -62,6 +75,7 @@ export class ModelClient {
       args,
       forceWasm: this.forceWasm,
       base: new URL(import.meta.env.BASE_URL, document.baseURI).href,
+      ...(this.customModel ? { customModel: this.customModel } : {}),
     } as ModelRequest;
     return new Promise((resolve, reject) => {
       this.pending.set(id, {

@@ -226,3 +226,59 @@
 .sync-choice .field-help {
   margin: 8px 0 0;
 }
+/* S16: search model choice */
+.search-model {
+  margin: 18px 0;
+  padding-top: 14px;
+  border-top: 1px solid var(--hair);
+}
+.search-model-label {
+  margin: 0 0 6px;
+  font-weight: 600;
+}
+.search-model-option {
+  padding: 8px 0;
+}
+.search-model-option label {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 44px;
+  font-size: 15px;
+  font-weight: 400;
+}
+.search-model-option input {
+  flex: 0 0 20px;
+  width: 20px;
+  height: 20px;
+  margin: 0;
+  accent-color: var(--ink);
+}
+.search-model-option .field-help {
+  margin: 0 0 0 32px;
+}
+.search-model-add {
+  margin-top: 14px;
+}
+.search-model-add summary {
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+  font-weight: 600;
+}
+.search-model-form {
+  display: grid;
+  gap: 10px;
+  margin: 10px 0;
+}
+.search-model-form label {
+  display: grid;
+  gap: 4px;
+  font-size: 14px;
+}
+.search-model-form input,
+.search-model-form select {
+  min-height: 44px;
+  font-size: 16px;
+}
