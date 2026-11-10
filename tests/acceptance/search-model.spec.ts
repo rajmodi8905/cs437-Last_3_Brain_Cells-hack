@@ -62,8 +62,9 @@ test("[S16] a student's own model is pinned, verified, calibrated and used offli
     await repository.open();
     const engine = new h.LocalEngine(repository);
     await engine.initialize();
+    // BGE's documented settings: CLS pooling and its query instruction.
     const model = await engine.addCustomModel(repo, {
-      pooling: 'mean',
+      pooling: 'cls',
       queryPrefix: 'Represent this sentence for searching relevant passages: ',
       documentPrefix: '',
     });

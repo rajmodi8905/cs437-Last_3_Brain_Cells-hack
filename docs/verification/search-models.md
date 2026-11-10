@@ -44,7 +44,7 @@ In the acceptance run, `Xenova/bge-small-en-v1.5` added with its documented quer
 - Five campus-style negatives join the threshold choice.
 - Eight more unrelated campus questions, never used to choose the threshold, are searched against the eight calibration notes plus twelve other campus notes.
 
-Settings shows "found N of 8 sample questions and wrongly matched M of 8 unrelated ones". A model that matches more than half (5 or more) is refused. That limit was set after seeing these numbers and does not bind any model measured (Node, q8):
+Settings shows "found N of 8 sample questions and wrongly matched M of 8 unrelated ones". A model that matches more than half (5 or more) is refused. I set that limit after seeing the Node numbers below, where it bound no model. In the browser it does bind one setup: `Xenova/bge-small-en-v1.5` with mean pooling chose a lower threshold there (0.47; the WASM numbers differ slightly from Node's) and wrongly matched 6 of 8, so it was refused. With CLS pooling, which its model card specifies, it found 7 of 8, wrongly matched 3 of 8 at 0.56, and is the setup the acceptance test uses. Node measurements (q8):
 
 | Model                     | Found         | Wrongly matched |
 | ------------------------- | ------------- | --------------- |
