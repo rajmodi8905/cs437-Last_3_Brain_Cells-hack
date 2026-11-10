@@ -10,7 +10,18 @@ import {
 } from '../shared';
 import { DexieLibraryRepository } from '../storage';
 import { ModelClient } from '../app/model-client';
-import { getManifest, offlineStatus, setupAssets, type AssetManifest } from './assets';
+import { assetsFor, getManifest, offlineStatus, setupAssets, type AssetManifest } from './assets';
+import {
+  GEMMA,
+  activeSearchModel,
+  customSearchModel,
+  saveSearchModel,
+  savedCustomModel,
+  type CustomModelConfig,
+  type SearchModel,
+} from '../shared/searchModels';
+import { modelSettings, pinCustomModel } from './customModel';
+import { calibrate, calibrationProblem } from './calibration';
 import {
   assertDecodableImage,
   extractMedia,
@@ -18,19 +29,23 @@ import {
   imageOcr,
   type Extracted,
 } from './extract';
-import { rankSegments } from './ranking';
+import { rankForModel } from './modelRanking';
 import { embeddingTitle } from './documents';
 import { isSearchableQuery } from './text-guards';
 export const INDEX_VERSION =
   'gemma2-daa72c5-q4-768-ch256o48-img70-lowered1-notitledup1-asr2-ocrconf1-v8';
 export class LocalEngine implements EngineClient {
   readonly models = new ModelClient();
+  /** S16: the student's own model's worker. Speech and pictures always use `models`. */
+  readonly customModels = new ModelClient('custom');
   private listeners = new Set<ProgressListener>();
   private manifest?: AssetManifest;
   private running?: Promise<void>;
   private disposed = false;
   private wakeTimer?: ReturnType<typeof setInterval>;
   private active?: { id: string; cancelled: boolean };
+  /** The search model in use on this device (S16). */
+  private model: SearchModel = activeSearchModel();
   ready = false;
   /** Pilot Auto-sync: cloud items' segments, searched on this device with the local ones. */
   extraSegments?: (kind?: ItemKind) => Promise<SearchableSegment[]>;
@@ -42,12 +57,32 @@ export class LocalEngine implements EngineClient {
     this.listeners.add(listener);
     return () => this.listeners.delete(listener);
   }
+  private embedder(model: SearchModel) {
+    if (!model.custom) return this.models;
+    const { repo, revision, dtype, pooling, queryPrefix, documentPrefix } = model.custom;
+    this.customModels.customModel = { repo, revision, dtype, pooling, queryPrefix, documentPrefix };
+    return this.customModels;
+  }
+  get searchModel(): SearchModel {
+    return this.model;
+  }
+  /** The student's own model, when one was added on this device. */
+  get customModel(): SearchModel | undefined {
+    const saved = this.model.custom ?? savedCustomModel();
+    return saved && customSearchModel(saved);
+  }
+  /** The setup size of a search model's files, shared files included. */
+  downloadBytesFor(model: SearchModel) {
+    return this.manifest
+      ? assetsFor(this.manifest, model).reduce((sum, asset) => sum + asset.bytes, 0)
+      : 0;
+  }
   get downloadBytes() {
-    return this.manifest?.assets.reduce((sum, asset) => sum + asset.bytes, 0) ?? 0;
+    return this.downloadBytesFor(this.model);
   }
   async initialize() {
     this.manifest = await getManifest();
-    this.ready = await offlineStatus(this.manifest);
+    this.ready = await offlineStatus(this.manifest, this.model);
     if (this.ready) {
       this.startWake();
       void this.drain();
@@ -62,18 +97,106 @@ export class LocalEngine implements EngineClient {
   async setupModels(onProgress?: ProgressListener) {
     this.ready = false;
     this.manifest ??= await getManifest();
-    await setupAssets(this.manifest, (event) => {
-      this.emit(event);
-      onProgress?.(event);
-    });
+    await setupAssets(
+      this.manifest,
+      (event) => {
+        this.emit(event);
+        onProgress?.(event);
+      },
+      undefined,
+      this.model,
+    );
     this.ready = true;
     this.startWake();
     this.emit({
       stage: 'setup',
       message: 'Offline assets verified',
-      loadedBytes: this.manifest.assets.reduce((n, a) => n + a.bytes, 0),
-      totalBytes: this.manifest.assets.reduce((n, a) => n + a.bytes, 0),
+      loadedBytes: this.downloadBytes,
+      totalBytes: this.downloadBytes,
     });
+    void this.drain();
+  }
+  /**
+   * Adds a student's own model (S16): pins it on Hugging Face, downloads and verifies its files,
+   * and calibrates its threshold here. Search keeps using the current model; nothing switches.
+   */
+  async addCustomModel(
+    repo: string,
+    overrides: Partial<Pick<CustomModelConfig, 'pooling' | 'queryPrefix' | 'documentPrefix'>>,
+    onProgress?: ProgressListener,
+  ): Promise<SearchModel> {
+    const { published, ...pinned } = await pinCustomModel(repo);
+    this.manifest ??= await getManifest();
+    const spec = { ...pinned, ...modelSettings(published, overrides) };
+    const draft = customSearchModel({
+      ...spec,
+      dimension: 1,
+      threshold: 0,
+      calibration: { correct: 0, total: 0, unrelatedMatched: 0, unrelatedTotal: 0 },
+    });
+    await setupAssets(
+      this.manifest,
+      (event) => {
+        this.emit(event);
+        onProgress?.(event);
+      },
+      undefined,
+      draft,
+    );
+    onProgress?.({ stage: 'setup', message: 'Testing the model with sample questions' });
+    const tester = new ModelClient('custom');
+    tester.customModel = {
+      repo: spec.repo,
+      revision: spec.revision,
+      dtype: spec.dtype,
+      pooling: spec.pooling,
+      queryPrefix: spec.queryPrefix,
+      documentPrefix: spec.documentPrefix,
+    };
+    let result;
+    try {
+      result = await calibrate(tester);
+    } finally {
+      await tester.dispose();
+    }
+    const problem = calibrationProblem(spec.repo, result);
+    if (problem)
+      throw new AppOperationError({ code: 'INVALID_INPUT', message: problem, retryable: false });
+    return customSearchModel({
+      ...spec,
+      dimension: result.dimension,
+      threshold: result.threshold,
+      calibration: {
+        correct: result.correct,
+        total: result.total,
+        unrelatedMatched: result.unrelatedMatched,
+        unrelatedTotal: result.unrelatedTotal,
+      },
+    });
+  }
+  /**
+   * Switches the search model (S16). The model's files are downloaded and verified first, while
+   * search keeps working with the current one. Then every saved item is queued for re-indexing,
+   * and each becomes searchable again as soon as it is done.
+   */
+  async setSearchModel(next: SearchModel, onProgress?: ProgressListener) {
+    if (next.indexVersion === this.model.indexVersion) return;
+    this.manifest ??= await getManifest();
+    if (!(await offlineStatus(this.manifest, next)))
+      await setupAssets(
+        this.manifest,
+        (event) => {
+          this.emit(event);
+          onProgress?.(event);
+        },
+        undefined,
+        next,
+      );
+    this.model = next;
+    saveSearchModel(next);
+    this.ready = true;
+    await this.invalidateOldIndexes();
+    this.startWake();
     void this.drain();
   }
   async indexItem(itemId: string) {
@@ -85,7 +208,7 @@ export class LocalEngine implements EngineClient {
     await db.transaction('rw', db.items, db.segments, db.jobs, async () => {
       for (const item of await db.items.where('status').equals('ready').toArray()) {
         const segments = await db.segments.where('itemId').equals(item.id).toArray();
-        if (!segments.length || segments.some((s) => s.indexVersion !== INDEX_VERSION)) {
+        if (!segments.length || segments.some((s) => s.indexVersion !== this.model.indexVersion)) {
           const generation = item.processingGeneration + 1;
           await db.items.put({ ...item, status: 'queued', processingGeneration: generation });
           await db.segments.where('itemId').equals(item.id).delete();
@@ -113,6 +236,8 @@ export class LocalEngine implements EngineClient {
             const claim = await this.repository.claimNextJob();
             if (!claim) break;
             const active = (this.active = { id: claim.item.id, cancelled: false });
+            // The whole job uses the model it started with, even if the student switches.
+            const model = this.model;
             const check = () => {
               if (active.cancelled || this.disposed) throw new Error('Processing cancelled.');
             };
@@ -177,6 +302,7 @@ export class LocalEngine implements EngineClient {
                 extracted.samples = undefined;
               }
               const segments: IndexedSegment[] = [];
+              let pictureOnly = false;
               const add = (
                 modality: 'text' | 'visual',
                 location: SourceLocation,
@@ -190,7 +316,7 @@ export class LocalEngine implements EngineClient {
                   location,
                   vector,
                   text,
-                  indexVersion: INDEX_VERSION,
+                  indexVersion: model.indexVersion,
                 });
               for (let i = 0; i < extracted.parts.length; i++) {
                 check();
@@ -202,13 +328,17 @@ export class LocalEngine implements EngineClient {
                   extracted.parts.length,
                 );
                 if (part.text?.trim())
-                  for (const chunk of await this.models.documents(
+                  for (const chunk of await this.embedder(model).documents(
                     part.text,
                     embeddingTitle(claim.item, part.text),
                   )) {
                     check();
                     add('text', part.location, chunk.vector, chunk.text);
                   }
+                if (part.image && !model.visual) {
+                  pictureOnly = true;
+                  part.image = undefined;
+                }
                 if (part.image) {
                   const vector = await this.models.image(part.image);
                   check();
@@ -216,6 +346,10 @@ export class LocalEngine implements EngineClient {
                   part.image = undefined;
                 }
               }
+              if (!segments.length && pictureOnly)
+                throw new Error(
+                  `There is no text or speech to search here, and your own search model cannot search what is in a picture or video. Switch to ${GEMMA.label} in Settings to search it. The original is still saved and can be opened.`,
+                );
               if (!segments.length)
                 throw new Error(
                   'No searchable content was extracted. The original is still saved and can be opened.',
@@ -271,12 +405,13 @@ export class LocalEngine implements EngineClient {
     if (!isSearchableQuery(query)) return [];
     if (Array.from(query).length > 1000)
       throw new Error('Keep your search under 1,000 characters.');
-    const vector = await this.models.query(query.trim());
-    const local = await this.repository.listSearchableSegments(INDEX_VERSION, kind);
+    const model = this.model;
+    const vector = await this.embedder(model).query(query.trim());
+    const local = await this.repository.listSearchableSegments(model.indexVersion, kind);
     // A failing cloud source never blocks local search.
     const extra = (await this.extraSegments?.(kind).catch(() => [])) ?? [];
-    const cloud = extra.filter((segment) => segment.indexVersion === INDEX_VERSION);
-    return rankSegments(vector, [...local, ...cloud], query);
+    const cloud = extra.filter((segment) => segment.indexVersion === model.indexVersion);
+    return rankForModel(vector, [...local, ...cloud], query, model.thresholds);
   }
   async cancelItem(id: string) {
     if (this.active?.id === id) this.active.cancelled = true;
@@ -288,6 +423,7 @@ export class LocalEngine implements EngineClient {
     clearInterval(this.wakeTimer);
     if (this.active) this.active.cancelled = true;
     await this.models.dispose();
+    await this.customModels.dispose();
     this.listeners.clear();
   }
 }

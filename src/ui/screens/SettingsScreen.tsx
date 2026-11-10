@@ -3,6 +3,7 @@ import type { CampusRecallModel } from '../../app/useCampusRecall';
 import { bytes } from '../hooks';
 import { AutoSyncSection } from '../../../pilot/ui/AutoSyncSection';
 import { SetupProgress, downloadSize } from '../SetupProgress';
+import { SearchModelPicker } from '../SearchModelPicker';
 /** Browsers allow roughly a share of the disk, so the limit is given loosely. */
 const roughSize = (value: number) =>
   value >= 1e9 ? `${(value / 1e9).toFixed(1)} GB` : bytes(value);
@@ -71,6 +72,18 @@ export function SettingsScreen({ model }: { model: CampusRecallModel }) {
             Keep the app open while processing. Unfinished jobs resume after reopening. Search may
             be slower on smaller devices.
           </p>
+          {model.canChooseSearchModel && (
+            <SearchModelPicker
+              current={model.searchModel}
+              custom={model.customModel}
+              sizeOf={model.downloadBytesFor}
+              switching={model.switchingModel}
+              onSwitch={(next) => void model.switchSearchModel(next)}
+              adding={model.addingModel}
+              addError={model.addModelError}
+              onAdd={(repo, options) => void model.addCustomModel(repo, options)}
+            />
+          )}
           <label className="settings-switch">
             <input
               type="checkbox"

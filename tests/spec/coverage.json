@@ -1151,6 +1151,78 @@
         "Policy/source factual review completed under Raj delegation; deployment-specific facts are reviewed when a host is selected."
       ],
       "remaining": []
+    },
+    {
+      "id": "S16",
+      "scope": "EmbeddingGemma stays the default; a student's own Hugging Face model is pinned, verified, calibrated on the device, used only with its own vectors and threshold, and re-indexes the library on a switch",
+      "tests": [
+        {
+          "suite": "fast",
+          "file": "tests/spec/search-models.test.ts",
+          "title": "[S16] EmbeddingGemma stays the default search model exactly"
+        },
+        {
+          "suite": "fast",
+          "file": "tests/spec/search-models.test.ts",
+          "title": "[S16] a student's own model is remembered only when it is well formed and calibrated"
+        },
+        {
+          "suite": "fast",
+          "file": "tests/spec/search-models.test.ts",
+          "title": "[S16] a Hugging Face listing becomes pinned files and published settings, or a plain refusal"
+        },
+        {
+          "suite": "fast",
+          "file": "tests/spec/search-models.test.ts",
+          "title": "[S16] calibration uses the separate set and the same grid rule as EmbeddingGemma"
+        },
+        {
+          "suite": "fast",
+          "file": "tests/spec/search-models.test.ts",
+          "title": "[S16] calibration counts unrelated campus questions a model wrongly matches, and refuses most"
+        },
+        {
+          "suite": "fast",
+          "file": "tests/spec/search-models.test.ts",
+          "title": "[S16] each model downloads and verifies only its own files and has its own readiness"
+        },
+        {
+          "suite": "fast",
+          "file": "tests/spec/search-models.test.ts",
+          "title": "[S16] each model ranks with its own calibrated threshold"
+        },
+        {
+          "suite": "fast",
+          "file": "tests/spec/search-models.test.ts",
+          "title": "[S16] ranking with explicit thresholds matches the frozen ranking exactly"
+        },
+        {
+          "suite": "fast",
+          "file": "tests/spec/search-models.test.ts",
+          "title": "[S16] the library stores only vectors of the size the segment's model produces"
+        },
+        {
+          "suite": "fast",
+          "file": "tests/spec/search-models.test.ts",
+          "title": "[S16] switching models re-queues every saved item, and switching back restores the default"
+        },
+        {
+          "suite": "fast",
+          "file": "tests/app/search-model.test.tsx",
+          "title": "[S16] Settings keeps EmbeddingGemma by default, adds a tested model, and switches only when chosen"
+        },
+        {
+          "suite": "fast",
+          "file": "tests/app/search-model.test.tsx",
+          "title": "[S16] a model that cannot be used is explained, and search keeps its model"
+        },
+        {
+          "suite": "acceptance",
+          "file": "tests/acceptance/search-model.spec.ts",
+          "title": "[S16] a student's own model is pinned, verified, calibrated and used offline with only its vectors"
+        }
+      ],
+      "remaining": []
     }
   ],
   "releaseStatus": {

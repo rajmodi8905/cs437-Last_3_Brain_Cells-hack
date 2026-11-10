@@ -1,12 +1,23 @@
 import { liveQuery } from 'dexie';
 import { CampusRecallDatabase, DexieLibraryRepository } from '../storage';
 import { LocalEngine } from '../engine';
+import type { CustomModelConfig, SearchModel } from '../shared/searchModels';
 import { captureWebpage, extractHtml, extractPdfText, validateWebUrl } from '../engine/capture';
-import type { EngineClient, LibraryItem, LibraryRepository } from '../shared';
+import type { EngineClient, LibraryItem, LibraryRepository, ProgressListener } from '../shared';
 
 export interface ApplicationEngine extends EngineClient {
   readonly ready: boolean;
   readonly downloadBytes: number;
+  /** S16: the search model in use, the student's own model, adding one and switching. */
+  readonly searchModel?: SearchModel;
+  readonly customModel?: SearchModel;
+  downloadBytesFor?(model: SearchModel): number;
+  addCustomModel?(
+    repo: string,
+    overrides: Partial<Pick<CustomModelConfig, 'pooling' | 'queryPrefix' | 'documentPrefix'>>,
+    onProgress?: ProgressListener,
+  ): Promise<SearchModel>;
+  setSearchModel?(model: SearchModel): Promise<void>;
 }
 export interface CaptureService {
   captureWebpage: typeof captureWebpage;

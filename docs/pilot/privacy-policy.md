@@ -20,7 +20,7 @@ Processing, query embedding and ranking run on your devices. Search queries are 
 
 Opening the hosted app sends ordinary requests to Azure infrastructure. Technical operational records can include IP addresses, request times and errors. No advertising or behavioral analytics is implemented, and the application does not record document titles, extracted content or queries as usage metrics. Counts displayed in Settings describe your library, not a claim about overall adoption.
 
-Explicit offline setup downloads pinned model files from Hugging Face, English OCR data from jsDelivr, and runtime files from the app host. Those providers receive download requests, without your library content or queries. Model downloads are a setup step; inference runs locally.
+Explicit offline setup downloads pinned model files from Hugging Face, English OCR data from jsDelivr, and runtime files from the app host. Those providers receive download requests, without your library content or queries. Model downloads are a setup step; inference runs locally. If you add your own search model in Settings, the model ID you type is sent to Hugging Face to look up and download that model's files; the model then runs on this device like the default one, and your library content and queries are never sent.
 
 Capturing a public webpage requests the URL you enter. The destination receives ordinary network information, such as your IP address. Browser rules may block capture; you can paste text or import an inert snapshot instead. Imported HTML never executes. Opening an external source, Google sign-in, the repository or the issue tracker contacts that service under its own policy.
 

@@ -75,7 +75,7 @@ jobs:
       - uses: actions/cache@v4
         with:
           path: .models
-          key: public-models-${{ hashFiles('scripts/model-assets.json') }}
+          key: public-models-${{ hashFiles('scripts/model-assets.json', 'tests/fixtures/byo-model.json') }}
       # Exercise model setup before any build can create its generated manifest.
       - run: npm run models:download
       - run: npm run build
@@ -113,7 +113,7 @@ jobs:
       - uses: actions/cache@v4
         with:
           path: .models
-          key: public-models-${{ hashFiles('scripts/model-assets.json') }}
+          key: public-models-${{ hashFiles('scripts/model-assets.json', 'tests/fixtures/byo-model.json') }}
       - run: npm run models:download
       - run: npm run test:pilot:models
         env:
