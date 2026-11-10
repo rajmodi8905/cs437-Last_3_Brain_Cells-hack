@@ -22,6 +22,7 @@ import {
 } from './store';
 import { IndexPublishError, publishIndexBundle } from './index-publish';
 import { DEFAULT_LIMITS, RateLimiter, type RateLimits } from './limits';
+import { resetOwnerVault } from './vault-reset';
 import type { KeySource } from './tokens';
 import { verifyIdToken } from './tokens';
 import {
@@ -760,13 +761,7 @@ export function createPilotHandler(options: PilotServerOptions): RequestListener
       if (body.confirm !== 'remove-cloud-library')
         throw new ApiError('INVALID_INPUT', 'Confirm removing the cloud library.');
       await requireEpoch(session.ownerKey, body);
-      const { epoch, removed, abandoned } = await store.resetVault(session.ownerKey);
-      for (const item of removed) {
-        for (const key of [item.objectKey, item.indexObjectKey])
-          if (key?.startsWith(`${session.ownerKey}/`)) await objects.delete(key);
-      }
-      for (const upload of abandoned)
-        for (const n of upload.chunks) await objects.delete(stagingKey(upload.uploadId, n));
+      const epoch = await resetOwnerVault(store, objects, session.ownerKey);
       return send(res, 200, { vault: { epoch } });
     }
 
