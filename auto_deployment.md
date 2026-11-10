@@ -1,26 +1,20 @@
 # Campus Recall automated Azure deployment
 
-This is the operating guide for the proposed GitHub-to-Azure pilot release pipeline. It is deliberately specific about what is implemented in the repository versus what has **not** yet been provisioned or released. It replaces neither the Azure runtime runbook in [`docs/pilot/deployment.md`](docs/pilot/deployment.md) nor the normal review process.
+This is the operating guide for the GitHub-to-Azure pilot release pipeline. It is deliberately specific about what is set up and proven versus what is still open. It replaces neither the Azure runtime runbook in [`docs/pilot/deployment.md`](docs/pilot/deployment.md) nor the normal review process.
 
-## Status — 9 November 2026, Asia/Kolkata
+## Status — 10 November 2026, Asia/Kolkata
 
-The automation source was drafted on branch `codex/azure-autodeploy` and is now carried, uncommitted, on top of the UX work in the `codex/mobile-polish` worktree (based on `6f21ac93ec6e93e5f7b71ee73e88eb398277d6a3`). It has not been pushed, reviewed, merged, run in GitHub Actions, or used to deploy the VM.
+The pipeline is live and automatic deployment is **on**.
 
-`main` has moved to `e75b2b6` (PR #45). Neither `codex/mobile-polish` nor the UX work is on `main` yet, and this pipeline deploys only `main`, so they must be merged through a reviewed PR before any of it reaches the pilot.
+- The workflow, Bicep template, release script and this guide reached `main` through PR #49 (two approvals, normal merge).
+- The `azure-pilot` environment exists and allows only `main`. The identity `campusrecall-github-deploy`, its federated credential for the subject below, and the custom VM-only role assigned at `campusrecall-vm` scope were created with `github-deployment.bicep`.
+- The `azure-pilot` environment holds `AZURE_CLIENT_ID`, `AZURE_TENANT_ID`, `AZURE_SUBSCRIPTION_ID`, `AZURE_RESOURCE_GROUP` and `AZURE_VM_NAME` as variables. There are no deployment secrets.
+- Before the first release the VM was checked read-only: the cutoff timer was active, `/srv/campus-recall` was mounted, and the running image carried the revision label `26d4f41ae361396557a2b5994122c6f6739568f5`. The bundled migration list was unchanged between that build and `main`.
+- First release: manual run [Deploy Azure pilot #4](https://github.com/rajmodi8905/cs437-Last_3_Brain_Cells-hack/actions/runs/42747427837) on 10 November 2026 deployed `main` at `2d24bbe729cfec526826376dfa9142b7d3bd0a17` as `ghcr.io/rajmodi8905/campus-recall-pilot@sha256:d606684143eadb7beece74de457a1a7b960112a991b6360d7b18a2b62610451d`. Every step passed, and no rollback was needed. The public site then served the same `index-Czderzwn.js` and `index-CAsp6bd3.css` that the image build produced, and a manual check on a phone and a laptop was satisfactory.
+- The `campus-recall-pilot` GHCR package was already public on the first run, because a package published from this public repository by the workflow token takes the repository's visibility. The anonymous registry check passed first time.
+- Automatic deployment was then enabled by setting the **repository** variable `PILOT_AUTO_DEPLOY_ENABLED=true` (see [the switch](#the-auto-deploy-switch)).
 
-Rechecked on 9 November 2026 against the combined work: the bundled server's `MIGRATIONS` literal matches the release script's pattern (2 string migrations); the repository's OIDC subject uses immutable IDs with prefix `repo:rajmodi8905@189959158/cs437-Last_3_Brain_Cells-hack@1411565360`; `npm audit --audit-level=low` reports 0 vulnerabilities and `npm run release:check` passes; `shellcheck -S warning` reports nothing for the release script. The VM prerequisites in step 5 (revision label on the running image, cutoff timer, mounted data disk) have **not** been re-verified from this session.
-
-The read-only checks performed while writing this guide found:
-
-- The authenticated GitHub account is `rajmodi8905`; the target repository is public and its default branch is `main`.
-- The existing pilot VM `campusrecall-vm` in resource group `campus-recall-pilot-rg` is running. Its public IP at the check was `172.198.78.169`.
-- No GitHub environment was returned by the repository environment listing.
-- The proposed Azure user-assigned identity `campusrecall-github-deploy` does not exist yet.
-- The local Azure CLI identity is `24110282@iitgn.ac.in` in subscription `307305c3-1e38-4fbe-8470-5b75d758232d`, tenant `7c21bd5f-12e7-4869-9a23-9ad39d684f76`.
-- The repository has an active branch ruleset. It requires two real approvals; this pipeline must not be merged by bypassing that requirement.
-- The GitHub token available for this check lacks `read:packages`, so package existence/visibility was not established. The first published GHCR package must be made public before a VM deployment can succeed.
-
-The local Bicep compiled, the release script passed `bash -n`, and the workflow parsed as YAML. Those are syntax checks only, not a cloud deployment test.
+Not yet done: the Google OAuth client secret that was exposed in a chat still needs rotating in Google Cloud. That is outside this workflow.
 
 ## What the pipeline does
 
@@ -68,7 +62,21 @@ The workflow is allowed to deploy only when all of these hold:
 4. It checks this again immediately before contacting the VM, so a queued older workflow cannot overwrite newer `main`.
 5. Workflow executions serialize under `campus-recall-azure-pilot`; an existing release is never cancelled halfway through.
 
-Automatic runs come from a successful `workflow_run` event and are additionally disabled until the repository environment variable `PILOT_AUTO_DEPLOY_ENABLED` is set to the literal value `true`. A manual run is permitted only from `main`; it must still pass the exact-CI and current-main checks.
+Automatic runs come from a successful `workflow_run` event and are additionally disabled unless the **repository** variable `PILOT_AUTO_DEPLOY_ENABLED` is the literal value `true`. A manual run is permitted only from `main`; it must still pass the exact-CI and current-main checks.
+
+### The auto-deploy switch
+
+The switch is read in the `authorize` job's `if:`. That job does not use the `azure-pilot` environment, so it cannot see environment variables: a `PILOT_AUTO_DEPLOY_ENABLED` set only on the environment is invisible there, and automatic runs would keep skipping without an error. Set it as a repository variable:
+
+```sh
+# turn automatic deployment on
+gh variable set PILOT_AUTO_DEPLOY_ENABLED -R rajmodi8905/cs437-Last_3_Brain_Cells-hack --body true
+
+# turn it off again
+gh variable set PILOT_AUTO_DEPLOY_ENABLED -R rajmodi8905/cs437-Last_3_Brain_Cells-hack --body false
+```
+
+Any value other than `true`, or no variable at all, means off. Manual runs from the Actions tab work either way.
 
 The workflow uses pinned revisions of checkout, GitHub Script, Docker Buildx/login/build-push, and Azure Login actions. It checks out only the already-authorized main SHA and uses a Linux AMD64 image, the platform required by the Azure VM.
 
@@ -105,7 +113,9 @@ These steps mutate Azure or GitHub. They must be performed after the pull reques
 
 ### 1. Review and merge the automation safely
 
-1. Commit the three automation files and this guide on `codex/azure-autodeploy`.
+Done through PR #49.
+
+1. Commit the three automation files and this guide on a branch.
 2. Push the branch and open a PR against `main`.
 3. Obtain the repository's two required genuine approvals and merge normally. Do not use a ruleset bypass.
 4. Confirm the `Verify Campus Recall` push CI run for the resulting `main` SHA is successful.
@@ -165,7 +175,6 @@ Set the following as `azure-pilot` environment **variables**:
 ```text
 AZURE_RESOURCE_GROUP=campus-recall-pilot-rg
 AZURE_VM_NAME=campusrecall-vm
-PILOT_AUTO_DEPLOY_ENABLED=false
 ```
 
 Also set the following as `azure-pilot` environment **variables** (not secrets):
@@ -176,9 +185,9 @@ AZURE_TENANT_ID=<Azure tenant ID>
 AZURE_SUBSCRIPTION_ID=<Azure subscription ID>
 ```
 
-These are identifiers, not credentials: OIDC replaces the client secret. The workflow currently reads `vars.AZURE_CLIENT_ID`, `vars.AZURE_TENANT_ID`, and `vars.AZURE_SUBSCRIPTION_ID`, so configuring them as environment variables is required. `AZURE_RESOURCE_GROUP`, `AZURE_VM_NAME`, and the auto-deploy flag are intentionally variables too. Do not create duplicate/conflicting names as secrets; the Google OAuth secret and database password remain exclusively on the VM.
+These are identifiers, not credentials: OIDC replaces the client secret. The workflow currently reads `vars.AZURE_CLIENT_ID`, `vars.AZURE_TENANT_ID`, and `vars.AZURE_SUBSCRIPTION_ID`, so configuring them as environment variables is required. `AZURE_RESOURCE_GROUP` and `AZURE_VM_NAME` are intentionally variables too. Do not create duplicate/conflicting names as secrets; the Google OAuth secret and database password remain exclusively on the VM.
 
-Leave `PILOT_AUTO_DEPLOY_ENABLED=false` through the first successful proof deployment.
+The auto-deploy switch is **not** an environment variable: it is a repository variable (see [the switch](#the-auto-deploy-switch)). Leave it unset or `false` through the first successful proof deployment.
 
 ### 5. Confirm VM prerequisites
 
@@ -217,10 +226,10 @@ If a failure occurs after selecting the new image, the script restores the prior
 1. Keep automatic deployment disabled.
 2. Merge the reviewed workflow and finish the environment, identity, package visibility, and VM prerequisites above.
 3. From GitHub Actions, manually run **Deploy Azure pilot** on `main`. The workflow accepts no arbitrary revision: it will refuse any SHA that is not current `main` with a successful exact push CI execution.
-4. The first run will build the package. If anonymous GHCR validation fails, mark the newly created `campus-recall-pilot` package public in GitHub Package settings, then rerun the same current-main dispatch. Do not add a registry credential to the VM.
+4. The first run will build the package. It normally takes the public repository's visibility. If anonymous GHCR validation fails, mark the `campus-recall-pilot` package public in GitHub Package settings, then rerun the same current-main dispatch. Do not add a registry credential to the VM.
 5. Read the run summary, the Azure Run Command result, and the public HTTPS endpoint. Also conduct the product-level device checks from the pilot runbook; a green endpoint alone does not prove sign-in, sync, offline behavior, or user data isolation.
 6. Preserve the run URL, source SHA, image digest, backup verification outcome, and any manual device-test evidence in the project checkpoint.
-7. Only after that proof is satisfactory set `PILOT_AUTO_DEPLOY_ENABLED=true`. Every future successful main CI execution then becomes a serialized automatic release.
+7. Only after that proof is satisfactory set the repository variable `PILOT_AUTO_DEPLOY_ENABLED=true` (see [the switch](#the-auto-deploy-switch)). Every future successful main CI execution then becomes a serialized automatic release.
 
 ## Manual release or migration change
 
@@ -280,7 +289,7 @@ bash -n pilot/deploy/deploy-release.sh
 ruby -e 'require "yaml"; YAML.load_file(".github/workflows/azure-pilot.yml"); puts "workflow YAML parses"'
 ```
 
-All three completed successfully (the Bicep CLI emitted only an available-version warning). No `what-if`, Azure deployment, GitHub environment creation, GHCR publication, or GitHub Actions deployment has yet been run.
+All three completed successfully (the Bicep CLI emitted only an available-version warning). The one-time setup and the first real release followed on 9 and 10 November; see [Status](#status--10-november-2026-asiakolkata).
 
 ## References
 
