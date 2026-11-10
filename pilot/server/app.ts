@@ -4,11 +4,8 @@ import { createHash, randomBytes, randomUUID, timingSafeEqual } from 'node:crypt
 import type { IncomingMessage, RequestListener, ServerResponse } from 'node:http';
 import {
   decideWrite,
-  PILOT_INDEX_VERSIONS,
   pickItemDescription,
-  searchMetadataDigest,
   validateCloudItem,
-  validateIndexBundle,
   type IndexBundle,
   type CloudItem,
   type ItemWrite,
@@ -23,6 +20,7 @@ import {
   type Session,
   type StoredItem,
 } from './store';
+import { IndexPublishError, publishIndexBundle } from './index-publish';
 import { DEFAULT_LIMITS, RateLimiter, type RateLimits } from './limits';
 import type { KeySource } from './tokens';
 import { verifyIdToken } from './tokens';
@@ -778,32 +776,26 @@ export function createPilotHandler(options: PilotServerOptions): RequestListener
       const opId = opIdOf(body);
       const epoch = await requireEpoch(session.ownerKey, body);
       const result = await idempotent(session.ownerKey, opId, async () => {
-        const current = await store.getItem(session.ownerKey, match![1]);
-        if (!current) throw new ApiError('NOT_FOUND', 'Item not found.');
-        if (current.deleted) throw new ApiError('ITEM_DELETED', 'This item was deleted.');
-        const valid = validateIndexBundle(
-          body.bundle as IndexBundle,
-          {
-            globalId: current.globalId,
-            contentSha256: current.contentSha256,
-            searchMetadataDigest: await searchMetadataDigest(current),
-          },
-          options.supportedIndexVersions ?? PILOT_INDEX_VERSIONS,
-        );
-        if (!valid.ok) throw new ApiError(valid.code, valid.reason);
-        // Stored as received: the bundle's own bytes from the validated body, not re-encoded.
-        const bytes = memberBytes(received, 'bundle');
-        if (!bytes) throw new ApiError('INVALID_INPUT', 'Body has no bundle.');
-        // The new bundle replaces any earlier one, so only the difference is new storage.
-        const used = (await store.committedBytes(session.ownerKey)) - (current.indexBytes ?? 0);
-        if (used + bytes.length > options.quotaBytes)
-          throw new ApiError('QUOTA_EXCEEDED', 'This would exceed your cloud storage quota.');
-        const indexObjectKey = `${session.ownerKey}/${epoch}/${current.globalId}/index`;
-        await objects.put(indexObjectKey, bytes);
-        // An index does not change the item's revision, so it never causes rename conflicts.
-        const next = { ...current, index: valid.value, indexObjectKey, indexBytes: bytes.length };
-        await store.publish(session.ownerKey, next, epoch);
-        return { status: 200, body: { item: publicItem(next) } };
+        try {
+          const next = await publishIndexBundle(
+            {
+              store,
+              objects,
+              quotaBytes: options.quotaBytes,
+              supportedIndexVersions: options.supportedIndexVersions,
+            },
+            session.ownerKey,
+            epoch,
+            match![1],
+            body.bundle as IndexBundle,
+            // Stored as received: the bundle's own bytes from the validated body, not re-encoded.
+            () => memberBytes(received, 'bundle'),
+          );
+          return { status: 200, body: { item: publicItem(next) } };
+        } catch (cause) {
+          if (cause instanceof IndexPublishError) throw new ApiError(cause.code, cause.message);
+          throw cause;
+        }
       });
       return send(res, result.status, result.body);
     }
