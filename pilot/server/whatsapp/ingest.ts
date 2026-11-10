@@ -159,8 +159,27 @@ export function sameSha256(declared: string, hex: string) {
   return bytes.length === 32 && bytes.toString('hex') === hex;
 }
 
-/** Called with typed text that is not saved; a later slice answers searches here. */
+/** Called with typed text that is not saved; the conversation answers searches here. */
 export type TextHook = (sender: WhatsAppSender, text: string, message: WaMessage) => Promise<void>;
+
+/**
+ * Sees every message before it is handled (consent, commands, list replies). True means the
+ * message was dealt with: nothing is saved and the worker only finishes the job.
+ */
+export type GateHook = (input: {
+  sender: WhatsAppSender;
+  wamid: string;
+  message: WaMessage;
+  plan: MessagePlan;
+}) => Promise<boolean>;
+
+/** Where replies to a sender go: the BSUID when there is one, else the phone number. */
+export const addressOf = (sender: WhatsAppSender): WhatsAppAddress | undefined =>
+  !sender.userId.startsWith('phone-')
+    ? { bsuid: sender.userId }
+    : sender.waId
+      ? { waId: sender.waId }
+      : undefined;
 
 export interface WhatsAppWorkerOptions {
   bot: BotStore;
@@ -171,6 +190,12 @@ export interface WhatsAppWorkerOptions {
   quotaBytes: number;
   nowSeconds?: () => number;
   onText?: TextHook;
+  gate?: GateHook;
+  /**
+   * Replaces the "Saved" reply, for example to confirm a burst in one message. It is called only
+   * after this message's reply was claimed, so each message is still confirmed at most once.
+   */
+  onSaved?: (sender: WhatsAppSender, title: string) => Promise<void>;
   /** Handles index jobs; without one they stay queued for a later indexer. */
   onIndexJob?: (job: BotJob) => Promise<void>;
   /** A claimed job is taken again after this long if its worker stopped; 5 minutes. */
@@ -223,11 +248,7 @@ export function createWhatsAppIngest(options: WhatsAppWorkerOptions) {
 
   /** Sends a plain text message to the sender. */
   async function reply(sender: WhatsAppSender, text: string) {
-    const to: WhatsAppAddress | undefined = !sender.userId.startsWith('phone-')
-      ? { bsuid: sender.userId }
-      : sender.waId
-        ? { waId: sender.waId }
-        : undefined;
+    const to = addressOf(sender);
     if (to) await graph.sendText(to, text);
   }
   /**
@@ -288,6 +309,8 @@ export function createWhatsAppIngest(options: WhatsAppWorkerOptions) {
     if (!inbound || !sender) return bot.finishJob(job);
     const { wamid, ownerKey, message } = inbound;
     const plan = planMessage(message);
+    if (options.gate && (await options.gate({ sender, wamid, message, plan })))
+      return bot.finishJob(job);
     if (plan.action === 'ignore') return bot.finishJob(job);
     if (plan.action === 'refuse') {
       await bot.finishJob(job);
@@ -304,7 +327,12 @@ export function createWhatsAppIngest(options: WhatsAppWorkerOptions) {
     const saved = async (item: StoredItem) => {
       await bot.finishJob(job);
       // A deleted item stays deleted; a retry only completes what was started.
-      if (!item.deleted) await answer(wamid, sender, REPLIES.saved(item.title));
+      if (item.deleted) return;
+      if (!options.onSaved) return answer(wamid, sender, REPLIES.saved(item.title));
+      if (await bot.claimReply(wamid))
+        await options
+          .onSaved(sender, item.title)
+          .catch((cause: unknown) => log('WhatsApp reply failed', cause));
     };
     const earlier = await store.getItem(ownerKey, globalId);
     if (earlier) return saved(earlier);
