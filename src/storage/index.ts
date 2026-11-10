@@ -167,6 +167,10 @@ function validateUrl(url: string): void {
     throw error('INVALID_INPUT', 'Webpage URL must use HTTP or HTTPS.');
 }
 
+// Notes and webpages are plain text, optionally declared as UTF-8. Nothing else is accepted, so a
+// crafted backup cannot smuggle in a type such as `text/plain,text/html`.
+const PLAIN_TEXT = /^text\/plain(?:[ \t]*;[ \t]*charset[ \t]*=[ \t]*(?:utf-8|"utf-8"))?$/i;
+
 function isValidHttpUrl(url: string): boolean {
   try {
     const parsed = new URL(url);
@@ -213,7 +217,7 @@ function validateArchiveEntry(
   if (typeof candidate.mimeType !== 'string' || !candidate.mimeType.trim())
     throw error('INVALID_ARCHIVE', 'Archive MIME type is invalid.');
   if (candidate.kind === 'note' || candidate.kind === 'webpage') {
-    if (!candidate.mimeType.startsWith('text/plain'))
+    if (!PLAIN_TEXT.test(candidate.mimeType))
       throw error('INVALID_ARCHIVE', 'Archive text item MIME type is invalid.');
   } else if (SUPPORTED_MIME_TYPES[candidate.mimeType] !== candidate.kind) {
     throw error('INVALID_ARCHIVE', 'Archive item MIME type does not match its kind.');

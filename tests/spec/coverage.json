@@ -320,6 +320,16 @@
           "suite": "browser",
           "file": "tests/e2e/storage-recovery.spec.ts",
           "title": "[S6] closing the tab during a large restore leaves either the whole archive or none of it"
+        },
+        {
+          "suite": "fast",
+          "file": "tests/storage/archive-source-url.test.ts",
+          "title": "rejects a non-web source link on any imported item kind"
+        },
+        {
+          "suite": "fast",
+          "file": "tests/storage/archive-source-url.test.ts",
+          "title": "accepts only plain text as the type of an imported note"
         }
       ],
       "remaining": []
@@ -392,6 +402,11 @@
           "suite": "browser",
           "file": "tests/e2e/first-run-search.spec.ts",
           "title": "the Library setup banner leads to the Search download card"
+        },
+        {
+          "suite": "fast",
+          "file": "tests/app/runtime-route.test.ts",
+          "title": "serves only this app's own runtime files from the asset cache"
         }
       ],
       "remaining": []

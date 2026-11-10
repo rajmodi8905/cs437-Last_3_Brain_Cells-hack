@@ -2,6 +2,7 @@
 import { precacheAndRoute, cleanupOutdatedCaches, getCacheKeyForURL } from 'workbox-precaching';
 import { ASSET_CACHE } from './engine/assets';
 import { SHARE_PATH, sharedAddHash, storeShare } from './app/shareTarget';
+import { isOwnRuntimeRequest } from './app/runtimeRequest';
 declare const self: ServiceWorkerGlobalScope & { __WB_MANIFEST: any };
 precacheAndRoute(self.__WB_MANIFEST);
 cleanupOutdatedCaches();
@@ -31,7 +32,7 @@ self.addEventListener('fetch', (event) => {
   if (event.request.method !== 'GET') return;
   // App-shell runtime files, such as the PDF viewer worker, are served by the precache route.
   if (getCacheKeyForURL(event.request.url)) return;
-  if (new URL(event.request.url).pathname.includes('/runtime/'))
+  if (isOwnRuntimeRequest(event.request.url, self.location.origin))
     event.respondWith(
       (async () => {
         const lookup = new URL(event.request.url).pathname.endsWith(
