@@ -117,6 +117,11 @@ const LOGIN_SECONDS = 600;
 const GOOGLE_AUTHORIZE = 'https://accounts.google.com/o/oauth2/v2/auth';
 const GOOGLE_TOKEN = 'https://oauth2.googleapis.com/token';
 const random = () => randomBytes(32).toString('base64url');
+/**
+ * Sessions and sign-in attempts are stored under the SHA-256 of their cookie value, so a copy
+ * of the database cannot be turned back into a working cookie.
+ */
+const storedId = (cookie: string) => createHash('sha256').update(cookie).digest('hex');
 const sameText = (a: string, b: string) =>
   a.length === b.length && timingSafeEqual(Buffer.from(a), Buffer.from(b));
 const MAX_JSON_BYTES = 64 * 1024;
@@ -148,6 +153,11 @@ const errorBody = (code: PilotErrorCode, message: string) => ({
 
 // Mutating responses are held until the durable owner transaction has committed.
 const pendingResponses = new WeakMap<ServerResponse, { flush?: () => void }>();
+/** A session just opened, with the cookie value that only the browser keeps. */
+interface OpenedSession {
+  session: Session;
+  cookie: string;
+}
 
 function send(
   res: ServerResponse,
@@ -182,20 +192,92 @@ async function readBody(req: IncomingMessage, limit: number): Promise<Uint8Array
     if (size > limit) throw new ApiError('LIMIT_EXCEEDED', 'Request body is too large.');
     parts.push(chunk as Buffer);
   }
-  return new Uint8Array(Buffer.concat(parts));
+  const all = Buffer.concat(parts);
+  // A view of the joined buffer rather than another copy of it.
+  return new Uint8Array(all.buffer, all.byteOffset, all.length);
+}
+const UTF8 = new TextDecoder('utf-8', { fatal: true, ignoreBOM: true });
+/** The body as a JSON object, plus the bytes it was parsed from. */
+async function readJsonWithBytes(req: IncomingMessage, limit: number) {
+  const bytes = await readBody(req, limit);
+  try {
+    // Strict UTF-8, so bytes kept as received decode the same way on every device.
+    const value: unknown = JSON.parse(UTF8.decode(bytes));
+    if (value && typeof value === 'object' && !Array.isArray(value))
+      return { value: value as Record<string, unknown>, bytes };
+  } catch {
+    // Fall through to the error below.
+  }
+  throw new ApiError('INVALID_INPUT', 'Body must be a JSON object.');
 }
 async function readJson(
   req: IncomingMessage,
   limit = MAX_JSON_BYTES,
 ): Promise<Record<string, unknown>> {
-  const bytes = await readBody(req, limit);
-  try {
-    const value = JSON.parse(Buffer.from(bytes).toString('utf8'));
-    if (value && typeof value === 'object' && !Array.isArray(value)) return value;
-  } catch {
-    // Fall through to the error below.
+  return (await readJsonWithBytes(req, limit)).value;
+}
+
+const QUOTE = 0x22;
+const BACKSLASH = 0x5c;
+const isJsonSpace = (byte: number) =>
+  byte === 0x20 || byte === 0x09 || byte === 0x0a || byte === 0x0d;
+/** End (exclusive) of the JSON string starting at `at`. */
+function skipJsonString(bytes: Uint8Array, at: number) {
+  let i = at + 1;
+  while (bytes[i] !== QUOTE) i += bytes[i] === BACKSLASH ? 2 : 1;
+  return i + 1;
+}
+/** End (exclusive) of the JSON value starting at `at`. */
+function skipJsonValue(bytes: Uint8Array, at: number) {
+  const first = bytes[at];
+  if (first === QUOTE) return skipJsonString(bytes, at);
+  if (first === 0x7b || first === 0x5b) {
+    let depth = 0;
+    let i = at;
+    do {
+      const byte = bytes[i];
+      if (byte === QUOTE) {
+        i = skipJsonString(bytes, i);
+        continue;
+      }
+      if (byte === 0x7b || byte === 0x5b) depth++;
+      else if (byte === 0x7d || byte === 0x5d) depth--;
+      i++;
+    } while (depth > 0);
+    return i;
   }
-  throw new ApiError('INVALID_INPUT', 'Body must be a JSON object.');
+  let i = at;
+  while (i < bytes.length && ![0x2c, 0x7d, 0x5d].includes(bytes[i]) && !isJsonSpace(bytes[i])) i++;
+  return i;
+}
+/**
+ * The exact bytes of a top-level member's value in a JSON object that `JSON.parse` has already
+ * accepted (the last one wins, as in `JSON.parse`). UTF-8 continuation bytes are never ASCII,
+ * so scanning bytes for JSON punctuation is safe.
+ */
+function memberBytes(bytes: Uint8Array, name: string) {
+  let found: Uint8Array | undefined;
+  let i = 0;
+  const skipSpace = () => {
+    while (isJsonSpace(bytes[i])) i++;
+  };
+  skipSpace();
+  i++; // {
+  for (;;) {
+    skipSpace();
+    if (bytes[i] === 0x7d) return found;
+    const keyEnd = skipJsonString(bytes, i);
+    const key = JSON.parse(Buffer.from(bytes.subarray(i, keyEnd)).toString('utf8')) as string;
+    i = keyEnd;
+    skipSpace();
+    i++; // :
+    skipSpace();
+    const start = i;
+    i = skipJsonValue(bytes, i);
+    if (key === name) found = bytes.subarray(start, i);
+    skipSpace();
+    if (bytes[i] === 0x2c) i++;
+  }
 }
 const cookieValue = (req: IncomingMessage, name: string) => {
   for (const part of (req.headers.cookie ?? '').split(';')) {
@@ -254,19 +336,25 @@ export function createPilotHandler(options: PilotServerOptions): RequestListener
     vault: await store.vault(session.ownerKey),
   });
 
-  const sessionCookie = (session: Session) =>
-    `${COOKIE}=${session.id}; Path=/api; Max-Age=${sessionSeconds}; HttpOnly; Secure; SameSite=Lax`;
+  const sessionCookie = (opened: OpenedSession) =>
+    `${COOKIE}=${opened.cookie}; Path=/api; Max-Age=${sessionSeconds}; HttpOnly; Secure; SameSite=Lax`;
+  /** Stores a new session; only its hash is kept, the cookie value goes to the browser. */
   async function openSession(identity: { ownerKey: string; email: string }) {
+    const cookie = randomBytes(32).toString('base64url');
     const session: Session = {
-      id: randomBytes(32).toString('base64url'),
+      id: storedId(cookie),
       csrf: randomBytes(24).toString('base64url'),
       ownerKey: identity.ownerKey,
       email: identity.email,
       expiresAt: now() + sessionSeconds,
     };
     await store.createSession(session);
-    return session;
+    return { session, cookie };
   }
+  const sessionFromCookie = (req: IncomingMessage) => {
+    const cookie = cookieValue(req, COOKIE);
+    return cookie ? store.getSession(storedId(cookie)) : Promise.resolve(undefined);
+  };
   const identityPolicy = (nonce?: string) => ({
     clientId: options.clientId,
     allowedEmailDomain: options.allowedEmailDomain,
@@ -281,10 +369,10 @@ export function createPilotHandler(options: PilotServerOptions): RequestListener
     google: GoogleLoginOptions,
     req: IncomingMessage,
     url: URL,
-  ): Promise<{ result: 'failed' | 'cancelled' | 'not-eligible' } | { session: Session }> {
+  ): Promise<{ result: 'failed' | 'cancelled' | 'not-eligible' } | { session: OpenedSession }> {
     const id = cookieValue(req, LOGIN_COOKIE);
     // Taken (and so removed) before anything else: an attempt is usable once.
-    const attempt = id ? await store.takeLoginAttempt(id) : undefined;
+    const attempt = id ? await store.takeLoginAttempt(storedId(id)) : undefined;
     const state = url.searchParams.get('state') ?? '';
     if (!attempt || attempt.expiresAt <= now() || !sameText(state, attempt.state))
       return { result: 'failed' };
@@ -316,8 +404,7 @@ export function createPilotHandler(options: PilotServerOptions): RequestListener
   }
 
   async function requireSession(req: IncomingMessage, write: boolean): Promise<Session> {
-    const id = cookieValue(req, COOKIE);
-    const session = id ? await store.getSession(id) : undefined;
+    const session = await sessionFromCookie(req);
     if (!session || session.expiresAt <= now()) {
       if (session) await store.deleteSession(session.id);
       throw new ApiError('UNAUTHENTICATED', 'Sign in again.');
@@ -363,22 +450,25 @@ export function createPilotHandler(options: PilotServerOptions): RequestListener
     )
       limitSignIn(req);
 
-    if (path === '/session' && method === 'POST') {
+    // A raw ID token carries no sign-in attempt nonce, so it could open sessions until it
+    // expires. With Google sign-in on, sessions come only from the one-use callback flow.
+    if (path === '/session' && method === 'POST' && (options.devSigner || !options.google)) {
       if (req.headers.origin !== options.origin)
         throw new ApiError('FORBIDDEN', 'Sign-in is only accepted from the pilot site.');
       const body = await readJson(req);
       const verified = await verifyIdToken(body.idToken, options.keys, identityPolicy());
       if (!verified.ok) throw new ApiError(verified.code, verified.reason);
-      const session = await openSession(verified.value);
-      return send(res, 200, await sessionBody(session), {
-        'set-cookie': sessionCookie(session),
+      const opened = await openSession(verified.value);
+      return send(res, 200, await sessionBody(opened.session), {
+        'set-cookie': sessionCookie(opened),
       });
     }
 
     if (path === '/auth/google/start' && method === 'GET' && options.google) {
       const verifier = random();
+      const loginCookie = random();
       const attempt = {
-        id: random(),
+        id: storedId(loginCookie),
         state: random(),
         nonce: random(),
         codeVerifier: verifier,
@@ -402,7 +492,7 @@ export function createPilotHandler(options: PilotServerOptions): RequestListener
       return send(res, 302, undefined, {
         location: to.href,
         'referrer-policy': 'no-referrer',
-        'set-cookie': `${LOGIN_COOKIE}=${attempt.id}; Path=/api/v1/auth; Max-Age=${LOGIN_SECONDS}; HttpOnly; Secure; SameSite=Lax`,
+        'set-cookie': `${LOGIN_COOKIE}=${loginCookie}; Path=/api/v1/auth; Max-Age=${LOGIN_SECONDS}; HttpOnly; Secure; SameSite=Lax`,
       });
     }
 
@@ -608,11 +698,13 @@ export function createPilotHandler(options: PilotServerOptions): RequestListener
                 index: undefined,
               }
             : { ...current, revision: decision.nextRevision, title: write.title };
+        await store.publish(session.ownerKey, next, epoch);
+        // Blobs go only after the tombstone is written: if publishing fails, the item and its
+        // original stay readable everywhere, and a retried delete finishes the job.
         if (write.type === 'delete') {
           for (const key of [current.objectKey, current.indexObjectKey])
             if (key?.startsWith(`${session.ownerKey}/`)) await objects.delete(key);
         }
-        await store.publish(session.ownerKey, next, epoch);
         return { status: 200, body: { item: publicItem(next) } };
       });
       return send(res, result.status, result.body);
@@ -633,6 +725,10 @@ export function createPilotHandler(options: PilotServerOptions): RequestListener
         'content-type': item.mimeType,
         etag: `"sha256-${item.contentSha256}"`,
         'accept-ranges': 'bytes',
+        // The app reads originals with fetch; a browser opening this URL directly must neither
+        // render nor run what was uploaded.
+        'content-disposition': 'attachment',
+        'content-security-policy': "sandbox; default-src 'none'",
       };
       const range = req.headers.range;
       const parsed = range === undefined ? undefined : parseRange(range, size);
@@ -668,7 +764,7 @@ export function createPilotHandler(options: PilotServerOptions): RequestListener
 
     if ((match = /^\/items\/([^/]+)\/index$/.exec(path)) && method === 'PUT') {
       const session = await requireSession(req, true);
-      const body = await readJson(req, MAX_INDEX_BYTES);
+      const { value: body, bytes: received } = await readJsonWithBytes(req, MAX_INDEX_BYTES);
       const opId = opIdOf(body);
       const epoch = await requireEpoch(session.ownerKey, body);
       const result = await idempotent(session.ownerKey, opId, async () => {
@@ -685,7 +781,9 @@ export function createPilotHandler(options: PilotServerOptions): RequestListener
           options.supportedIndexVersions ?? PILOT_INDEX_VERSIONS,
         );
         if (!valid.ok) throw new ApiError(valid.code, valid.reason);
-        const bytes = new TextEncoder().encode(JSON.stringify(body.bundle));
+        // Stored as received: the bundle's own bytes from the validated body, not re-encoded.
+        const bytes = memberBytes(received, 'bundle');
+        if (!bytes) throw new ApiError('INVALID_INPUT', 'Body has no bundle.');
         // The new bundle replaces any earlier one, so only the difference is new storage.
         const used = (await store.committedBytes(session.ownerKey)) - (current.indexBytes ?? 0);
         if (used + bytes.length > options.quotaBytes)
@@ -717,8 +815,7 @@ export function createPilotHandler(options: PilotServerOptions): RequestListener
   async function dispatch(req: IncomingMessage, res: ServerResponse) {
     const method = req.method ?? 'GET';
     if (method === 'GET' || method === 'HEAD') return route(req, res);
-    const sessionId = cookieValue(req, COOKIE);
-    const session = sessionId ? await store.getSession(sessionId) : undefined;
+    const session = await sessionFromCookie(req);
     if (!session || session.expiresAt <= now()) return route(req, res);
     const pending: { flush?: () => void } = {};
     pendingResponses.set(res, pending);

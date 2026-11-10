@@ -133,9 +133,11 @@ const validTitle = (title: unknown) =>
   typeof title === 'string' &&
   title.trim().length > 0 &&
   Array.from(title).length <= MAX_TITLE_CODE_POINTS;
+// Plain text, optionally declared as UTF-8; nothing else (the type is served back as is).
+const PLAIN_TEXT = /^text\/plain(?:[ \t]*;[ \t]*charset[ \t]*=[ \t]*(?:utf-8|"utf-8"))?$/i;
 const mimeMatchesKind = (mimeType: string, kind: ItemKind) =>
   kind === 'note' || kind === 'webpage'
-    ? mimeType.startsWith('text/plain')
+    ? PLAIN_TEXT.test(mimeType)
     : SUPPORTED_MIME_TYPES[mimeType] === kind;
 
 /** Checks eligibility and derives the owner from already signature-verified claims. */
