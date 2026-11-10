@@ -5,11 +5,37 @@ import type { CaptureService } from '../app/services';
 import { plainMessage } from '../app/plainError';
 import { takeShare } from '../app/shareTarget';
 import { fileProblem, sameFile } from '../app/fileCheck';
+import {
+  MAX_FOLDER_FILES,
+  folderName,
+  freeBytes,
+  isFolderEntry,
+  sortFolder,
+  walkEntries,
+  type FolderEntry,
+  type SkippedFile,
+} from '../app/folderFiles';
 import { bytes } from './hooks';
 /** True when a paste belongs to a field the student is typing in. */
 const typingIn = (target: EventTarget | null) =>
   target instanceof Element &&
   !!target.closest('input, textarea, select, [contenteditable]:not([contenteditable="false"])');
+/** Folders can be picked only where the browser supports it; elsewhere Add looks as before. */
+const canPickFolder = () =>
+  typeof HTMLInputElement !== 'undefined' && 'webkitdirectory' in HTMLInputElement.prototype;
+/**
+ * What one added folder brought in, shown as a summary above the file list. The summary is
+ * worked out again from the files of that folder still selected, so removing them keeps it
+ * true, and removing all of them removes the summary and its skipped files with it.
+ */
+interface FolderNote {
+  id: number;
+  name?: string;
+  ready: File[];
+  skipped: SkippedFile[];
+  overLimit: number;
+  truncated: boolean;
+}
 export function Add({
   repository,
   capture: { captureWebpage, extractHtml, extractPdfText, validateWebUrl },
@@ -30,6 +56,10 @@ export function Add({
   const [captureNotice, setCaptureNotice] = useState('');
   const [drag, setDrag] = useState(false);
   const input = useRef<HTMLInputElement>(null);
+  const folderInput = useRef<HTMLInputElement>(null);
+  const [folderNotes, setFolderNotes] = useState<FolderNote[]>([]);
+  const nextFolder = useRef(0);
+  const [reading, setReading] = useState(false);
   const lastCapture = useRef<{ url: string; title: string } | undefined>(undefined);
   const [shareNotice, setShareNotice] = useState('');
   const fileList = useRef<HTMLUListElement>(null);
@@ -46,6 +76,18 @@ export function Add({
           !added.slice(0, i).some((earlier) => sameFile(earlier, file)),
       ),
     ]);
+  /** Adds a folder's files that can be saved; the rest are listed as skipped, with reasons. */
+  const addFolder = (
+    folderFiles: File[],
+    name = folderName(folderFiles),
+    truncated = false,
+    unread: SkippedFile[] = [],
+  ) => {
+    const { ready, skipped, overLimit } = sortFolder(folderFiles);
+    addFiles(ready);
+    const note = { name, ready, skipped: [...unread, ...skipped], overLimit, truncated };
+    setFolderNotes((current) => [...current, { id: nextFolder.current++, ...note }]);
+  };
   const removeFile = (index: number) => {
     focusAfterRemove.current = index;
     setFiles((current) => current.filter((_, i) => i !== index));
@@ -61,6 +103,15 @@ export function Add({
   const problems = files.map(fileProblem);
   const valid = files.filter((_, i) => !problems[i]);
   const invalid = problems.filter((problem): problem is string => !!problem);
+  // Each folder's summary counts only its files still selected. A folder that brought nothing
+  // savable keeps its summary, so its skipped files are still explained.
+  const liveFolders = folderNotes
+    .map((note) => ({
+      ...note,
+      added: note.ready.length,
+      ready: note.ready.filter((file) => files.some((kept) => sameFile(kept, file))),
+    }))
+    .filter((note) => note.ready.length > 0 || note.added === 0);
   // Pasting on Add: an image joins Files; text starts a note. A paste into a field stays there.
   const pasteBlocked = useRef(false);
   pasteBlocked.current = busy || capturing;
@@ -140,6 +191,16 @@ export function Add({
           );
           return;
         }
+        // A large batch is checked against the space left before saving, so it does not stop
+        // halfway with the device full.
+        const needed = valid.reduce((sum, file) => sum + file.size, 0);
+        const room = await freeBytes();
+        if (room !== undefined && needed > room) {
+          setError(
+            `These files need about ${bytes(needed)}, but only ${bytes(room)} of space is left on this device. Remove some files or free up space, then save again.`,
+          );
+          return;
+        }
         inputs = valid.map((file) => ({
           kind: 'file',
           file,
@@ -155,11 +216,19 @@ export function Add({
       }
       for (const value of inputs) saved.push(await repository.save(value));
       // Files that cannot be saved were listed with the reason; say so again on the Library.
+      const folderSkipped =
+        tab === 'file' ? liveFolders.reduce((sum, note) => sum + note.skipped.length, 0) : 0;
       const skipped =
-        tab === 'file' && invalid.length
-          ? `${invalid.join(' ')} ${invalid.length} remaining file(s) were not saved.`
-          : undefined;
+        [
+          tab === 'file' && invalid.length
+            ? `${invalid.join(' ')} ${invalid.length} remaining file(s) were not saved.`
+            : '',
+          folderSkipped ? `${folderSkipped} file(s) from the folder were skipped.` : '',
+        ]
+          .filter(Boolean)
+          .join(' ') || undefined;
       setFiles([]);
+      setFolderNotes([]);
       setText('');
       setTitle('');
       setUrl('');
@@ -260,13 +329,38 @@ export function Add({
                   e.preventDefault();
                   setDrag(false);
                   setError('');
-                  addFiles(Array.from(e.dataTransfer.files));
+                  // A dropped folder's contents are not in the file list, so its entries are
+                  // walked. They must be taken now, while the drop event is still running.
+                  const entries = Array.from(e.dataTransfer.items ?? [])
+                    .map((item) => item.webkitGetAsEntry?.() as FolderEntry | null | undefined)
+                    .filter((entry): entry is FolderEntry => !!entry);
+                  const folders = entries.filter(isFolderEntry);
+                  if (!folders.length) {
+                    addFiles(Array.from(e.dataTransfer.files));
+                    return;
+                  }
+                  setReading(true);
+                  void walkEntries(entries)
+                    .then(({ files: found, skipped, truncated }) =>
+                      addFolder(
+                        found,
+                        folders.length === 1 ? folders[0].name : undefined,
+                        truncated,
+                        skipped,
+                      ),
+                    )
+                    .catch((cause) =>
+                      setError(`The folder could not be read. ${plainMessage(cause)}`),
+                    )
+                    .finally(() => setReading(false));
                 }}
               >
                 <strong>
-                  {files.length
-                    ? `${files.length} file${files.length === 1 ? '' : 's'} selected`
-                    : 'Choose files or drop them here'}
+                  {reading
+                    ? 'Reading the folder…'
+                    : files.length
+                      ? `${files.length} file${files.length === 1 ? '' : 's'} selected`
+                      : 'Choose files or drop them here'}
                 </strong>
                 <span>Images, PDFs, audio and MP4 video</span>
                 <span className="small muted">
@@ -275,6 +369,59 @@ export function Add({
                     : 'Originals stay on this device'}
                 </span>
               </button>
+              {canPickFolder() && (
+                <>
+                  <input
+                    ref={(element) => {
+                      folderInput.current = element;
+                      // React does not know this attribute, so it is set directly.
+                      element?.setAttribute('webkitdirectory', '');
+                    }}
+                    disabled={busy}
+                    aria-label="Choose a folder to save"
+                    tabIndex={-1}
+                    className="sr-only"
+                    type="file"
+                    multiple
+                    onChange={(e) => {
+                      setError('');
+                      addFolder(Array.from(e.target.files ?? []));
+                      e.target.value = '';
+                    }}
+                  />
+                  <button
+                    type="button"
+                    className="button secondary folder-pick"
+                    disabled={busy || reading}
+                    onClick={() => folderInput.current?.click()}
+                  >
+                    Choose a folder
+                  </button>
+                </>
+              )}
+              {liveFolders.map((note) => (
+                <div className="folder-summary" role="status" key={note.id}>
+                  <p>
+                    {note.name ? `From “${note.name}”: ` : 'From the folder: '}
+                    {note.ready.length} file{note.ready.length === 1 ? '' : 's'} ready to save
+                    {note.skipped.length ? `, ${note.skipped.length} skipped` : ''}.
+                    {note.overLimit > 0 &&
+                      ` ${note.overLimit} more could be saved, but one folder adds at most ${MAX_FOLDER_FILES} files. Add the rest in another go.`}
+                    {note.truncated &&
+                      ' This folder is very large, so only part of it was read. Add its subfolders one at a time.'}
+                  </p>
+                  {note.skipped.length > 0 && (
+                    <details>
+                      <summary>Show skipped</summary>
+                      <ul className="skipped-files" aria-label="Skipped files">
+                        {note.skipped.map((skip, i) => (
+                          <li key={`${skip.name}-${i}`}>{skip.reason}</li>
+                        ))}
+                      </ul>
+                    </details>
+                  )}
+                </div>
+              ))}
               {files.length > 0 && (
                 <ul className="selected-files" aria-label="Selected files" ref={fileList}>
                   {files.map((f, i) => (

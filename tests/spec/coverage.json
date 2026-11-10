@@ -70,6 +70,61 @@
           "suite": "browser",
           "file": "tests/e2e/polish.spec.ts",
           "title": "pasting an image or text on Add fills the form, but never a paste into a field"
+        },
+        {
+          "suite": "fast",
+          "file": "tests/app/folder-files.test.ts",
+          "title": "[S1] the folder walker reads nested folders and every batch a folder reader returns"
+        },
+        {
+          "suite": "fast",
+          "file": "tests/app/folder-files.test.ts",
+          "title": "[S1] the folder walker does not enter hidden folders and stops at its limit"
+        },
+        {
+          "suite": "fast",
+          "file": "tests/app/folder-files.test.ts",
+          "title": "[S1] a folder skips hidden and system files and reports unsupported files instead of saving them"
+        },
+        {
+          "suite": "fast",
+          "file": "tests/app/folder-files.test.ts",
+          "title": "[S1] one folder adds at most the folder limit and counts the rest"
+        },
+        {
+          "suite": "browser",
+          "file": "tests/e2e/add-folder.spec.ts",
+          "title": "[S1] choosing a folder saves its supported files and lists the skipped ones"
+        },
+        {
+          "suite": "browser",
+          "file": "tests/e2e/add-folder.spec.ts",
+          "title": "[S1] dropping a folder adds the supported files inside it"
+        },
+        {
+          "suite": "fast",
+          "file": "tests/app/folder-files.test.ts",
+          "title": "[S1] a file or folder that cannot be read is skipped with a reason and the rest still come in"
+        },
+        {
+          "suite": "fast",
+          "file": "tests/app/folder-files.test.ts",
+          "title": "[S1] the folder walker stops reading as soon as it passes its limit"
+        },
+        {
+          "suite": "fast",
+          "file": "tests/app/folder-files.test.ts",
+          "title": "[S1] a picked folder named with a dot keeps its files, and a hidden folder inside it is named"
+        },
+        {
+          "suite": "fast",
+          "file": "tests/app/add-folder.test.tsx",
+          "title": "[S1] removing a folder file updates its summary and the skipped count still reaches the Library"
+        },
+        {
+          "suite": "fast",
+          "file": "tests/app/add-folder.test.tsx",
+          "title": "[S1] removing every file of a folder removes its summary and its skipped files from the save"
         }
       ],
       "remaining": []
