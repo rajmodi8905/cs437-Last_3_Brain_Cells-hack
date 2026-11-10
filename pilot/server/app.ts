@@ -26,6 +26,13 @@ import { resetOwnerVault } from './vault-reset';
 import type { KeySource } from './tokens';
 import { verifyIdToken } from './tokens';
 import {
+  PAGE_HEADERS,
+  confirmPage,
+  hashLinkToken,
+  isLinkToken,
+  linkErrorPage,
+} from './whatsapp/links';
+import {
   WEBHOOK_PATH,
   createWhatsAppWebhook,
   type WhatsAppWebhookOptions,
@@ -74,6 +81,8 @@ export interface PilotServerOptions {
   /**
    * Enables Meta's webhook for the WhatsApp channel at `/api/v1/whatsapp/webhook`. It is
    * authenticated by Meta's signature, so sessions, CSRF and the per-address limit do not apply.
+   * It also enables `/api/v1/whatsapp/open/{token}`, the one-time links that open a WhatsApp
+   * vault in the app.
    */
   whatsapp?: WhatsAppWebhookOptions;
 }
@@ -455,7 +464,8 @@ export function createPilotHandler(options: PilotServerOptions): RequestListener
     if (wait) throw limited(wait);
     if (
       (method === 'POST' && (path === '/session' || path === '/dev/token')) ||
-      path.startsWith('/auth/')
+      path.startsWith('/auth/') ||
+      path.startsWith('/whatsapp/open/')
     )
       limitSignIn(req);
 
@@ -518,6 +528,33 @@ export function createPilotHandler(options: PilotServerOptions): RequestListener
         location: `${options.origin}/?signin=${outcome.result}#/settings`,
         'referrer-policy': 'no-referrer',
         'set-cookie': clearLogin,
+      });
+    }
+
+    if ((match = /^\/whatsapp\/open\/([^/]+)$/.exec(path)) && options.whatsapp) {
+      const { bot } = options.whatsapp;
+      const token = match[1];
+      const hash = isLinkToken(token) ? hashLinkToken(token) : undefined;
+      if (method === 'GET' || method === 'HEAD') {
+        // Looking does not use the link up, so a link preview cannot spend it.
+        const link = hash && (await bot.peekLink(hash, now()));
+        return link
+          ? send(res, 200, confirmPage(link.label), PAGE_HEADERS)
+          : send(res, 404, linkErrorPage(), PAGE_HEADERS);
+      }
+      if (method !== 'POST') throw new ApiError('NOT_FOUND', 'No such endpoint.');
+      if (req.headers.origin !== options.origin)
+        return send(res, 403, linkErrorPage(), PAGE_HEADERS);
+      const link = hash && (await bot.takeLink(hash, now()));
+      if (!link) return send(res, 404, linkErrorPage(), PAGE_HEADERS);
+      // A session this browser already had is replaced, not left behind.
+      const previous = await sessionFromCookie(req);
+      if (previous) await store.deleteSession(previous.id);
+      const opened = await openSession({ ownerKey: link.ownerKey, email: link.label });
+      return send(res, 303, undefined, {
+        location: `${options.origin}/?signin=whatsapp#/settings`,
+        'referrer-policy': 'no-referrer',
+        'set-cookie': sessionCookie(opened),
       });
     }
 
