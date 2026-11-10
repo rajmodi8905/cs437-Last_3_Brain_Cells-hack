@@ -26,6 +26,11 @@ import {
 import { DEFAULT_LIMITS, RateLimiter, type RateLimits } from './limits';
 import type { KeySource } from './tokens';
 import { verifyIdToken } from './tokens';
+import {
+  WEBHOOK_PATH,
+  createWhatsAppWebhook,
+  type WhatsAppWebhookOptions,
+} from './whatsapp/webhook';
 
 /** Google sign-in run by this server (OpenID Connect authorization code flow with PKCE). */
 export interface GoogleLoginOptions {
@@ -67,6 +72,11 @@ export interface PilotServerOptions {
   trustProxy?: boolean;
   /** Unfinished uploads expire after this many seconds; a day by default. */
   uploadTtlSeconds?: number;
+  /**
+   * Enables Meta's webhook for the WhatsApp channel at `/api/v1/whatsapp/webhook`. It is
+   * authenticated by Meta's signature, so sessions, CSRF and the per-address limit do not apply.
+   */
+  whatsapp?: WhatsAppWebhookOptions;
 }
 
 const DAY = 24 * 3600;
@@ -812,7 +822,13 @@ export function createPilotHandler(options: PilotServerOptions): RequestListener
     throw new ApiError('NOT_FOUND', 'No such endpoint.');
   }
 
+  const whatsapp = options.whatsapp && createWhatsAppWebhook(options.whatsapp, now);
+
   async function dispatch(req: IncomingMessage, res: ServerResponse) {
+    if (whatsapp) {
+      const url = new URL(req.url ?? '/', 'http://pilot.local');
+      if (url.pathname === WEBHOOK_PATH) return whatsapp(req, res, url);
+    }
     const method = req.method ?? 'GET';
     if (method === 'GET' || method === 'HEAD') return route(req, res);
     const session = await sessionFromCookie(req);
