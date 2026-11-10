@@ -67,9 +67,11 @@ Nothing else is saved, and the bot says why in one short line: voice notes and o
 `gate` sees every message before the worker handles it and decides, in this order:
 
 1. **Stopped** (`STOP` was sent): only `START` is answered; anything else is not saved, its content is forgotten and nothing is sent back.
-2. **No consent yet** (W1): nothing is saved and the message's stored JSON is reduced to its ID and type (`forgetMessage`), which is all that dedupe needs. The first message from a sender gets the notice (claimed once with `claimNotice`, so two workers never send it twice); later messages before `AGREE` get no answer. Once the notice was sent, `AGREE` records the consent time and `noticeVersion` and answers "You're all set. Anything you sent before this wasn't saved, so please send it again."; `HELP`, `PRIVACY` and `STOP` are answered, and `DELETE ALL` gets "Nothing is saved for you yet." An `AGREE` before the notice only gets the notice.
-3. **A list reply** (`interactive.list_reply`): the picked result is sent back (below).
-4. **A command**. Anything else goes on to the worker: saved as before, or a search through `onText`.
+2. **No consent yet** (W1): nothing is saved and the message's stored JSON is reduced to its ID and type (`forgetMessage`), which is all that dedupe needs. The first message from a sender gets the notice (claimed once with `claimNotice`, so two workers never send it twice; if sending it fails the claim is given back, so the next message gets it); later messages before `AGREE` get no answer. Once the notice was sent, `AGREE` records the consent time and `noticeVersion` and answers "You're all set. Anything you sent before this wasn't saved, so please send it again."; `HELP`, `PRIVACY` and `STOP` are answered, and `DELETE ALL` gets "Nothing is saved for you yet." An `AGREE` before the notice only gets the notice, and a `START` after a `STOP` sent before consent answers "Reply AGREE to start."
+
+The webhook records every message as it arrives, with its content, because the worker needs the text to recognise `AGREE`. A message from a sender without consent is reduced to its ID and type when the worker reaches it, normally within seconds; while the worker is stopped or the sender is over the rate limit, that content stays in `wa_inbound` and could be in a backup taken meanwhile. No item is ever stored from it.
+
+Because a download can take a while, the worker checks again under the owner's lock, just before it stores an item, that its job is still the current claim and that the sender still has consent and has not sent STOP (`canStore`). A `DELETE ALL` or `STOP` handled by another worker meanwhile therefore wins: nothing is stored, nothing is confirmed and the message's content is forgotten. 3. **A list reply** (`interactive.list_reply`): the picked result is sent back (below). 4. **A command**. Anything else goes on to the worker: saved as before, or a search through `onText`.
 
 The notice covers what is saved, that WhatsApp (Meta) decrypts messages to deliver them and may keep them up to 30 days, that our server stores and processes files and searches, the 18+ age limit, `DELETE ALL` and the privacy link, and it ends "Reply AGREE to start."
 
@@ -122,25 +124,26 @@ The reply is an interactive list, within Meta's limits (`research/2026-11-10-tec
 | row title   | The item's title                                                                                       | 24 code points |
 | row details | `p. 2 · <excerpt>`, or the kind and `still indexing` or `title match`                                  | 72 code points |
 
-Longer texts are cut and end in "…". With no result the answer is "Nothing matched “<query>” (only things you sent here are searched).", adding that only titles were matched when search by meaning is off.
+Longer texts are cut between whole characters (graphemes, so an emoji or accented letter is never split) and end in "…". With no result the answer is "Nothing matched “<query>” (only things you sent here are searched).", adding that only titles were matched when search by meaning is off.
 
 A `list_reply` names a row. The item is read from the sender's own vault only; another vault's ID, a deleted item or a malformed ID get "That item isn't in your library any more." Then:
 
 - A JPEG or PNG photo up to 5 MB is uploaded with `POST /{phone-number-id}/media` and sent as an image with its title as the caption.
 - Other photos (WebP, larger ones) and PDFs are sent as a document, with the title (and page, for example "Guest rules.pdf (p. 2)") as the caption and the title as the file name.
+- Other kinds (audio, video or web pages, which reach the vault only from a device library included in a WhatsApp session) are not sent; the answer is "This one can't be sent in WhatsApp. Open it in the app instead."
 - A note is sent as its text, cut at 4,096 code points with a pointer to the app.
 
 A CTA URL message follows: "Open it in Campus Recall. The link works once, for 10 minutes.", with the button "Open in app" and a fresh link. The pick is answered once, like any message.
 
 ## Opening the app (W6)
 
-`OPEN` and the CTA above create a link with `createOpenLink` (`whatsapp/links.ts`): 32 random bytes in base64url, stored in `wa_links` only as their SHA-256, valid for 10 minutes, for the sender's vault, and labelled with the masked number ("WhatsApp ••••1234", or "your WhatsApp account" when no number is known). The URL is `<origin>/api/v1/whatsapp/open/<token>`; the token is in the path because the app strips `token` from query strings. The endpoints are in [protocol.md](protocol.md):
+`OPEN` and the CTA above create a link with `createOpenLink` once the reply is claimed (so a retried job leaves no spare link) (`whatsapp/links.ts`): 32 random bytes in base64url, stored in `wa_links` only as their SHA-256, valid for 10 minutes, for the sender's vault, and labelled with the masked number ("WhatsApp ••••1234", or "your WhatsApp account" when no number is known). The URL is `<origin>/api/v1/whatsapp/open/<token>`; the token is in the path because the app strips `token` from query strings. The endpoints are in [protocol.md](protocol.md):
 
 - `GET` shows a small server-rendered page with the masked identity and a Continue button: no scripts or external resources, a strict CSP with a hash for its one style block, and a `same-origin` referrer policy. It uses nothing up, so link previews cannot spend the link. The referrer policy is not `no-referrer` because browsers then send `Origin: null` on the form's POST.
-- Continue posts to the same path. The server checks `Origin`, takes the link in one step (`takeLink`), replaces any session the browser had, opens a normal session for `wa:<BSUID>` with the label as `email`, and redirects to `/?signin=whatsapp#/settings`. Cookie, CSRF and expiry rules are those of every session.
+- Continue posts to the same path. The server checks `Origin`, takes the link in one step (`takeLink`) under the vault's owner lock (so a link taken after `DELETE ALL` finds nothing), replaces any session the browser had, opens a normal session for `wa:<BSUID>` with the label as `email`, and redirects to `/?signin=whatsapp#/settings`. Cookie, CSRF and expiry rules are those of every session.
 - An expired, used or unknown token gets a plain error page that says to send OPEN again, and opens nothing.
 
-In the app, `signin=whatsapp` is removed from the address and counts as an explicit Auto-sync activation, as returning from Google does; Settings shows "Signed in as WhatsApp ••••1234". The session body has `kind: "whatsapp"`. For such a session the app runs a read-only pass (`SyncEngine.browse`: the change feed and the usable index bundles, only `GET` requests), so the vault's items are listed under "In your cloud library" and found by the app's search before, and without, "Include this device's library". Including the device library is still the explicit choice of P02; after it, sync works as for any account.
+In the app, `signin=whatsapp` is removed from the address. The app then asks the server for its session, and only if that is a WhatsApp session (`kind: "whatsapp"`) does it count as an explicit Auto-sync activation, as returning from Google does, and an unfinished sign-out as done (the server replaced that session). The parameter alone, which any link can carry, changes nothing; Settings shows "Signed in as WhatsApp ••••1234". The session body has `kind: "whatsapp"`. For such a session the app runs a read-only pass (`SyncEngine.browse`: the change feed and the usable index bundles, only `GET` requests), so the vault's items are listed under "In your cloud library" and found by the app's search before, and without, "Include this device's library". The pass repeats on the usual sync schedule, so items sent to the bot meanwhile appear without a reload. Including the device library is still the explicit choice of P02; after it, sync works as for any account.
 
 ## Graph API client
 
@@ -203,7 +206,7 @@ Peak resident memory, summed over Chromium's processes (which counts shared page
 - `startWhatsAppWorker(options)` runs the worker in the server process and returns `{ runOnce, drain, reply, wake, stop }`; pass `wake` as the webhook's `onRecorded` so new messages start at once. `createWhatsAppIngest(options)` gives the same functions without the loop.
 - Indexing: pass `onIndexJob: createWhatsAppIndexer({ store, objects, engine, quotaBytes })` with a started `PlaywrightEngineHost({ distDir: '.cache/engine-host-dist', modelsDir: '.models' })`; close the host on shutdown. The deploy image needs Playwright's Chromium, the `.models` files and the engine host build (`npm run build:engine-host`).
 - Search: `engineHost.search(query, ownerItems, kind?)` returns `EngineSearchHit[]` (`{ globalId, itemId, segmentId, location, matchKind, excerpt?, score }`, best first, at most five), where `ownerItems = await ownerSearchItems(store, objects, ownerKey)` (`whatsapp/indexer.ts`) lists one `{ globalId, kind, indexVersion, segments }` per live item whose stored bundle still matches its original, title and a supported index version, as the app checks before it uses a synced bundle.
-- Worker hooks: `gate({ sender, wamid, message, plan })` sees every message first and returns true when it dealt with it; `onText(sender, text, message)` gets typed text that is not saved; `onSaved(sender, title)` replaces the "Saved" reply after the reply was claimed. The conversation sets all three.
+- Worker hooks: `gate({ sender, wamid, message, plan })` sees every message first and returns true when it dealt with it; `onText(sender, text, message)` gets typed text that is not saved; `onSaved(sender, title)` replaces the "Saved" reply after the reply was claimed; `canStore(sender)` is checked under the owner's lock just before an item is stored. The conversation sets all four. Batch windows use `schedule` (a real timer by default), and `flush()` also waits for confirmations already being sent, so `stop()` loses none.
 - Running the bot: `startWhatsAppBot({ ...workerOptions, engine?, origin, privacyUrl, contactEmail, noticeVersion })`, with `wake` as the webhook's `onRecorded`; the open-link routes are mounted whenever `createPilotHandler` has the `whatsapp` option.
 - Replies: `reply(sender, text)` sends one plain text message.
 
@@ -215,5 +218,5 @@ Tests: `pilot/tests/whatsapp-conversation.test.ts` (W1, commands, W9, batching, 
 - Clean-up of old `wa_inbound` rows, finished jobs and expired `wa_links` rows (expired links cannot be used, but stay until then).
 - A new notice version does not ask senders who agreed to an older one to agree again; the version is only stored.
 - Waiting confirmations live in the worker's memory: a crash or restart can lose one (never send it twice).
-- With several workers, a save from the same sender that is already running when `CONFIRM DELETE` is handled can still store that one item in the new, empty vault. One worker handles jobs one at a time, so this cannot happen there.
+- After a WhatsApp session includes a device library, the bot searches those items too; its "only things you sent here are searched" then means this vault.
 - Without an engine host, keyword search matches titles only, not note text.
