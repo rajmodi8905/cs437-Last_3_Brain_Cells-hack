@@ -93,3 +93,31 @@ The wire format, states and limits referred to below are defined in [protocol.md
 **Statement:** Before the announced end date users can export their cloud originals; pilot metrics are aggregate counts only and never include document names, text or queries.
 
 **Test:** Export a vault and compare hashes with the stored originals; inspect the metrics records and confirm they hold no document or query content.
+
+## WhatsApp channel (opt-in)
+
+These statements cover the optional WhatsApp channel ([whatsapp.md](whatsapp.md)): students message the bot's number and the pilot server stores what they send in a vault for that sender. A student who never messages the bot sees no change, and P01 to P15 are unchanged. Tests run against a stand-in for Meta's Graph API with webhook deliveries in Meta's documented format; claims about the real Meta number need their own evidence.
+
+### W2 — Exact original
+
+**Statement:** A file saved from WhatsApp is stored byte for byte: its SHA-256 equals the `sha256` WhatsApp sent with it, and downloading it through `GET /items/{globalId}/original` returns identical bytes.
+
+**Test:** Send a photo (base64 `sha256`, direct URL) and a PDF (looked up by media ID, hex `sha256`); compare the stored item's hash and the downloaded bytes with the source. Bytes that do not match are never stored.
+
+### W3 — No duplicates from retries
+
+**Statement:** A webhook delivered more than once, delivered concurrently, or a job retried after a crash or a lapsed lease never creates a second item or sends a second confirmation.
+
+**Test:** Deliver the same webhook twice and three times at once, run two workers together, crash a job after it published its item, and let a stalled worker finish after another took over its job; assert one item and one confirmation each time.
+
+### W4 — Signed deliveries only
+
+**Statement:** A webhook request with a missing or wrong `X-Hub-Signature-256` is rejected before its body is parsed, and nothing from it is stored or answered.
+
+**Test:** Send deliveries with no signature, a signature made with another secret, a malformed header and a body changed after signing; assert 401 or 403, no recorded message, no job, no item and no reply.
+
+### W5 — One vault per sender
+
+**Statement:** Each sender's items are stored only in that sender's vault (`wa:<business-scoped user ID>`), and cannot be read with another sender's session or a Google account's session.
+
+**Test:** Two senders each save a note; each vault holds only its own item and storage key; reading the first sender's original with the second sender's or a Google account's session returns `NOT_FOUND`, and their change feeds do not list it.
