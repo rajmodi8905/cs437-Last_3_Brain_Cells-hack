@@ -137,14 +137,7 @@ export class AutoSyncController {
     const entry = typeof location !== 'undefined' ? applyEntry() : undefined;
     if (entry?.from === 'insiit') this.set({ entry: 'insiit' });
     if (entry?.signIn) this.set({ signInResult: SIGN_IN_MESSAGES[entry.signIn] });
-    if (entry?.signedIn === 'whatsapp') {
-      // Following a WhatsApp link is an explicit choice to use Auto-sync, like returning from
-      // Google. The server replaced any earlier session on this browser, so an unfinished
-      // sign-out has nothing left to end. Including this device's library stays a separate
-      // choice (P02): only the WhatsApp vault's items are listed until then.
-      await this.services.preferences.set(SIGN_OUT_PENDING_KEY, false);
-      await this.services.preferences.set(ACTIVATED_KEY, true);
-    }
+    if (entry?.signedIn === 'whatsapp') await this.confirmWhatsAppSignIn();
     if (await this.services.preferences.get<boolean>(SIGN_OUT_PENDING_KEY)) {
       this.set({ signOutPending: true, error: SIGN_OUT_PENDING_MESSAGE });
       // Finishing an earlier sign-out does not wait for the user to turn sync on again.
@@ -154,6 +147,25 @@ export class AutoSyncController {
       }
     }
     if (await this.services.preferences.get<boolean>(ACTIVATED_KEY)) await this.begin();
+  }
+
+  /**
+   * After a WhatsApp link (`signin=whatsapp`), Auto-sync counts as chosen only if the server
+   * really has a WhatsApp session for this browser: the parameter alone, which any link can
+   * carry, changes nothing. With such a session the server replaced any earlier one, so an
+   * unfinished sign-out has nothing left to end. Including this device's library stays a
+   * separate choice (P02).
+   */
+  private async confirmWhatsAppSignIn() {
+    let session: SessionInfo | undefined;
+    try {
+      session = await this.api.restoreSession();
+    } catch {
+      return;
+    }
+    if (session?.kind !== 'whatsapp') return;
+    await this.services.preferences.set(SIGN_OUT_PENDING_KEY, false);
+    await this.services.preferences.set(ACTIVATED_KEY, true);
   }
 
   /** Explicit permission to contact the sync service; library inclusion is a separate choice. */
@@ -274,7 +286,12 @@ export class AutoSyncController {
     this.set({ status: 'signed-in', email: session.email, error: undefined });
     await this.refresh(snapshot);
     if (snapshot.included) this.startLoop();
-    else if (session.kind === 'whatsapp') void this.syncNow();
+    else if (session.kind === 'whatsapp') {
+      // The read-only pass runs now and then on the usual schedule, so items sent to the bot
+      // meanwhile appear without a reload.
+      this.startLoop();
+      void this.syncNow();
+    }
   }
 
   /** Opens an account's sync state on this device and the engine over it. */
