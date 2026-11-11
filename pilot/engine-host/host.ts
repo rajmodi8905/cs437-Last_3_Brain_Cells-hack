@@ -9,6 +9,7 @@ import {
   type SearchableSegment,
   type SourceLocation,
 } from '../../src/shared';
+import { pdfjs } from '../../src/shared/browser-assets';
 import { GEMMA, saveSearchModel } from '../../src/shared/searchModels';
 import { INDEX_VERSION, LocalEngine } from '../../src/engine';
 import { CampusRecallDatabase, DexieLibraryRepository } from '../../src/storage';
@@ -39,7 +40,11 @@ export type HostIndexOutcome =
       /** Time spent from save to a ready index, in milliseconds. */
       ms: number;
     }
-  | { ok: false; error: { code: string; message: string } };
+  | {
+      ok: false;
+      /** The app's own reason; `pageCount` is a refused PDF's number of pages, when readable. */
+      error: { code: string; message: string; pageCount?: number };
+    };
 
 /** One cloud item's bundle, as search reads it. */
 export interface HostSearchItem {
@@ -108,6 +113,20 @@ const failure = (cause: unknown): HostIndexOutcome => ({
         },
 });
 
+/** A PDF's number of pages, or undefined when it cannot be opened (damaged, password-protected). */
+export async function pdfPageCount(bytes: Uint8Array) {
+  try {
+    const task = (await pdfjs()).getDocument({ data: bytes.slice(), useWasm: false });
+    try {
+      return (await task.promise).numPages;
+    } finally {
+      await task.destroy();
+    }
+  } catch {
+    return undefined;
+  }
+}
+
 /** Index and search over an engine whose models are set up. One call runs at a time. */
 export function createEngineHost(
   engine: LocalEngine,
@@ -135,7 +154,17 @@ export function createEngineHost(
     if (!engine.ready) throw new Error('The engine host has no models set up.');
   }
 
+  /** Adds a refused PDF's page count, so a chat can say how far it is over the page limit. */
   async function index(input: HostIndexInput): Promise<HostIndexOutcome> {
+    const outcome = await indexOnce(input);
+    if (outcome.ok || input.kind !== 'pdf') return outcome;
+    const pageCount = await pdfPageCount(input.bytes);
+    return pageCount === undefined
+      ? outcome
+      : { ok: false, error: { ...outcome.error, pageCount } };
+  }
+
+  async function indexOnce(input: HostIndexInput): Promise<HostIndexOutcome> {
     checkModel();
     const started = now();
     let id: string | undefined;
