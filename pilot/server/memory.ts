@@ -66,6 +66,10 @@ export class MemoryPilotStore implements PilotStore {
   async deleteSession(id: string) {
     this.sessions.delete(id);
   }
+  async deleteOwnerSessions(ownerKey: string) {
+    for (const [id, session] of this.sessions)
+      if (session.ownerKey === ownerKey) this.sessions.delete(id);
+  }
   async createLoginAttempt(attempt: LoginAttempt) {
     this.attempts.set(attempt.id, attempt);
   }

@@ -13,12 +13,21 @@ const CREDENTIAL_PARAMS = new Set([
 
 const SIGN_IN_RESULTS = ['failed', 'cancelled', 'not-eligible'] as const;
 export type SignInResult = (typeof SIGN_IN_RESULTS)[number];
+/** Chat channels whose one-time links open a session. */
+const BOT_CHANNELS = ['whatsapp', 'telegram'] as const;
+export type BotChannel = (typeof BOT_CHANNELS)[number];
 
 export interface Entry {
   /** Set when the user arrived through the INSIIT link. */
   from?: 'insiit';
   /** Set when Google sign-in came back without a session. */
   signIn?: SignInResult;
+  /**
+   * Set when a WhatsApp or Telegram link just opened a session (`signin=whatsapp`,
+   * `signin=telegram`; a Telegram link opens the linked IITGN account). The session is the
+   * server's cookie; this only says the user chose to use Auto-sync, as returning from Google.
+   */
+  signedIn?: BotChannel;
   /** The address to show, without entry or credential parameters. */
   cleanUrl: string;
   strippedCredentials: boolean;
@@ -28,6 +37,7 @@ function clean(params: URLSearchParams) {
   let stripped = false;
   let from: Entry['from'];
   let signIn: Entry['signIn'];
+  let signedIn: Entry['signedIn'];
   for (const key of [...params.keys()]) {
     const lower = key.toLowerCase();
     const value = params.get(key);
@@ -39,11 +49,12 @@ function clean(params: URLSearchParams) {
       params.delete(key);
     } else if (lower === 'signin') {
       if (SIGN_IN_RESULTS.includes(value as SignInResult)) signIn = value as SignInResult;
+      else if (BOT_CHANNELS.includes(value as BotChannel)) signedIn = value as BotChannel;
       params.delete(key);
     }
   }
   const rest = params.toString();
-  return { stripped, from, signIn, rest: rest ? `?${rest}` : '' };
+  return { stripped, from, signIn, signedIn, rest: rest ? `?${rest}` : '' };
 }
 
 export function readEntry(href: string): Entry {
@@ -53,9 +64,11 @@ export function readEntry(href: string): Entry {
   const inHash = clean(new URLSearchParams(hashQuery));
   const from = query.from ?? inHash.from;
   const signIn = query.signIn ?? inHash.signIn;
+  const signedIn = query.signedIn ?? inHash.signedIn;
   return {
     ...(from ? { from } : {}),
     ...(signIn ? { signIn } : {}),
+    ...(signedIn ? { signedIn } : {}),
     cleanUrl: `${url.origin}${url.pathname}${query.rest}${route}${inHash.rest}`,
     strippedCredentials: query.stripped || inHash.stripped,
   };

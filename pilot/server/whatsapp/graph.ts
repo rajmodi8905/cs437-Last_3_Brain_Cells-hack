@@ -1,9 +1,10 @@
 /// <reference types="node" />
-// The few WhatsApp Cloud API (Graph API) calls the channel makes. Later slices add
-// interactive messages and sending media through the same client.
+// The few WhatsApp Cloud API (Graph API) calls the channel makes: reading inbound media,
+// uploading media to send back, and text, media and interactive messages.
 
 /** Where a reply goes: the BSUID when known (Meta accepts it since July 2026), else the number. */
-export type WhatsAppAddress = { bsuid: string } | { waId: string };
+/** A BSUID reply may carry the phone number too, for the fallback in `sendMessage`. */
+export type WhatsAppAddress = { bsuid: string; waId?: string } | { waId: string };
 
 export interface MediaInfo {
   url: string;
@@ -18,6 +19,20 @@ export interface GraphClient {
   /** The file at a media URL, read with the access token; refused beyond `maxBytes`. */
   download(url: string, maxBytes: number): Promise<Uint8Array>;
   sendText(to: WhatsAppAddress, text: string): Promise<void>;
+  /** Uploads a file for sending (`POST /{phone-number-id}/media`); returns its media ID. */
+  uploadMedia(bytes: Uint8Array, mimeType: string, filename: string): Promise<string>;
+  /** Sends uploaded media as a photo or a document, with an optional caption. */
+  sendMedia(to: WhatsAppAddress, media: OutgoingMedia): Promise<void>;
+  /** Sends an interactive message (`list`, `button` or `cta_url`) as Meta defines it. */
+  sendInteractive(to: WhatsAppAddress, interactive: Record<string, unknown>): Promise<void>;
+}
+
+export interface OutgoingMedia {
+  type: 'image' | 'document';
+  mediaId: string;
+  caption?: string;
+  /** Shown for documents. */
+  filename?: string;
 }
 
 /** A Graph API answer other than success; `status` 404 on a media URL means it expired. */
@@ -25,6 +40,10 @@ export class GraphError extends Error {
   constructor(
     readonly status: number,
     message: string,
+    /** Meta's reason (code, subcode, message, details), for the log only. */
+    readonly detail?: string,
+    /** Meta's error code, when it sent one. */
+    readonly code?: number,
   ) {
     super(message);
     this.name = 'GraphError';
@@ -53,15 +72,37 @@ export interface GraphClientOptions {
   fetch?: typeof fetch;
 }
 
+/** Meta's "recipient phone number not in allowed list" (test numbers). */
+const RECIPIENT_NOT_ALLOWED = 131030;
+
 export function createGraphClient(options: GraphClientOptions): GraphClient {
   const fetchImpl = options.fetch ?? fetch;
   const api = `${(options.baseUrl ?? 'https://graph.facebook.com').replace(/\/$/, '')}/${
     options.version ?? GRAPH_API_VERSION
   }`;
+  const phone = `${api}/${encodeURIComponent(options.phoneNumberId)}`;
   const auth = { authorization: `Bearer ${options.accessToken}` };
   const failed = async (res: Response, what: string) => {
-    await res.body?.cancel().catch(() => undefined);
-    return new GraphError(res.status, `${what} failed with HTTP ${res.status}.`);
+    // Meta's error object says why (code, message, details); it never echoes the token.
+    const body = (await res.text().catch(() => '')).slice(0, 2000);
+    let reason = '';
+    let code: number | undefined;
+    try {
+      const error = (JSON.parse(body) as { error?: Record<string, unknown> }).error ?? {};
+      const details = (error.error_data as { details?: unknown } | undefined)?.details;
+      if (typeof error.code === 'number') code = error.code;
+      reason = [error.code, error.error_subcode, error.message, details]
+        .filter((part) => part !== undefined && part !== '')
+        .join(' / ');
+    } catch {
+      // Not JSON: keep only the status.
+    }
+    return new GraphError(
+      res.status,
+      `${what} failed with HTTP ${res.status}.`,
+      reason || undefined,
+      code,
+    );
   };
 
   return {
@@ -109,21 +150,61 @@ export function createGraphClient(options: GraphClientOptions): GraphClient {
       return bytes;
     },
 
-    async sendText(to, text) {
-      const res = await fetchImpl(`${api}/${encodeURIComponent(options.phoneNumberId)}/messages`, {
+    sendText(to, text) {
+      return sendMessage(to, { type: 'text', text: { body: text, preview_url: false } });
+    },
+
+    async uploadMedia(bytes, mimeType, filename) {
+      const form = new FormData();
+      form.set('messaging_product', 'whatsapp');
+      form.set('type', mimeType);
+      form.set('file', new Blob([new Uint8Array(bytes)], { type: mimeType }), filename);
+      const res = await fetchImpl(`${phone}/media`, { method: 'POST', headers: auth, body: form });
+      if (!res.ok) throw await failed(res, 'Uploading media');
+      const body = (await res.json()) as Record<string, unknown>;
+      if (typeof body.id !== 'string') throw new GraphError(502, 'Media upload gave no ID.');
+      return body.id;
+    },
+
+    sendMedia(to, media) {
+      const content =
+        media.type === 'document'
+          ? {
+              id: media.mediaId,
+              ...(media.caption ? { caption: media.caption } : {}),
+              ...(media.filename ? { filename: media.filename } : {}),
+            }
+          : { id: media.mediaId, ...(media.caption ? { caption: media.caption } : {}) };
+      return sendMessage(to, { type: media.type, [media.type]: content });
+    },
+
+    sendInteractive(to, interactive) {
+      return sendMessage(to, { type: 'interactive', interactive });
+    },
+  };
+
+  async function sendMessage(to: WhatsAppAddress, message: Record<string, unknown>) {
+    const post = (address: Record<string, string>) =>
+      fetchImpl(`${phone}/messages`, {
         method: 'POST',
         headers: { ...auth, 'content-type': 'application/json' },
         body: JSON.stringify({
           messaging_product: 'whatsapp',
           recipient_type: 'individual',
-          // Meta reads `recipient` as a BSUID and `to` as a phone number.
-          ...('bsuid' in to ? { recipient: to.bsuid } : { to: to.waId }),
-          type: 'text',
-          text: { body: text, preview_url: false },
+          ...address,
+          ...message,
         }),
       });
-      if (!res.ok) throw await failed(res, 'Sending a message');
-      await res.body?.cancel().catch(() => undefined);
-    },
-  };
+    // Meta reads `recipient` as a BSUID and `to` as a phone number.
+    let res = await post('bsuid' in to ? { recipient: to.bsuid } : { to: to.waId });
+    if (!res.ok && 'bsuid' in to && to.waId) {
+      const error = await failed(res, 'Sending a message');
+      // A test number's allowed list (131030) matches phone numbers only, so a BSUID is
+      // refused there even for an allowed phone: send the same message once to the number.
+      if (error.code !== RECIPIENT_NOT_ALLOWED) throw error;
+      res = await post({ to: to.waId });
+    }
+    if (!res.ok) throw await failed(res, 'Sending a message');
+    await res.body?.cancel().catch(() => undefined);
+  }
 }

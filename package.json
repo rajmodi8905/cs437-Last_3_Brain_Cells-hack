@@ -33,6 +33,8 @@
     "test:pilot": "vitest run --config pilot/vitest.config.ts",
     "test:pilot:storage": "node pilot/scripts/test-storage.mjs",
     "pilot:server": "node pilot/scripts/build-server.mjs && node .cache/pilot-server/main.mjs",
+    "pilot:whatsapp-local": "node pilot/scripts/whatsapp-local.mjs",
+    "pilot:telegram-local": "node pilot/scripts/telegram-local.mjs",
     "test:pilot:e2e": "playwright test --config pilot/playwright.config.ts",
     "test:pilot:models": "playwright test --config pilot/real-model.config.ts"
   },

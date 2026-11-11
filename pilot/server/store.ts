@@ -17,6 +17,12 @@ export interface Session {
   ownerKey: string;
   email: string;
   expiresAt: number;
+  /**
+   * `telegram` for a session opened from a Telegram bot's one-time app link rather than the
+   * account's own sign-in. It works like any session of that account, but cannot link a Telegram
+   * user (docs/pilot/telegram.md).
+   */
+  via?: 'telegram';
 }
 
 /** An upload in progress. Its chunk bytes live in the object store under `stagingKey`. */
@@ -68,6 +74,8 @@ export interface PilotStore {
   createSession(session: Session): Promise<void>;
   getSession(id: string): Promise<Session | undefined>;
   deleteSession(id: string): Promise<void>;
+  /** Ends every session of one account, as when a WhatsApp sender erases everything. */
+  deleteOwnerSessions(ownerKey: string): Promise<void>;
   createLoginAttempt(attempt: LoginAttempt): Promise<void>;
   /** Returns and removes the attempt in one step, so it can be used only once. */
   takeLoginAttempt(id: string): Promise<LoginAttempt | undefined>;

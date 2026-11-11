@@ -119,6 +119,72 @@ const MIGRATIONS = [
   );
   CREATE INDEX wa_jobs_due ON wa_jobs (run_after, created_at) WHERE state IN ('pending', 'running');
   `,
+  // 4: WhatsApp consent, commands and app links (docs/pilot/whatsapp.md). Times in seconds.
+  `
+  ALTER TABLE wa_senders ADD COLUMN notice_sent_at bigint;
+  ALTER TABLE wa_senders ADD COLUMN consented_at bigint;
+  ALTER TABLE wa_senders ADD COLUMN notice_version text;
+  ALTER TABLE wa_senders ADD COLUMN stopped_at bigint;
+  ALTER TABLE wa_senders ADD COLUMN delete_requested_at bigint;
+  CREATE TABLE wa_links (
+    token_hash text PRIMARY KEY,
+    owner_key text NOT NULL,
+    label text NOT NULL,
+    created_at bigint NOT NULL,
+    expires_at bigint NOT NULL
+  );
+  CREATE INDEX wa_links_owner ON wa_links (owner_key);
+  CREATE INDEX wa_inbound_owner ON wa_inbound (owner_key);
+  CREATE INDEX sessions_owner ON sessions (owner_key);
+  `,
+  // 5: the Telegram channel (docs/pilot/telegram.md). Its bot state has the same layout as the
+  // WhatsApp tables, so the same store code serves both; in these tables `wamid` holds the
+  // Telegram message key and `wa_id` the @username. Times in seconds.
+  `
+  CREATE TABLE tg_senders (LIKE wa_senders INCLUDING ALL);
+  CREATE TABLE tg_inbound (LIKE wa_inbound INCLUDING ALL);
+  CREATE TABLE tg_jobs (LIKE wa_jobs INCLUDING ALL);
+  CREATE TABLE tg_links (LIKE wa_links INCLUDING ALL);
+  CREATE TABLE tg_state (
+    name text PRIMARY KEY,
+    value bigint NOT NULL
+  );
+  CREATE TABLE tg_picks (
+    token text PRIMARY KEY,
+    owner_key text NOT NULL,
+    global_id text NOT NULL,
+    location jsonb NOT NULL,
+    expires_at bigint NOT NULL
+  );
+  CREATE INDEX tg_picks_owner ON tg_picks (owner_key);
+  CREATE INDEX tg_picks_expiry ON tg_picks (expires_at);
+  `,
+  // 6: Telegram users link their IITGN Google account, and the bot saves into that account's own
+  // vault (docs/pilot/telegram.md). `tg_links` now holds one-time login and app links per
+  // Telegram user; links made before this step opened a separate Telegram vault and are dropped.
+  // `sessions.via` marks a session opened from a Telegram app link. Times in seconds.
+  `
+  CREATE TABLE tg_accounts (
+    user_id text PRIMARY KEY,
+    owner_key text NOT NULL,
+    email text NOT NULL,
+    linked_at bigint NOT NULL
+  );
+  CREATE INDEX tg_accounts_owner ON tg_accounts (owner_key);
+  DELETE FROM tg_links;
+  ALTER TABLE tg_links ADD COLUMN purpose text NOT NULL DEFAULT 'open';
+  ALTER TABLE tg_links ADD COLUMN user_id text;
+  ALTER TABLE tg_links ADD COLUMN message_id bigint;
+  CREATE INDEX tg_links_user ON tg_links (user_id);
+  CREATE TABLE tg_saved (
+    owner_key text NOT NULL,
+    global_id text NOT NULL,
+    user_id text NOT NULL,
+    saved_at bigint NOT NULL,
+    PRIMARY KEY (owner_key, global_id)
+  );
+  ALTER TABLE sessions ADD COLUMN via text;
+  `,
 ];
 
 const SCHEMA = /^[a-z_][a-z0-9_]{0,62}$/;
@@ -135,6 +201,15 @@ export const BACKUP_TABLES = [
   'wa_senders',
   'wa_inbound',
   'wa_jobs',
+  'wa_links',
+  'tg_senders',
+  'tg_inbound',
+  'tg_jobs',
+  'tg_links',
+  'tg_state',
+  'tg_picks',
+  'tg_accounts',
+  'tg_saved',
 ] as const;
 export type BackupTable = (typeof BACKUP_TABLES)[number];
 /** The database version this code writes and can restore. */
@@ -331,13 +406,20 @@ export class PostgresPilotStore implements PilotStore {
 
   async createSession(session: Session) {
     await this.database.query(
-      'INSERT INTO sessions (id, csrf, owner_key, email, expires_at) VALUES ($1, $2, $3, $4, $5)',
-      [session.id, session.csrf, session.ownerKey, session.email, session.expiresAt],
+      'INSERT INTO sessions (id, csrf, owner_key, email, expires_at, via) VALUES ($1, $2, $3, $4, $5, $6)',
+      [
+        session.id,
+        session.csrf,
+        session.ownerKey,
+        session.email,
+        session.expiresAt,
+        session.via ?? null,
+      ],
     );
   }
-  async getSession(id: string) {
+  async getSession(id: string): Promise<Session | undefined> {
     const { rows } = await this.database.query(
-      'SELECT id, csrf, owner_key, email, expires_at FROM sessions WHERE id = $1',
+      'SELECT id, csrf, owner_key, email, expires_at, via FROM sessions WHERE id = $1',
       [id],
     );
     const row = rows[0];
@@ -348,11 +430,15 @@ export class PostgresPilotStore implements PilotStore {
           ownerKey: row.owner_key,
           email: row.email,
           expiresAt: Number(row.expires_at),
+          ...(row.via === 'telegram' ? { via: 'telegram' as const } : {}),
         }
       : undefined;
   }
   async deleteSession(id: string) {
     await this.database.query('DELETE FROM sessions WHERE id = $1', [id]);
+  }
+  async deleteOwnerSessions(ownerKey: string) {
+    await this.database.query('DELETE FROM sessions WHERE owner_key = $1', [ownerKey]);
   }
 
   async createLoginAttempt(attempt: LoginAttempt) {

@@ -4,6 +4,10 @@ Status 8 November 2026: the pilot was deployed on 6 November, and [PR #35](https
 
 Export deadline and compute cutoff: **6 December 2026, 17:47 IST (12:17 UTC)**. Users can export cloud originals and metadata through Settings. See the [deployment runbook](deployment.md), [pilot privacy policy](privacy-policy.md) and [terms](terms-and-conditions.md).
 
+The opt-in WhatsApp channel for the 24 November demo is described in [whatsapp.md](whatsapp.md), with its [Meta setup and local trial](whatsapp-setup.md), [privacy page](whatsapp-privacy.md), deployment section in the [runbook](deployment.md) and [demo record](2026-11-23-whatsapp-demo.md). It is off unless its settings are given; the local checker stack keeps it off.
+
+The demo moved to the opt-in Telegram channel ([telegram.md](telegram.md)), where a student links the bot to their IITGN account and it saves into that account's own cloud library; it reuses the WhatsApp channel's core: [BotFather setup and local trial](telegram-setup.md), [privacy page](telegram-privacy.md) and the Telegram section of the [runbook](deployment.md). It is also off unless its settings are given, and the WhatsApp channel keeps working alongside it.
+
 For a fresh-laptop local check, run `docker compose up --build --wait` at the repository root and open http://localhost:4600. Run all checker tests with `./test.sh` (10 GB allocated to Docker for the isolated real-model test browser). The root Compose stack uses persistent local PostgreSQL/Azurite and visibly labelled development sign-in, without Azure/Google credentials; it does not deploy or modify the live pilot. See the [root quickstart](../../README.md#run-locally).
 
 Read in this order:
