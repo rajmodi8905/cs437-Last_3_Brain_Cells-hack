@@ -341,8 +341,11 @@ if (engineHostConfig && (bot || tgBot)) {
       appLinks: origin.protocol === 'https:',
       privacyUrl: telegram.privacyUrl,
       contactEmail: telegram.contactEmail,
+      // Timing lines have no detail, so nothing is printed after them.
       log: (message, detail) =>
-        console.error(message, detail instanceof Error ? describeFailure(detail) : detail),
+        detail === undefined
+          ? console.error(message)
+          : console.error(message, detail instanceof Error ? describeFailure(detail) : detail),
     });
     const me = await telegramApi.getMe().catch((cause: unknown) => {
       console.error('Telegram getMe failed', describeFailure(cause));

@@ -110,6 +110,12 @@ export interface TelegramApi {
   sendDocument(chatId: number, file: UploadFile, caption?: string): Promise<void>;
   /** Acknowledges a button tap, optionally with a short notice shown in the app. */
   answerCallbackQuery(callbackQueryId: string, text?: string): Promise<void>;
+  /**
+   * Shows "typing…" in the chat; Telegram clears it after 5 seconds or at the next message. Not
+   * spaced like a message, an HTTP 429 is not waited out (the next one is a few seconds away),
+   * and it gives up after 5 seconds, so it cannot hold up the reply it comes before.
+   */
+  sendChatAction(chatId: number, action: 'typing'): Promise<void>;
 }
 
 /** A Bot API call that did not succeed. Never holds a URL or the token. */
@@ -191,6 +197,7 @@ export function createTelegramApi(options: TelegramApiOptions): TelegramApi {
     method: string,
     body: Record<string, unknown> | FormData,
     signal?: AbortSignal,
+    retries = maxRetries,
   ): Promise<T> {
     for (let attempt = 0; ; attempt++) {
       const form = body instanceof FormData;
@@ -224,7 +231,7 @@ export function createTelegramApi(options: TelegramApiOptions): TelegramApi {
       );
       if (
         res.status !== 429 ||
-        attempt >= maxRetries ||
+        attempt >= retries ||
         !Number.isFinite(retryAfter) ||
         retryAfter > maxRetryAfter
       )
@@ -397,6 +404,9 @@ export function createTelegramApi(options: TelegramApiOptions): TelegramApi {
         callback_query_id: callbackQueryId,
         ...(text ? { text } : {}),
       });
+    },
+    async sendChatAction(chatId, action) {
+      await call('sendChatAction', { chat_id: chatId, action }, AbortSignal.timeout(5000), 0);
     },
   };
 }

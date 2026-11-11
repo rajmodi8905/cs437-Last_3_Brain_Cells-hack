@@ -25,6 +25,7 @@ import {
   createTelegramBot,
   createTelegramIndexer,
   refuseTelegramUser,
+  startTelegramBot,
   type TelegramBotOptions,
 } from '../server/telegram/bot';
 import { createTelegramIntake, type AllowedUsers } from '../server/telegram/intake';
@@ -233,30 +234,34 @@ describe.each(backends)('Telegram bot: %s', (name, available, open) => {
     const base = `http://127.0.0.1:${(server.address() as AddressInfo).port}/api/v1`;
     const engine = over.engine === false ? undefined : (over.engine ?? new FakeEngineHost());
     const timers = new Set<() => void>();
+    const botOptions = (
+      apiFor: TelegramApi = api,
+      extra: Partial<TelegramBotOptions> = {},
+    ): TelegramBotOptions => ({
+      ...stores,
+      api: apiFor,
+      quotaBytes,
+      ...(engine
+        ? {
+            engine,
+            onIndexJob: createTelegramIndexer({ ...stores, engine, quotaBytes }),
+          }
+        : {}),
+      origin: ORIGIN,
+      privacyUrl: PRIVACY_URL,
+      contactEmail: CONTACT,
+      batchMs: 60_000,
+      schedule: (run) => {
+        timers.add(run);
+        return () => timers.delete(run);
+      },
+      nowSeconds: () => clock.now,
+      log,
+      ...over.bot,
+      ...extra,
+    });
     const makeBot = (apiFor: TelegramApi = api, extra: Partial<TelegramBotOptions> = {}) =>
-      createTelegramBot({
-        ...stores,
-        api: apiFor,
-        quotaBytes,
-        ...(engine
-          ? {
-              engine,
-              onIndexJob: createTelegramIndexer({ ...stores, engine, quotaBytes }),
-            }
-          : {}),
-        origin: ORIGIN,
-        privacyUrl: PRIVACY_URL,
-        contactEmail: CONTACT,
-        batchMs: 60_000,
-        schedule: (run) => {
-          timers.add(run);
-          return () => timers.delete(run);
-        },
-        nowSeconds: () => clock.now,
-        log,
-        ...over.bot,
-        ...extra,
-      });
+      createTelegramBot(botOptions(apiFor, extra));
     const telegram = makeBot();
     /** Posts updates to the webhook, as Telegram does, without running a worker. */
     const deliver = async (updates: Record<string, unknown>[]) => {
@@ -472,6 +477,7 @@ describe.each(backends)('Telegram bot: %s', (name, available, open) => {
       google,
       telegram,
       makeBot,
+      botOptions,
       intake,
       timers,
       deliver,
@@ -1983,6 +1989,241 @@ describe.each(backends)('Telegram bot: %s', (name, available, open) => {
       expect(t.tg.textsTo(USER_A.id).at(-1)).toBe(
         'Nothing matched “cricket” in your Campus Recall library. Try other words.',
       );
+    });
+  });
+
+  describe('Typing and slow searches', () => {
+    const pause = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+    /** An engine whose searches take `searchMs`, and wait for any index call still running. */
+    class SlowEngine extends FakeEngineHost {
+      searchMs = 0;
+      indexing: Promise<void> = Promise.resolve();
+      async search(query: string, items: Parameters<FakeEngineHost['search']>[1]) {
+        await this.indexing;
+        await pause(this.searchMs);
+        return super.search(query, items);
+      }
+    }
+    const QUERY = 'where is the confidential exam schedule';
+    const SEARCH_LINE = /^Telegram search took (\d+\.\d) s \(waited (\d+\.\d) s for the engine\)/;
+
+    it('shows typing during a slow search, stops before the reply, and logs only times', async () => {
+      const engine = new SlowEngine();
+      const t = await setup({ engine });
+      await t.link();
+      await t.send(textUpdate('note Exam schedule is on the notice board'));
+      const bot = t.makeBot(t.api, { typingEveryMs: 40, waitNoticeMs: 60_000 });
+      engine.searchMs = 300;
+      const before = t.tg.state.chatActions.length;
+      await t.deliver([textUpdate(QUERY)]);
+      await bot.drain();
+      const reply = t.tg.to(USER_A.id).at(-1)!;
+      expect(reply.text).toContain(`Best matches for “${QUERY}”`);
+      const typing = t.tg.state.chatActions.slice(before);
+      // Sent at once and about every 40 ms of the 300 ms search, all before the reply.
+      expect(typing.length).toBeGreaterThanOrEqual(4);
+      for (const action of typing) {
+        expect(action).toMatchObject({ chatId: USER_A.id, action: 'typing' });
+        expect(action.at).toBeLessThanOrEqual(reply.at);
+      }
+      await pause(200);
+      expect(t.tg.state.chatActions.length - before).toBe(typing.length);
+      // No file was being indexed, so no "still processing" message.
+      expect(t.tg.textsTo(USER_A.id)).not.toContain(TELEGRAM_REPLIES.searchWaiting);
+      const lines = t.errors.filter((line) => SEARCH_LINE.test(line));
+      const [, total, waited] = SEARCH_LINE.exec(lines.at(-1)!)!;
+      expect(Number(waited)).toBeGreaterThanOrEqual(0.3);
+      expect(Number(total)).toBeGreaterThanOrEqual(Number(waited));
+      expect(t.errors.some((line) => /^Telegram index job took \d+\.\d s/.test(line))).toBe(true);
+      for (const line of t.errors) {
+        expect(line).not.toContain('confidential');
+        expect(line).not.toContain(String(USER_A.id));
+        expect(line).not.toContain('student_a');
+        expect(line).not.toContain(BOT_TOKEN);
+      }
+    });
+
+    it('says once that a search is waiting for a file being indexed, before the results', async () => {
+      const engine = new SlowEngine();
+      const t = await setup({ engine });
+      await t.link();
+      // An item already searchable by meaning, so the search needs the (busy) engine.
+      await t.send(textUpdate('note Exam hall is B12'));
+      const bot = t.makeBot(t.api, { typingEveryMs: 30, waitNoticeMs: 100 });
+      const earlier = t.tg.textsTo(USER_A.id).length;
+      let release!: () => void;
+      engine.indexing = new Promise<void>((resolve) => (release = resolve));
+      engine.onIndex = () => engine.indexing;
+      const pdf = pdfBytes('Exam schedule. ');
+      t.tg.addFile('exam', pdf);
+      await t.deliver([
+        documentUpdate({
+          fileId: 'exam',
+          size: pdf.length,
+          mimeType: 'application/pdf',
+          fileName: 'Exam schedule.pdf',
+        }),
+      ]);
+      expect(await bot.runIngestOnce()).toBe(true);
+      // The file is being indexed (the engine is busy) when the student searches.
+      const indexing = bot.runIndexOnce!();
+      await t.deliver([textUpdate(QUERY)]);
+      const before = t.tg.state.chatActions.length;
+      const searching = bot.runIngestOnce();
+      await pause(400);
+      expect(t.tg.textsTo(USER_A.id).slice(earlier)).toEqual([TELEGRAM_REPLIES.searchWaiting]);
+      // "typing…" kept coming while the student waited.
+      expect(t.tg.state.chatActions.length - before).toBeGreaterThanOrEqual(5);
+      release();
+      await Promise.all([indexing, searching]);
+      await bot.flush();
+      const texts = t.tg.textsTo(USER_A.id).slice(earlier);
+      expect(texts.filter((text) => text === TELEGRAM_REPLIES.searchWaiting)).toHaveLength(1);
+      const results = texts.findIndex((text) => text.startsWith('Best matches for'));
+      expect(results).toBeGreaterThan(texts.indexOf(TELEGRAM_REPLIES.searchWaiting));
+      expect(TELEGRAM_REPLIES.searchWaiting).toBe(
+        'Searching… a file you just sent is still being processed, this can take a moment.',
+      );
+      const [, , waited] = SEARCH_LINE.exec(t.errors.find((line) => SEARCH_LINE.test(line))!)!;
+      expect(Number(waited)).toBeGreaterThanOrEqual(0.4);
+      for (const line of t.errors) expect(line).not.toContain('confidential');
+      // Nothing more once both are done.
+      const after = t.tg.state.chatActions.length;
+      await pause(100);
+      expect(t.tg.state.chatActions.length).toBe(after);
+    });
+
+    it("does not call another student's file being indexed “a file you just sent”", async () => {
+      const engine = new SlowEngine();
+      const t = await setup({ engine });
+      await t.link();
+      await t.link(USER_B, EMAIL_Y);
+      await t.send(textUpdate('note Exam hall is B12'));
+      const bot = t.makeBot(t.api, { typingEveryMs: 30, waitNoticeMs: 100 });
+      const earlier = t.tg.textsTo(USER_A.id).length;
+      let release!: () => void;
+      engine.indexing = new Promise<void>((resolve) => (release = resolve));
+      engine.onIndex = () => engine.indexing;
+      const pdf = pdfBytes('Lab manual. ');
+      t.tg.addFile('lab', pdf);
+      await t.deliver([
+        documentUpdate(
+          { fileId: 'lab', size: pdf.length, mimeType: 'application/pdf', fileName: 'Lab.pdf' },
+          USER_B,
+        ),
+      ]);
+      expect(await bot.runIngestOnce()).toBe(true);
+      // The other student's file keeps the engine busy while this student searches.
+      const indexing = bot.runIndexOnce!();
+      await t.deliver([textUpdate(QUERY)]);
+      const before = t.tg.state.chatActions.filter((action) => action.chatId === USER_A.id).length;
+      const searching = bot.runIngestOnce();
+      await pause(400);
+      // Still "typing…" for the student who is waiting, but no message about a file of theirs.
+      expect(t.tg.textsTo(USER_A.id).slice(earlier)).toEqual([]);
+      expect(
+        t.tg.state.chatActions.filter((action) => action.chatId === USER_A.id).length - before,
+      ).toBeGreaterThanOrEqual(5);
+      release();
+      await Promise.all([indexing, searching]);
+      await bot.flush();
+      const texts = t.tg.textsTo(USER_A.id).slice(earlier);
+      expect(texts).not.toContain(TELEGRAM_REPLIES.searchWaiting);
+      expect(texts.at(-1)).toContain('Best matches for');
+    });
+
+    it('answers a message at once while the running bot is still indexing a file', async () => {
+      const engine = new SlowEngine();
+      const t = await setup({ engine });
+      await t.link();
+      let release!: () => void;
+      engine.indexing = new Promise<void>((resolve) => (release = resolve));
+      engine.onIndex = () => engine.indexing;
+      const running = startTelegramBot({
+        ...t.botOptions(t.api, { typingEveryMs: 30 }),
+        idleMs: 20,
+      });
+      let stopped = false;
+      const stop = async () => {
+        if (stopped) return;
+        stopped = true;
+        release();
+        await running.stop();
+      };
+      cleanups.push(stop);
+      const waitFor = async (check: () => boolean | Promise<boolean>) => {
+        for (let tries = 0; tries < 200 && !(await check()); tries++) await pause(10);
+        expect(await check()).toBe(true);
+      };
+      const pdf = pdfBytes('Exam schedule. ');
+      t.tg.addFile('exam', pdf);
+      await t.deliver([
+        documentUpdate({
+          fileId: 'exam',
+          size: pdf.length,
+          mimeType: 'application/pdf',
+          fileName: 'Exam schedule.pdf',
+        }),
+      ]);
+      running.wake();
+      // The file is saved, and its index job is running (and held) with "typing…" in the chat.
+      await waitFor(async () => (await t.liveItems()).length === 1);
+      await waitFor(() => t.tg.state.chatActions.length >= 2);
+      const [item] = await t.liveItems();
+      expect(item.index).toBeUndefined();
+      await t.deliver([textUpdate('/help')]);
+      running.wake();
+      await waitFor(() => t.tg.textsTo(USER_A.id).includes(TELEGRAM_REPLIES.help(CONTACT)));
+      expect((await t.liveItems())[0].index).toBeUndefined();
+      // Once the engine is free the file becomes searchable, and stopping leaves nothing behind.
+      release();
+      await waitFor(async () => (await t.liveItems())[0].index !== undefined);
+      await stop();
+      const after = t.tg.state.chatActions.length;
+      await pause(100);
+      expect(t.tg.state.chatActions.length).toBe(after);
+    });
+
+    it('answers as usual when Telegram refuses every chat action', async () => {
+      const t = await setup();
+      await t.link();
+      await t.send(textUpdate('note Exam schedule is on the notice board'));
+      t.tg.state.failChatActions = 1000;
+      const before = t.tg.state.chatActions.length;
+      await t.send(textUpdate('exam schedule'));
+      expect(t.tg.textsTo(USER_A.id).at(-1)).toContain('Best matches for “exam schedule”');
+      expect(t.tg.state.chatActions).toHaveLength(before);
+      expect(t.errors.some((line) => line.startsWith('Telegram chat action failed'))).toBe(true);
+      expect(t.errors.some((line) => line.includes(BOT_TOKEN))).toBe(false);
+    });
+
+    it('answers as usual when chat actions get no answer at all, and logs that once', async () => {
+      const engine = new SlowEngine();
+      const t = await setup({ engine });
+      await t.link();
+      await t.send(textUpdate('note Exam schedule is on the notice board'));
+      let attempts = 0;
+      const broken: TelegramApi = {
+        ...t.api,
+        sendChatAction: async () => {
+          attempts++;
+          throw new Error('no answer');
+        },
+      };
+      const bot = t.makeBot(broken, { typingEveryMs: 20 });
+      engine.searchMs = 150;
+      const logged = () =>
+        t.errors.filter((line) => line.startsWith('Telegram chat action failed')).length;
+      const before = logged();
+      await t.deliver([textUpdate('exam schedule')]);
+      await bot.drain();
+      expect(t.tg.textsTo(USER_A.id).at(-1)).toContain('Best matches for “exam schedule”');
+      // Tried again and again during the search, logged once, and not after the reply.
+      expect(attempts).toBeGreaterThanOrEqual(3);
+      expect(logged() - before).toBe(1);
+      const after = attempts;
+      await pause(100);
+      expect(attempts).toBe(after);
     });
   });
 

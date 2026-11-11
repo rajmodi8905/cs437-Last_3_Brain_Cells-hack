@@ -139,6 +139,9 @@ export const TELEGRAM_REPLIES = {
   /** Under results that include items not searchable by meaning yet. */
   stillIndexing:
     'Items marked “still indexing” matched by their title only; their contents are not searchable yet.',
+  /** Before a search that waits for a file being indexed (the engine does one job at a time). */
+  searchWaiting:
+    'Searching… a file you just sent is still being processed, this can take a moment.',
   noResults: (query: string, keywordOnly: boolean) =>
     `Nothing matched ${quote(query)} in your Campus Recall library.${
       keywordOnly

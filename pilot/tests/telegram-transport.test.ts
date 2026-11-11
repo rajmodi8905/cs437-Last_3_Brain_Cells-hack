@@ -210,6 +210,32 @@ describe('Telegram Bot API client', () => {
     });
   });
 
+  it('sends a chat action without message spacing, and does not wait out HTTP 429 for it', async () => {
+    const tg = await fake();
+    const sleeps: number[] = [];
+    const api = createTelegramApi({
+      token: BOT_TOKEN,
+      baseUrl: tg.base,
+      minIntervalMs: 1000,
+      sleep: async (ms) => void sleeps.push(ms),
+    });
+    await api.sendMessage(USER_A.id, 'first');
+    await api.sendChatAction(USER_A.id, 'typing');
+    await api.sendChatAction(USER_A.id, 'typing');
+    expect(tg.state.chatActions).toMatchObject([
+      { chatId: USER_A.id, action: 'typing' },
+      { chatId: USER_A.id, action: 'typing' },
+    ]);
+    expect(sleeps).toEqual([]);
+    tg.state.chatActionRateLimits.push(3);
+    await expect(api.sendChatAction(USER_A.id, 'typing')).rejects.toMatchObject({
+      status: 429,
+      retryAfter: 3,
+    });
+    expect(sleeps).toEqual([]);
+    expect(tg.state.chatActions).toHaveLength(2);
+  });
+
   it('stops a download as soon as it passes the limit', async () => {
     const tg = await fake();
     const api = createTelegramApi({ token: BOT_TOKEN, baseUrl: tg.base });

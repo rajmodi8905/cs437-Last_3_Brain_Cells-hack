@@ -214,6 +214,13 @@ export interface TelegramBotOptions {
   retryDelaySeconds?: (attempt: number) => number;
   senderBurst?: number;
   senderPerMinute?: number;
+  /** "typing…" is sent again this often while a search or an index job runs; 4 seconds. */
+  typingEveryMs?: number;
+  /**
+   * A search still waiting for the engine after this long, while a file is being indexed, first
+   * gets a short "still processing" message; 5 seconds.
+   */
+  waitNoticeMs?: number;
   log?: (message: string, detail?: unknown) => void;
 }
 
@@ -239,11 +246,16 @@ export const createTelegramIndexer = (options: Omit<WhatsAppIndexerOptions, 'glo
   createWhatsAppIndexer({ ...options, globalIdOf: (job) => telegramGlobalId(job.wamid) });
 
 const errorText = (cause: unknown) => (cause instanceof Error ? cause.message : String(cause));
+/** Seconds with one decimal, for log lines. */
+const seconds = (ms: number) => (ms / 1000).toFixed(1);
 
 export function createTelegramBot(options: TelegramBotOptions) {
   const { bot, state, store, objects, api } = options;
   const now = options.nowSeconds ?? (() => Math.floor(Date.now() / 1000));
-  const log = options.log ?? ((message, detail) => console.error(message, detail));
+  const log =
+    options.log ??
+    ((message, detail) =>
+      detail === undefined ? console.error(message) : console.error(message, detail));
   const appLinks = options.appLinks ?? true;
   const channel = createTelegramChannel({
     api,
@@ -262,6 +274,40 @@ export function createTelegramBot(options: TelegramBotOptions) {
     ownerKey: account.ownerKey,
   });
   const failed = (cause: unknown) => log('Telegram reply failed', describeFailure(cause));
+  const typingEveryMs = options.typingEveryMs ?? 4000;
+  const waitNoticeMs = options.waitNoticeMs ?? 5000;
+  /**
+   * Per account: index jobs running in this process now, and when the last one ended
+   * (performance.now). A search is told it is waiting only for a file of its own account.
+   */
+  const indexingNow = new Map<string, number>();
+  const lastIndexEnd = new Map<string, number>();
+
+  /**
+   * Shows "typing…" in a chat now and every `typingEveryMs` until the returned stop is called.
+   * A failing chat action is logged once and never thrown. One is sent at a time, and stop waits
+   * for the one still being sent, so "typing…" can never arrive after the reply.
+   */
+  function typing(chatId: number) {
+    let inFlight: Promise<void> | undefined;
+    let logged = false;
+    const send = () => {
+      if (inFlight) return;
+      inFlight = api
+        .sendChatAction(chatId, 'typing')
+        .catch((cause: unknown) => {
+          if (!logged) log('Telegram chat action failed', describeFailure(cause));
+          logged = true;
+        })
+        .finally(() => (inFlight = undefined));
+    };
+    send();
+    const timer = setInterval(send, typingEveryMs);
+    return async () => {
+      clearInterval(timer);
+      await inFlight;
+    };
+  }
   const unlinkInput = (sender: TelegramSender) => ({
     store,
     objects,
@@ -533,12 +579,12 @@ export function createTelegramBot(options: TelegramBotOptions) {
   }
 
   /** Search results for an owner: by meaning when the engine is there, plus keyword matches. */
-  const search = (ownerKey: string, query: string) =>
+  const search = (ownerKey: string, query: string, engine = options.engine) =>
     searchOwner(
       {
         store,
         objects,
-        engine: options.engine,
+        engine,
         supportedIndexVersions: options.supportedIndexVersions,
         log,
         fallbackMessage: 'Telegram search fell back to keywords',
@@ -553,11 +599,51 @@ export function createTelegramBot(options: TelegramBotOptions) {
     key: string,
     query: string,
   ) {
-    const { rows, keywordOnly } = await search(account.ownerKey, clip(query, 500));
-    await answer(key, async () => {
-      if (!rows.length) return say(sender, TELEGRAM_REPLIES.noResults(query, keywordOnly))();
-      await channel.sendResults(addressOf(sender, account), query, rows, keywordOnly);
-    });
+    const started = performance.now();
+    const stopTyping = typing(Number(sender.userId));
+    let engineMs = 0;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    let notice: Promise<unknown> | undefined;
+    // The engine host runs one job at a time, so a search can wait behind a file being indexed;
+    // the time spent in the engine is measured, and a long wait for a file of this account is
+    // explained once.
+    const base = options.engine;
+    const engine: EngineHost | undefined = base && {
+      index: (input) => base.index(input),
+      close: () => base.close(),
+      search: async (text, items, kind) => {
+        const asked = performance.now();
+        timer ??= setTimeout(() => {
+          const own =
+            (indexingNow.get(account.ownerKey) ?? 0) > 0 ||
+            (lastIndexEnd.get(account.ownerKey) ?? -Infinity) > asked;
+          if (own) notice = say(sender, TELEGRAM_REPLIES.searchWaiting)().catch(failed);
+        }, waitNoticeMs);
+        try {
+          return await base.search(text, items, kind);
+        } finally {
+          clearTimeout(timer);
+          engineMs += performance.now() - asked;
+        }
+      },
+    };
+    try {
+      const { rows, keywordOnly } = await search(account.ownerKey, clip(query, 500), engine);
+      // The "still processing" message and the last "typing…" are out before the results.
+      await notice;
+      await stopTyping();
+      await answer(key, async () => {
+        if (!rows.length) return say(sender, TELEGRAM_REPLIES.noResults(query, keywordOnly))();
+        await channel.sendResults(addressOf(sender, account), query, rows, keywordOnly);
+      });
+    } finally {
+      clearTimeout(timer);
+      await stopTyping();
+      // No query text and no user: only how long it took.
+      log(
+        `Telegram search took ${seconds(performance.now() - started)} s (waited ${seconds(engineMs)} s for the engine)`,
+      );
+    }
   }
 
   /** The bytes to store; files are fetched from Telegram and checked against the declared size. */
@@ -726,41 +812,74 @@ export function createTelegramBot(options: TelegramBotOptions) {
     await say(sender, reply)().catch(failed);
   }
 
-  const runner = createJobRunner({
-    bot,
-    kinds,
-    now,
-    leaseSeconds: options.leaseSeconds ?? 300,
-    maxAttempts: options.maxAttempts ?? 6,
-    retryDelay: options.retryDelaySeconds ?? defaultRetryDelay,
-    log,
-    label: 'Telegram',
-    async run(job) {
-      if (job.kind === 'ingest') {
-        const wait = senders.take(job.ownerKey);
-        if (wait) return bot.deferJob(job, now() + wait);
-        await ingest(job);
-      } else {
-        await options.onIndexJob!(job);
-        await bot.finishJob(job);
+  /**
+   * An index job, timed and logged, with "typing…" in the chat of the student who sent the file
+   * while it runs (a search they type meanwhile waits for the engine).
+   */
+  async function indexJob(job: BotJob) {
+    const started = performance.now();
+    const inbound = await bot.getInbound(job.wamid);
+    const sender = inbound && (await bot.getSender(inbound.senderId));
+    const stopTyping = sender ? typing(Number(sender.userId)) : async () => undefined;
+    indexingNow.set(job.ownerKey, (indexingNow.get(job.ownerKey) ?? 0) + 1);
+    try {
+      await options.onIndexJob!(job);
+    } finally {
+      const left = (indexingNow.get(job.ownerKey) ?? 1) - 1;
+      if (left > 0) indexingNow.set(job.ownerKey, left);
+      else indexingNow.delete(job.ownerKey);
+      lastIndexEnd.set(job.ownerKey, performance.now());
+      if (lastIndexEnd.size > 1000) {
+        // Only ends newer than a search still running matter; old ones go.
+        const cutoff = performance.now() - 600_000;
+        for (const [owner, at] of lastIndexEnd) if (at < cutoff) lastIndexEnd.delete(owner);
       }
-    },
-    async gaveUp(job, cause) {
-      if (job.kind === 'ingest') {
-        const inbound = await bot.getInbound(job.wamid);
-        const sender = inbound && (await bot.getSender(inbound.senderId));
-        // A file Telegram would not hand over, or a problem on our side (storage, search).
-        const reply =
-          cause instanceof TelegramDownloadError
-            ? TELEGRAM_REPLIES.downloadFailed
-            : TELEGRAM_REPLIES.serverError;
-        if (inbound && sender) await answer(job.wamid, say(sender, reply));
-      } else await indexFailed(job, cause);
-    },
-  });
+      await stopTyping();
+      log(`Telegram index job took ${seconds(performance.now() - started)} s`);
+    }
+  }
+
+  const makeRunner = (kinds: JobKind[]) =>
+    createJobRunner({
+      bot,
+      kinds,
+      now,
+      leaseSeconds: options.leaseSeconds ?? 300,
+      maxAttempts: options.maxAttempts ?? 6,
+      retryDelay: options.retryDelaySeconds ?? defaultRetryDelay,
+      log,
+      label: 'Telegram',
+      async run(job) {
+        if (job.kind === 'ingest') {
+          const wait = senders.take(job.ownerKey);
+          if (wait) return bot.deferJob(job, now() + wait);
+          await ingest(job);
+        } else {
+          await indexJob(job);
+          await bot.finishJob(job);
+        }
+      },
+      async gaveUp(job, cause) {
+        if (job.kind === 'ingest') {
+          const inbound = await bot.getInbound(job.wamid);
+          const sender = inbound && (await bot.getSender(inbound.senderId));
+          // A file Telegram would not hand over, or a problem on our side (storage, search).
+          const reply =
+            cause instanceof TelegramDownloadError
+              ? TELEGRAM_REPLIES.downloadFailed
+              : TELEGRAM_REPLIES.serverError;
+          if (inbound && sender) await answer(job.wamid, say(sender, reply));
+        } else await indexFailed(job, cause);
+      },
+    });
+  const runner = makeRunner(kinds);
 
   return {
     ...runner,
+    /** Runs one due message (ingest job), leaving index jobs to `runIndexOnce`. */
+    runIngestOnce: makeRunner(['ingest']).runOnce,
+    /** Runs one due index job; undefined without an indexer. */
+    runIndexOnce: options.onIndexJob ? makeRunner(['index']).runOnce : undefined,
     /** Sends every waiting confirmation now and waits for those already being sent. */
     flush: () => batches.flush(),
     search,
@@ -786,16 +905,29 @@ export function refuseTelegramUser(
 /** The bot as one unit in this process; `stop` sends any waiting confirmations first. */
 export function startTelegramBot(options: TelegramBotOptions & { idleMs?: number }) {
   const telegram = createTelegramBot(options);
-  const loop = startJobLoop(telegram.runOnce, {
+  const loopOptions = {
     idleMs: options.idleMs ?? 5000,
-    log: options.log ?? ((message, detail) => console.error(message, detail)),
+    log: options.log ?? ((message: string, detail?: unknown) => console.error(message, detail)),
     label: 'Telegram',
-  });
+  };
+  // Index jobs run in their own loop, so a search is never queued behind a file being indexed:
+  // it runs at once (with "typing…") and only its engine call waits.
+  const indexRunOnce = telegram.runIndexOnce;
+  const indexLoop = indexRunOnce ? startJobLoop(indexRunOnce, loopOptions) : undefined;
+  const ingestLoop = startJobLoop(async () => {
+    const worked = await telegram.runIngestOnce();
+    // A saved file may have queued an index job.
+    if (worked) indexLoop?.wake();
+    return worked;
+  }, loopOptions);
   return {
     ...telegram,
-    wake: loop.wake,
+    wake() {
+      ingestLoop.wake();
+      indexLoop?.wake();
+    },
     async stop() {
-      await loop.stop();
+      await Promise.all([ingestLoop.stop(), indexLoop?.stop()]);
       await telegram.flush();
     },
   };
