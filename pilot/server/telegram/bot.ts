@@ -10,9 +10,10 @@ import { createHash, randomBytes } from 'node:crypto';
 import { LIMITS } from '../../../src/shared';
 import { validateCloudItem } from '../../contract';
 import { createSaveBatches, realSchedule } from '../chat/batch';
+import { classifyIndexFailure } from '../chat/index-failure';
 import { clip, type ChatChannel } from '../chat/channel';
 import { NOTE_MIME, storeChatItem } from '../chat/items';
-import { PermanentJobError, createJobRunner, defaultRetryDelay, startJobLoop } from '../chat/jobs';
+import { createJobRunner, defaultRetryDelay, startJobLoop } from '../chat/jobs';
 import { searchOwner } from '../chat/search';
 import { sendBack } from '../chat/send-back';
 import { RateLimiter } from '../limits';
@@ -31,9 +32,10 @@ import {
   type TgUser,
 } from './api';
 import { eraseTelegramItems, unlinkTelegramUser } from './erase';
-import { createLoginLink, createOpenLink, maskEmail, telegramName } from './links';
+import { createLoginLink, createOpenLink, telegramName } from './links';
 import { createdAtOf, planTelegramMessage, commandOf, type TelegramPlan } from './plan';
 import { describeFailure } from './poller';
+import { TELEGRAM_REPLIES } from './replies';
 import {
   telegramGlobalId,
   type TelegramAccount,
@@ -51,81 +53,7 @@ export const TELEGRAM_LIMITS = { text: 4096, caption: 1024, callbackData: 64 };
 const MAX_PHOTO_SEND_BYTES = 10 * 1024 * 1024;
 const SEND_AS_PHOTO = new Set(['image/jpeg', 'image/png']);
 
-const quote = (query: string) => `“${clip(query, 60)}”`;
-
-export const TELEGRAM_REPLIES = {
-  notice: (privacyUrl: string) =>
-    [
-      'Hi! This is Campus Recall. Log in with your IITGN Google account, then send or forward photos, PDFs and notes here to keep them in your Campus Recall library, and type anything to search it.',
-      '',
-      '• What you send here is saved to your Campus Recall cloud library, with the searches you type.',
-      '• Our server stores and processes your files to make them searchable, and sees your searches.',
-      '• Telegram keeps bot chats on its own servers. Chats with bots are not end-to-end encrypted.',
-      '• You must be 18 or older to use this.',
-      '• /logout unlinks this chat, and /delete erases what you saved here.',
-      '',
-      `Privacy: ${privacyUrl}`,
-      '',
-      'Nothing is saved until you log in. The login link works once, for 10 minutes.',
-    ].join('\n'),
-  loginButton: 'Log in with IITGN',
-  loginFirst: 'Log in first with /login.',
-  linked: (email: string) =>
-    `Linked to ${maskEmail(email)}. Forward or send files to save them; type anything to search.`,
-  alreadyLinked: (email: string) =>
-    `You're logged in as ${maskEmail(email)}. Send /help to see what I can do.`,
-  loginWhileLinked: (email: string) =>
-    `You're already logged in as ${maskEmail(email)}. To use another account, send /logout first, then /login.`,
-  loggedOut: (email: string) =>
-    `Logged out: this chat is no longer linked to ${maskEmail(email)}, and its unused links no longer work. What you saved stays in your Campus Recall library. Send /login to link again.`,
-  help: (contactEmail: string) =>
-    [
-      "Log in with /login, then send or forward photos, PDFs and notes to save them to your Campus Recall library. Photos keep their full quality when you send them as a file. Start a message with 'note ' to save it as a note, or send a single link. Type anything else to search your library.",
-      '',
-      '/login: link your IITGN account',
-      '/open: open your library in the app',
-      '/logout: unlink this chat',
-      '/privacy: how your data is handled',
-      '/stop and /resume: pause or resume the bot',
-      '/delete: erase what you saved here',
-      '',
-      `Questions: ${contactEmail}`,
-    ].join('\n'),
-  privacy: (privacyUrl: string) => `How Campus Recall handles your data: ${privacyUrl}`,
-  stopped:
-    "Stopped. I won't save anything or reply until you send /resume. What you saved is kept.",
-  started: "Welcome back. I'm saving and replying again.",
-  alreadyOn: "I'm already on. Send /help to see what I can do.",
-  resumeFirst: 'Send /resume first.',
-  deleteAsk:
-    "This erases the items you saved here through Telegram from your Campus Recall library, on every device, and logs this chat out. Items you added in the app stay; to remove everything, use Remove cloud library in the app's Settings. Tap the button within 10 minutes to go ahead.",
-  deleteButton: 'Yes, erase my Telegram items',
-  deleted: (count: number) =>
-    `Done. ${count === 1 ? '1 item' : `${count} items`} you saved through Telegram ${count === 1 ? 'is' : 'are'} erased from your Campus Recall library, and this chat is logged out. Everything else in your library stays; to remove it all, use Remove cloud library in the app's Settings.`,
-  deleteExpired:
-    'That request has expired. Send /delete again if you still want to erase what you saved here.',
-  deleteNotAsked: 'Send /delete first if you want to erase what you saved here.',
-  open: 'Open your Campus Recall library in the app. The link works once, for 10 minutes.',
-  openButton: 'Open in app',
-  noLinks:
-    "Links need the pilot's HTTPS address. In a local trial, start it again with --origin https://<tunnel host>, then send /login or /open.",
-  savedMany: (titles: string[]) =>
-    `Saved ${titles.length} items to Campus Recall: ${titles.map((t) => clip(t, 40)).join(', ')}`,
-  results: (query: string) => `Best matches for ${quote(query)}. Tap one to get it back.`,
-  keywordOnly: 'Matched by keyword only right now.',
-  noResults: (query: string, keywordOnly: boolean) =>
-    `Nothing matched ${quote(query)} in your Campus Recall library.${
-      keywordOnly ? ' Search by meaning is off right now, so only titles were matched.' : ''
-    }`,
-  gone: "That item isn't in your library any more.",
-  expired: 'That result has expired. Search again to get it.',
-  appOnly: "This one can't be sent in Telegram. Open it in the app instead.",
-  openCta: 'Open it in Campus Recall. The link works once, for 10 minutes.',
-  noteTooLong: '(Cut short here; open it in the app to read the rest.)',
-  unknownCommand: "I don't know that command. Send /help to see what I can do.",
-  notOpen:
-    "Campus Recall on Telegram isn't open to everyone yet, so nothing you send here is saved. Thanks for your interest!",
-};
+export { TELEGRAM_REPLIES } from './replies';
 
 /** Button data: the delete confirmation and a search result (`p:<token>`). */
 const DELETE = 'delete';
@@ -184,6 +112,9 @@ export function createTelegramChannel(input: {
         '',
         ...rows.map((row, i) => `${i + 1}. ${clip(row.title, 80)} (${row.description})`),
         ...(keywordOnly ? ['', TELEGRAM_REPLIES.keywordOnly] : []),
+        ...(!keywordOnly && rows.some((row) => row.description.endsWith('still indexing'))
+          ? ['', TELEGRAM_REPLIES.stillIndexing]
+          : []),
       ].join('\n');
       const keyboard: InlineKeyboard = {
         inline_keyboard: rows.map((row, i) => [
@@ -293,11 +224,21 @@ class Refusal extends Error {
   }
 }
 
+/** Getting a file from Telegram failed; retried, and then the user is asked to send it again. */
+class TelegramDownloadError extends Error {
+  constructor(message: string, options?: { cause?: unknown }) {
+    super(message, options);
+    this.name = 'TelegramDownloadError';
+  }
+}
+
 type SavePlan = Extract<TelegramPlan, { action: 'save' }>;
 
 /** The indexer for Telegram items, whose global IDs come from Telegram message keys. */
 export const createTelegramIndexer = (options: Omit<WhatsAppIndexerOptions, 'globalIdOf'>) =>
   createWhatsAppIndexer({ ...options, globalIdOf: (job) => telegramGlobalId(job.wamid) });
+
+const errorText = (cause: unknown) => (cause instanceof Error ? cause.message : String(cause));
 
 export function createTelegramBot(options: TelegramBotOptions) {
   const { bot, state, store, objects, api } = options;
@@ -536,7 +477,7 @@ export function createTelegramBot(options: TelegramBotOptions) {
         });
         return undefined;
       default:
-        await reply(TELEGRAM_REPLIES.unknownCommand);
+        await reply(TELEGRAM_REPLIES.unknownCommand(`/${command.name}`));
         return undefined;
     }
   }
@@ -622,14 +563,24 @@ export function createTelegramBot(options: TelegramBotOptions) {
   /** The bytes to store; files are fetched from Telegram and checked against the declared size. */
   async function contentOf(plan: SavePlan) {
     if (plan.kind === 'note') {
-      if (Array.from(plan.text).length > LIMITS.maxTextCodePoints)
-        throw new Refusal(REPLIES.longNote);
+      const characters = Array.from(plan.text).length;
+      if (characters > LIMITS.maxTextCodePoints)
+        throw new Refusal(TELEGRAM_REPLIES.longNote(characters));
       return { bytes: new TextEncoder().encode(plan.text), mimeType: NOTE_MIME };
     }
     const limit = plan.kind === 'image' ? LIMITS.maxImageBytes : LIMITS.maxPdfBytes;
-    const tooBig = new Refusal(plan.kind === 'image' ? REPLIES.bigImage : REPLIES.bigPdf);
+    const tooBig = (bytes: number | undefined, byTelegram = false) =>
+      new Refusal(
+        TELEGRAM_REPLIES.tooBig({
+          kind: plan.kind,
+          ...(plan.fileName ? { name: plan.fileName } : {}),
+          ...(bytes !== undefined ? { bytes } : {}),
+          byTelegram,
+        }),
+      );
     // Telegram states the size up front; a file over the app's limit is not even looked up.
-    if (plan.media.fileSize !== undefined && plan.media.fileSize > limit) throw tooBig;
+    if (plan.media.fileSize !== undefined && plan.media.fileSize > limit)
+      throw tooBig(plan.media.fileSize);
     let file;
     try {
       file = await api.getFile(plan.media.fileId);
@@ -640,23 +591,24 @@ export function createTelegramBot(options: TelegramBotOptions) {
         cause.status === 400 &&
         /too big/i.test(cause.description ?? '')
       )
-        throw tooBig;
-      throw cause;
+        throw tooBig(plan.media.fileSize, true);
+      throw new TelegramDownloadError(errorText(cause), { cause });
     }
-    if (!file.filePath) throw new Error('Telegram gave no file path for this file.');
+    if (!file.filePath)
+      throw new TelegramDownloadError('Telegram gave no file path for this file.');
     const size = file.fileSize ?? plan.media.fileSize;
-    if (size !== undefined && size > limit) throw tooBig;
+    if (size !== undefined && size > limit) throw tooBig(size);
     let bytes;
     try {
       bytes = await api.download(file.filePath, limit);
     } catch (cause) {
-      if (cause instanceof MediaTooLargeError) throw tooBig;
-      throw cause;
+      if (cause instanceof MediaTooLargeError) throw tooBig(size);
+      throw new TelegramDownloadError(errorText(cause), { cause });
     }
     // Telegram sends no hash: the size it declared must match, and the item's SHA-256 is computed
     // here from these bytes. Retried: a damaged download is fetched again next time.
     if (size !== undefined && bytes.length !== size)
-      throw new Error('Downloaded bytes do not match the size Telegram declared.');
+      throw new TelegramDownloadError('Downloaded bytes do not match the size Telegram declared.');
     return { bytes, mimeType: plan.mimeType };
   }
 
@@ -717,7 +669,14 @@ export function createTelegramBot(options: TelegramBotOptions) {
     };
     if (!validateCloudItem(description).ok) {
       await bot.finishJob(job);
-      return answer(key, say(sender, content.bytes.length ? REPLIES.failed : REPLIES.empty));
+      const name = plan.kind === 'note' ? undefined : plan.fileName;
+      return answer(
+        key,
+        say(
+          sender,
+          content.bytes.length ? TELEGRAM_REPLIES.notSaved(name) : TELEGRAM_REPLIES.empty(name),
+        ),
+      );
     }
     const outcome = await storeChatItem({
       bot,
@@ -741,21 +700,30 @@ export function createTelegramBot(options: TelegramBotOptions) {
     }
     if ('full' in outcome) {
       await bot.finishJob(job);
-      return answer(key, say(sender, REPLIES.full));
+      const name = plan.kind === 'note' ? undefined : plan.fileName;
+      return answer(key, say(sender, TELEGRAM_REPLIES.full(name, options.quotaBytes)));
     }
     if ('existing' in outcome && !outcome.existing.deleted) await track();
     return saved('item' in outcome ? outcome.item : outcome.existing);
   }
 
-  /** Tells the student once that a saved item could not be made searchable. */
-  async function indexFailed(job: BotJob, text?: string) {
+  /**
+   * Tells the student once that a saved item could not be made searchable, and why: the reason
+   * the engine host gave (too many pages, a password, …) with what to do about it.
+   */
+  async function indexFailed(job: BotJob, cause: unknown) {
     const failedJob = await bot.getJob(job.id);
     if (failedJob?.state !== 'failed' || failedJob.attempts !== job.attempts) return;
     const inbound = await bot.getInbound(job.wamid);
     const sender = inbound && (await bot.getSender(inbound.senderId));
     const item = await store.getItem(job.ownerKey, telegramGlobalId(job.wamid));
     if (!sender || !item || item.deleted) return;
-    await say(sender, text ?? REPLIES.notSearchable(item.title))().catch(failed);
+    const reply = TELEGRAM_REPLIES.notSearchable(
+      classifyIndexFailure(cause),
+      item,
+      options.quotaBytes,
+    );
+    await say(sender, reply)().catch(failed);
   }
 
   const runner = createJobRunner({
@@ -781,8 +749,13 @@ export function createTelegramBot(options: TelegramBotOptions) {
       if (job.kind === 'ingest') {
         const inbound = await bot.getInbound(job.wamid);
         const sender = inbound && (await bot.getSender(inbound.senderId));
-        if (inbound && sender) await answer(job.wamid, say(sender, REPLIES.failed));
-      } else await indexFailed(job, cause instanceof PermanentJobError ? cause.reply : undefined);
+        // A file Telegram would not hand over, or a problem on our side (storage, search).
+        const reply =
+          cause instanceof TelegramDownloadError
+            ? TELEGRAM_REPLIES.downloadFailed
+            : TELEGRAM_REPLIES.serverError;
+        if (inbound && sender) await answer(job.wamid, say(sender, reply));
+      } else await indexFailed(job, cause);
     },
   });
 

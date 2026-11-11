@@ -166,7 +166,7 @@ These statements cover the optional Telegram channel ([telegram.md](telegram.md)
 
 **Statement:** A file saved from Telegram is stored byte for byte in the linked account: its size equals the size Telegram declared, its SHA-256 is computed by the server from the downloaded bytes, and `GET /items/{globalId}/original` with the account's own session returns identical bytes. Of a photo's sizes the largest is saved. Files over the app's limits are refused before they are downloaded.
 
-**Test:** Send a photo in two sizes and a PDF document; only the largest size and the PDF are fetched, and the stored hash, size and downloaded bytes equal the source. A download one byte short is not stored and the job is retried, then stored correctly. A PDF or photo declared over 20 MB, or one Telegram refuses as too big, is refused with the app's message and nothing is downloaded. Voice notes, audio, video, stickers, Office documents and locations are refused with the same reasons as WhatsApp. Forwarded text (`forward_origin` or `forward_date`), `note ` and `save ` messages and a single link are saved as notes (and recorded as saved through Telegram), a forwarded `/help` is saved rather than answered, and other typed text is a search.
+**Test:** Send a photo in two sizes and a PDF document; only the largest size and the PDF are fetched, and the stored hash, size and downloaded bytes equal the source. A download one byte short is not stored and the job is retried, then stored correctly. A PDF or photo declared over 20 MB, or one Telegram refuses as too big, is refused with a reply giving its size (when known) and the limit, and nothing is downloaded. Voice notes, audio, video, stickers, Office documents and locations are refused with a reply naming what was sent and what can be saved. Forwarded text (`forward_origin` or `forward_date`), `note ` and `save ` messages and a single link are saved as notes (and recorded as saved through Telegram), a forwarded `/help` is saved rather than answered, and other typed text is a search.
 
 ### T3 — No duplicates from redelivery
 
@@ -196,7 +196,7 @@ These statements cover the optional Telegram channel ([telegram.md](telegram.md)
 
 **Statement:** The server indexes a Telegram item with the same engine host and indexer as WhatsApp items (W7) and publishes its bundle into the linked account like `PUT /items/{id}/index`.
 
-**Test:** With a stand-in engine, a saved PDF gets a published bundle for its current original under the account's vault and epoch, made from its title and bytes. The real-model checks of W7 cover the engine host itself.
+**Test:** With a stand-in engine, a saved PDF gets a published bundle for its current original under the account's vault and epoch, made from its title and bytes. When the engine refuses an original (with the app's own messages: over 50 pages, password, unreadable PDF, undecodable image, nothing searchable) or the quota has no room for the index, the item stays saved and the user is told once, with the file name, the reason and what to do; for a 71-page PDF: "Lecture 19_01_04_2026.pdf" has 71 pages — search works on PDFs up to 50 pages. It's still saved; split it into smaller PDFs to make it searchable. The real-model checks of W7 cover the engine host itself, and with the real engine a 71-page PDF and a damaged PDF give those replies.
 
 ### T8 — Search in Telegram
 

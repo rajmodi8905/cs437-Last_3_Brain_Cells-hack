@@ -1,9 +1,10 @@
 // What to do with one Telegram message, from its content alone: save it (and how), refuse it with
-// the same plain reasons as WhatsApp, treat it as a command, or search with it.
+// a plain reason that says what was sent and what can be saved, treat it as a command, or search
+// with it.
 import { MAX_TITLE_CODE_POINTS } from '../../contract';
 import { firstWords, noteFromText } from '../chat/items';
-import { REPLIES } from '../whatsapp/ingest';
 import type { TgFile, TgMessage, TgPhotoSize } from './api';
+import { TELEGRAM_REPLIES as REPLIES, fileTypeOf } from './replies';
 
 const IMAGE_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp']);
 
@@ -18,7 +19,15 @@ export type TelegramPlan =
   | { action: 'refuse'; reply: string }
   | { action: 'command'; name: string; payload: string }
   | { action: 'text'; text: string }
-  | { action: 'save'; kind: 'image' | 'pdf'; media: TgMedia; mimeType: string; title: string }
+  | {
+      action: 'save';
+      kind: 'image' | 'pdf';
+      media: TgMedia;
+      mimeType: string;
+      title: string;
+      /** A document's own file name, for replies about it. */
+      fileName?: string;
+    }
   | { action: 'save'; kind: 'note'; text: string; title: string; sourceUrl?: string };
 
 /** Forwarded from someone or somewhere else. */
@@ -83,25 +92,32 @@ export function planTelegramMessage(message: TgMessage): TelegramPlan {
   // Checked before `document`: Telegram also fills `document` for GIFs (animations).
   if (message.voice) return { action: 'refuse', reply: REPLIES.voice };
   if (message.audio) return { action: 'refuse', reply: REPLIES.audio };
-  if (message.video || message.video_note || message.animation)
-    return { action: 'refuse', reply: REPLIES.video };
+  if (message.animation) return { action: 'refuse', reply: REPLIES.gif };
+  if (message.video_note) return { action: 'refuse', reply: REPLIES.videoNote };
+  if (message.video) return { action: 'refuse', reply: REPLIES.video };
   if (message.sticker) return { action: 'refuse', reply: REPLIES.sticker };
   if (message.document && typeof message.document.file_id === 'string') {
     const mimeType = mimeOf(message.document);
     const kind =
       mimeType === 'application/pdf' ? 'pdf' : IMAGE_TYPES.has(mimeType) ? 'image' : undefined;
-    if (!kind) return { action: 'refuse', reply: REPLIES.file };
+    const fileName =
+      typeof message.document.file_name === 'string' && message.document.file_name.trim()
+        ? message.document.file_name.trim()
+        : undefined;
+    if (!kind)
+      return { action: 'refuse', reply: REPLIES.unsupportedFile(fileTypeOf(fileName, mimeType)) };
     const fallback = `Telegram ${kind === 'pdf' ? 'PDF' : 'photo'} ${day(message)}`;
     return {
       action: 'save',
       kind,
       media: media(message.document),
       mimeType,
-      title: titleFrom(message.caption, message.document.file_name, fallback),
+      title: titleFrom(message.caption, fileName, fallback),
+      ...(fileName ? { fileName } : {}),
     };
   }
   if (message.location || message.venue) return { action: 'refuse', reply: REPLIES.location };
-  if (message.contact) return { action: 'refuse', reply: REPLIES.contacts };
+  if (message.contact) return { action: 'refuse', reply: REPLIES.contact };
   if (typeof message.text === 'string') {
     const command = commandOf(message);
     if (command) return { action: 'command', ...command };
