@@ -10,7 +10,7 @@ import {
   type ChangeItem,
   type SessionInfo,
 } from './api';
-import { applyEntry, type SignInResult } from './entry';
+import { applyEntry, type BotChannel, type SignInResult } from './entry';
 import { IndexedDbSyncStateStore } from './idb';
 import { repositoryLibrary } from './library';
 import { SyncEngine, type SyncResult } from './sync';
@@ -137,7 +137,7 @@ export class AutoSyncController {
     const entry = typeof location !== 'undefined' ? applyEntry() : undefined;
     if (entry?.from === 'insiit') this.set({ entry: 'insiit' });
     if (entry?.signIn) this.set({ signInResult: SIGN_IN_MESSAGES[entry.signIn] });
-    if (entry?.signedIn === 'whatsapp') await this.confirmWhatsAppSignIn();
+    if (entry?.signedIn) await this.confirmBotSignIn(entry.signedIn);
     if (await this.services.preferences.get<boolean>(SIGN_OUT_PENDING_KEY)) {
       this.set({ signOutPending: true, error: SIGN_OUT_PENDING_MESSAGE });
       // Finishing an earlier sign-out does not wait for the user to turn sync on again.
@@ -150,20 +150,20 @@ export class AutoSyncController {
   }
 
   /**
-   * After a WhatsApp link (`signin=whatsapp`), Auto-sync counts as chosen only if the server
-   * really has a WhatsApp session for this browser: the parameter alone, which any link can
-   * carry, changes nothing. With such a session the server replaced any earlier one, so an
-   * unfinished sign-out has nothing left to end. Including this device's library stays a
-   * separate choice (P02).
+   * After a WhatsApp or Telegram link (`signin=whatsapp`, `signin=telegram`), Auto-sync counts as
+   * chosen only if the server really has a session of that same channel for this browser: the
+   * parameter alone, which any link can carry, changes nothing. With such a session the server
+   * replaced any earlier one, so an unfinished sign-out has nothing left to end. Including this
+   * device's library stays a separate choice (P02).
    */
-  private async confirmWhatsAppSignIn() {
+  private async confirmBotSignIn(channel: BotChannel) {
     let session: SessionInfo | undefined;
     try {
       session = await this.api.restoreSession();
     } catch {
       return;
     }
-    if (session?.kind !== 'whatsapp') return;
+    if (session?.kind !== channel) return;
     await this.services.preferences.set(SIGN_OUT_PENDING_KEY, false);
     await this.services.preferences.set(ACTIVATED_KEY, true);
   }
@@ -286,7 +286,7 @@ export class AutoSyncController {
     this.set({ status: 'signed-in', email: session.email, error: undefined });
     await this.refresh(snapshot);
     if (snapshot.included) this.startLoop();
-    else if (session.kind === 'whatsapp') {
+    else if (session.kind === 'whatsapp' || session.kind === 'telegram') {
       // The read-only pass runs now and then on the usual schedule, so items sent to the bot
       // meanwhile appear without a reload.
       this.startLoop();
@@ -354,8 +354,8 @@ export class AutoSyncController {
       try {
         const session = this.session;
         const result = await this.withSyncLock(() =>
-          // A WhatsApp vault lists its items before (and without) including this device.
-          session?.kind === 'whatsapp' && !this.view.included
+          // A bot vault lists its items before (and without) including this device.
+          (session?.kind === 'whatsapp' || session?.kind === 'telegram') && !this.view.included
             ? this.engine!.browse(session.vault.epoch)
             : this.engine!.runOnce(),
         );

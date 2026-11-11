@@ -13,6 +13,9 @@ const CREDENTIAL_PARAMS = new Set([
 
 const SIGN_IN_RESULTS = ['failed', 'cancelled', 'not-eligible'] as const;
 export type SignInResult = (typeof SIGN_IN_RESULTS)[number];
+/** Chat channels whose one-time links open a session. */
+const BOT_CHANNELS = ['whatsapp', 'telegram'] as const;
+export type BotChannel = (typeof BOT_CHANNELS)[number];
 
 export interface Entry {
   /** Set when the user arrived through the INSIIT link. */
@@ -20,10 +23,11 @@ export interface Entry {
   /** Set when Google sign-in came back without a session. */
   signIn?: SignInResult;
   /**
-   * Set when a WhatsApp link just opened a session (`signin=whatsapp`). The session is the
-   * server's cookie; this only says the user chose to use Auto-sync, as returning from Google.
+   * Set when a WhatsApp or Telegram link just opened a session (`signin=whatsapp`,
+   * `signin=telegram`). The session is the server's cookie; this only says the user chose to use
+   * Auto-sync, as returning from Google.
    */
-  signedIn?: 'whatsapp';
+  signedIn?: BotChannel;
   /** The address to show, without entry or credential parameters. */
   cleanUrl: string;
   strippedCredentials: boolean;
@@ -45,7 +49,7 @@ function clean(params: URLSearchParams) {
       params.delete(key);
     } else if (lower === 'signin') {
       if (SIGN_IN_RESULTS.includes(value as SignInResult)) signIn = value as SignInResult;
-      else if (value === 'whatsapp') signedIn = 'whatsapp';
+      else if (BOT_CHANNELS.includes(value as BotChannel)) signedIn = value as BotChannel;
       params.delete(key);
     }
   }

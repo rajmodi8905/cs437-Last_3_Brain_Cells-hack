@@ -137,6 +137,28 @@ const MIGRATIONS = [
   CREATE INDEX wa_inbound_owner ON wa_inbound (owner_key);
   CREATE INDEX sessions_owner ON sessions (owner_key);
   `,
+  // 5: the Telegram channel (docs/pilot/telegram.md). Its bot state has the same layout as the
+  // WhatsApp tables, so the same store code serves both; in these tables `wamid` holds the
+  // Telegram message key and `wa_id` the @username. Times in seconds.
+  `
+  CREATE TABLE tg_senders (LIKE wa_senders INCLUDING ALL);
+  CREATE TABLE tg_inbound (LIKE wa_inbound INCLUDING ALL);
+  CREATE TABLE tg_jobs (LIKE wa_jobs INCLUDING ALL);
+  CREATE TABLE tg_links (LIKE wa_links INCLUDING ALL);
+  CREATE TABLE tg_state (
+    name text PRIMARY KEY,
+    value bigint NOT NULL
+  );
+  CREATE TABLE tg_picks (
+    token text PRIMARY KEY,
+    owner_key text NOT NULL,
+    global_id text NOT NULL,
+    location jsonb NOT NULL,
+    expires_at bigint NOT NULL
+  );
+  CREATE INDEX tg_picks_owner ON tg_picks (owner_key);
+  CREATE INDEX tg_picks_expiry ON tg_picks (expires_at);
+  `,
 ];
 
 const SCHEMA = /^[a-z_][a-z0-9_]{0,62}$/;
@@ -154,6 +176,12 @@ export const BACKUP_TABLES = [
   'wa_inbound',
   'wa_jobs',
   'wa_links',
+  'tg_senders',
+  'tg_inbound',
+  'tg_jobs',
+  'tg_links',
+  'tg_state',
+  'tg_picks',
 ] as const;
 export type BackupTable = (typeof BACKUP_TABLES)[number];
 /** The database version this code writes and can restore. */

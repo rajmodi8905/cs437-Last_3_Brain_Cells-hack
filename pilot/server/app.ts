@@ -38,6 +38,13 @@ import {
   createWhatsAppWebhook,
   type WhatsAppWebhookOptions,
 } from './whatsapp/webhook';
+import type { BotStore } from './whatsapp/store';
+import { TELEGRAM_LINK_AGAIN, TELEGRAM_OPEN_PREFIX } from './telegram/links';
+import {
+  TELEGRAM_WEBHOOK_PATH,
+  createTelegramWebhook,
+  type TelegramWebhookOptions,
+} from './telegram/webhook';
 
 /** Google sign-in run by this server (OpenID Connect authorization code flow with PKCE). */
 export interface GoogleLoginOptions {
@@ -86,6 +93,12 @@ export interface PilotServerOptions {
    * vault in the app.
    */
   whatsapp?: WhatsAppWebhookOptions;
+  /**
+   * Enables `/api/v1/telegram/open/{token}`, the one-time links that open a Telegram vault in the
+   * app (links live in `bot`). With `webhook` (webhook mode) it also enables Telegram's webhook at
+   * `/api/v1/telegram/webhook`, authenticated by the secret token Telegram sends.
+   */
+  telegram?: { bot: BotStore; webhook?: TelegramWebhookOptions };
 }
 
 const DAY = 24 * 3600;
@@ -353,8 +366,9 @@ export function createPilotHandler(options: PilotServerOptions): RequestListener
     // Opaque per-account ID so devices can keep each account's state apart.
     account: createHash('sha256').update(session.ownerKey).digest('hex').slice(0, 32),
     vault: await store.vault(session.ownerKey),
-    // A WhatsApp vault (opened from a bot link) says so; other sessions are unchanged.
+    // A WhatsApp or Telegram vault (opened from a bot link) says so; other sessions are unchanged.
     ...(session.ownerKey.startsWith('wa:') ? { kind: 'whatsapp' } : {}),
+    ...(session.ownerKey.startsWith('tg:') ? { kind: 'telegram' } : {}),
   });
 
   const sessionCookie = (opened: OpenedSession) =>
@@ -468,7 +482,8 @@ export function createPilotHandler(options: PilotServerOptions): RequestListener
     if (
       (method === 'POST' && (path === '/session' || path === '/dev/token')) ||
       path.startsWith('/auth/') ||
-      path.startsWith('/whatsapp/open/')
+      path.startsWith('/whatsapp/open/') ||
+      path.startsWith('/telegram/open/')
     )
       limitSignIn(req);
 
@@ -534,22 +549,35 @@ export function createPilotHandler(options: PilotServerOptions): RequestListener
       });
     }
 
-    if ((match = /^\/whatsapp\/open\/([^/]+)$/.exec(path)) && options.whatsapp) {
-      const { bot } = options.whatsapp;
+    // One-time bot links: WhatsApp's, and Telegram's from its own link store, each opening only
+    // its own channel's vaults.
+    const linkChannel =
+      (match = /^\/whatsapp\/open\/([^/]+)$/.exec(path)) && options.whatsapp
+        ? { bot: options.whatsapp.bot, signin: 'whatsapp', name: 'WhatsApp', again: undefined }
+        : (match = /^\/telegram\/open\/([^/]+)$/.exec(path)) && options.telegram
+          ? {
+              bot: options.telegram.bot,
+              signin: 'telegram',
+              name: 'Telegram',
+              again: TELEGRAM_LINK_AGAIN,
+            }
+          : undefined;
+    if (match && linkChannel) {
+      const { bot } = linkChannel;
+      const errorPage = () => linkErrorPage(linkChannel.again);
       const token = match[1];
       const hash = isLinkToken(token) ? hashLinkToken(token) : undefined;
       if (method === 'GET' || method === 'HEAD') {
         // Looking does not use the link up, so a link preview cannot spend it.
         const link = hash && (await bot.peekLink(hash, now()));
         return link
-          ? send(res, 200, confirmPage(link.label), PAGE_HEADERS)
-          : send(res, 404, linkErrorPage(), PAGE_HEADERS);
+          ? send(res, 200, confirmPage(link.label, linkChannel.name), PAGE_HEADERS)
+          : send(res, 404, errorPage(), PAGE_HEADERS);
       }
       if (method !== 'POST') throw new ApiError('NOT_FOUND', 'No such endpoint.');
-      if (req.headers.origin !== options.origin)
-        return send(res, 403, linkErrorPage(), PAGE_HEADERS);
+      if (req.headers.origin !== options.origin) return send(res, 403, errorPage(), PAGE_HEADERS);
       const found = hash && (await bot.peekLink(hash, now()));
-      if (!found) return send(res, 404, linkErrorPage(), PAGE_HEADERS);
+      if (!found) return send(res, 404, errorPage(), PAGE_HEADERS);
       // Under the vault's lock, like DELETE ALL: a link taken after an erase finds nothing, so no
       // session opens on a vault that was just erased.
       const opened = await store.withOwnerLock(found.ownerKey, async () => {
@@ -557,12 +585,12 @@ export function createPilotHandler(options: PilotServerOptions): RequestListener
         if (!link || link.ownerKey !== found.ownerKey) return undefined;
         return openSession({ ownerKey: link.ownerKey, email: link.label });
       });
-      if (!opened) return send(res, 404, linkErrorPage(), PAGE_HEADERS);
+      if (!opened) return send(res, 404, errorPage(), PAGE_HEADERS);
       // A session this browser already had is replaced, not left behind.
       const previous = await sessionFromCookie(req);
       if (previous && previous.id !== opened.session.id) await store.deleteSession(previous.id);
       return send(res, 303, undefined, {
-        location: `${options.origin}/?signin=whatsapp#/settings`,
+        location: `${options.origin}/?signin=${linkChannel.signin}#/settings`,
         'referrer-policy': 'no-referrer',
         'set-cookie': sessionCookie(opened),
       });
@@ -857,17 +885,24 @@ export function createPilotHandler(options: PilotServerOptions): RequestListener
   }
 
   const whatsapp = options.whatsapp && createWhatsAppWebhook(options.whatsapp, now);
+  const telegram = options.telegram?.webhook && createTelegramWebhook(options.telegram.webhook);
 
   async function dispatch(req: IncomingMessage, res: ServerResponse) {
     if (whatsapp) {
       const url = new URL(req.url ?? '/', 'http://pilot.local');
       if (url.pathname === WEBHOOK_PATH) return whatsapp(req, res, url);
     }
+    if (telegram) {
+      const url = new URL(req.url ?? '/', 'http://pilot.local');
+      if (url.pathname === TELEGRAM_WEBHOOK_PATH) return telegram(req, res);
+    }
     const method = req.method ?? 'GET';
     if (method === 'GET' || method === 'HEAD') return route(req, res);
-    // Opening a WhatsApp link takes that vault's lock itself; holding the browser's current
+    // Opening a bot link takes that vault's lock itself; holding the browser's current
     // session's lock as well could wait on itself when both are the same vault.
     if (options.whatsapp && (req.url ?? '').startsWith(OPEN_PATH_PREFIX)) return route(req, res);
+    if (options.telegram && (req.url ?? '').startsWith(TELEGRAM_OPEN_PREFIX))
+      return route(req, res);
     const session = await sessionFromCookie(req);
     if (!session || session.expiresAt <= now()) return route(req, res);
     const pending: { flush?: () => void } = {};
