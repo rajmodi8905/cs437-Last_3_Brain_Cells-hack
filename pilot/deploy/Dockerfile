@@ -14,8 +14,11 @@ COPY scripts ./scripts
 COPY tests ./tests
 COPY docs ./docs
 COPY pilot ./pilot
-# The engine host page for the WhatsApp channel goes to .cache/engine-host-dist, never dist/.
-RUN npm run build && node pilot/scripts/build-server.mjs && npm run build:engine-host
+RUN npm run build && node pilot/scripts/build-server.mjs
+
+# The WhatsApp engine host page, for the runtime image only: .cache/engine-host-dist, never dist/.
+FROM build AS engine-host-build
+RUN npm run build:engine-host
 
 # Local checker targets are separate from the final production runtime below.
 FROM dependencies AS checker-test-dependencies
@@ -62,7 +65,7 @@ RUN node node_modules/playwright-core/cli.js install --with-deps --only-shell ch
     && rm -rf /var/lib/apt/lists/* /root/.cache /tmp/*
 COPY --from=build --chown=node:node /build/dist ./dist
 COPY --from=build --chown=node:node /build/.cache/pilot-server ./server
-COPY --from=build --chown=node:node /build/.cache/engine-host-dist ./engine-host
+COPY --from=engine-host-build --chown=node:node /build/.cache/engine-host-dist ./engine-host
 COPY --chown=node:node pilot/deploy/entrypoint.mjs ./entrypoint.mjs
 COPY --chown=node:node pilot/deploy/fill-models.mjs ./fill-models.mjs
 USER node
