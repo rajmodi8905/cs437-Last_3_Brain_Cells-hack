@@ -108,12 +108,18 @@ sudo $COMPOSE exec app node /app/entrypoint.mjs /app/server/backup.mjs now
 sudo docker pull ghcr.io/rajmodi8905/campus-recall-pilot@sha256:DIGEST
 # Fill the models (above), set PILOT_IMAGE in .env to the same digest, then:
 sudo $COMPOSE up --detach --wait app
-# The Caddyfile changed for the link page (below); copy it over the old one in place, then:
+# The Caddyfile changed for the link page (below); copy its contents over the old one in place
+# (see the warning below), check that Caddy sees the new file, then reload:
+sudo sh -c 'cat Caddyfile.new > /opt/campus-recall/Caddyfile'
+sha256sum /opt/campus-recall/Caddyfile
+sudo docker exec "$(sudo $COMPOSE ps -q caddy)" sha256sum /etc/caddy/Caddyfile
 sudo $COMPOSE exec caddy caddy reload --config /etc/caddy/Caddyfile
 sudo $COMPOSE logs app | grep -E 'WhatsApp|engine host'
 ```
 
 Caddy's headers are defaults now (`?Referrer-Policy`, `?Content-Security-Policy`): the one-time link page keeps its own `Referrer-Policy: same-origin` and CSP. With Caddy's `no-referrer` in its place, browsers send `Origin: null` on the page's Continue `POST` and the server refuses it, so links would never open. Check with `curl -sI https://…/api/v1/whatsapp/open/x`, which must show `Referrer-Policy: same-origin`. `deploy-release.sh` never recreates Caddy, so this copy and reload are manual.
+
+**Warning: copy the Caddyfile's contents, do not replace the file.** `compose.yaml` bind-mounts the single file `./Caddyfile` into the Caddy container. A bind mount of a file follows the file itself (its inode), not its name, so anything that writes a new file under the same name leaves the running container reading the old one: `install`, `mv`, `rsync` without `--inplace`, or an editor that saves by writing a new file and renaming it. `caddy reload` then reloads the old configuration and reports success. This happened in the first Telegram release. Either copy the contents into the existing file (`cat Caddyfile.new > Caddyfile`, which keeps the inode) and reload, or, if the file was replaced, restart the Caddy container (`sudo $COMPOSE restart caddy`) so it mounts the new file. Either way, check that the two hashes above match: `sha256sum /opt/campus-recall/Caddyfile` on the VM and `docker exec … sha256sum /etc/caddy/Caddyfile` inside the container.
 
 The log shows `WhatsApp channel on: Meta's webhook is https://…/api/v1/whatsapp/webhook.` and `WhatsApp engine host ready in … s.` If it shows `The WhatsApp engine host could not start`, the bot still answers: searches are by keyword only and index jobs wait until a later start indexes them. Fix the cause (usually the models folder or memory) and restart the app. Rolling back to an image from before the channel leaves the new tables and columns in place; older code applies only the migrations it knows, so it starts, but check compatibility as for any rollback. After this release, later releases with unchanged migrations go through the workflow again.
 
