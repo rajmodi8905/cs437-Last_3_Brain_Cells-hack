@@ -113,8 +113,8 @@ export function dimensionForIndex(indexVersion: string) {
   return custom ? Number(custom[1]) : undefined;
 }
 
-const ACTIVE_KEY = 'campus-recall:search-model';
-const CUSTOM_KEY = 'campus-recall:custom-search-model';
+const ACTIVE_KEY = 'anyrecall:search-model';
+const CUSTOM_KEY = 'anyrecall:custom-search-model';
 
 const storage = () => {
   try {

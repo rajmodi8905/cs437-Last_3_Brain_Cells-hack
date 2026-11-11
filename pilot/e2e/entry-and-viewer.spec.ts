@@ -68,7 +68,7 @@ test('an INSIIT link opens the site, drops any token from the address and never 
   await page.getByRole('button', { name: 'Open my library' }).click();
   await page.getByRole('link', { name: 'Settings' }).first().click();
   const sync = page.getByRole('region', { name: 'Auto-sync' });
-  await expect(sync).toContainText('You opened Campus Recall from INSIIT');
+  await expect(sync).toContainText('You opened AnyRecall from INSIIT');
   await expect(sync).toContainText('Local only');
   expect(sent[0]).toBe('opened');
   expect(sent.filter((line) => line.includes('/api/v1/'))).toEqual([]);

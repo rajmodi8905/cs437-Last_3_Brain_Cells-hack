@@ -1,4 +1,4 @@
-# Campus Recall release status
+# AnyRecall release status
 
 **3 November 2026: implementation and acceptance verification are complete. Deployment is the remaining release phase.**
 

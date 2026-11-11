@@ -1,12 +1,12 @@
-# Campus Recall
+# AnyRecall
 
 **Find what you saved, from what you remember.**
 
-Campus Recall turns your screenshots, PDFs, notes, saved webpages and short recordings into a personal library you can search by meaning. Find a matching original, jump to the right PDF page or media interval, and keep processing on your own device.
+AnyRecall turns your screenshots, PDFs, notes, saved webpages and short recordings into a personal library you can search by meaning. Find a matching original, jump to the right PDF page or media interval, and keep processing on your own device.
 
 https://github.com/user-attachments/assets/2947f113-1e72-4074-8d47-2b43daa21dfe
 
-[Try Campus Recall](https://campusrecall.indiasouthcentral.cloudapp.azure.com) · [Install on your phone](#use-on-your-phone) · [Run locally](#run-locally)
+[Try AnyRecall](https://campusrecall.indiasouthcentral.cloudapp.azure.com) · [Install on your phone](#use-on-your-phone) · [Run locally](#run-locally)
 
 - **Save the original.** Keep supported files and notes together, with a visible save confirmation and recent-saves library.
 - **Search from memory.** Describe the topic or visual appearance; results lead back to the saved source.
@@ -60,7 +60,7 @@ For a quick check:
 
 This local stack is bound to `127.0.0.1` and uses development authentication. It does not contact or change the deployed Azure pilot. Real Google sign-in, HTTPS and managed-identity storage are configured separately through the [production deployment runbook](docs/pilot/deployment.md).
 
-Stop with `docker compose down`. Named volumes preserve server data and the signing key for the next start. A deliberate `docker compose down --volumes` resets the checker server and test-model cache; it does not clear a browser's local library. If port 4600 is busy, use `CAMPUS_RECALL_PORT=4601 docker compose up --build --wait` and open http://localhost:4601. Inspect startup failures with `docker compose logs`.
+Stop with `docker compose down`. Named volumes preserve server data and the signing key for the next start. A deliberate `docker compose down --volumes` resets the checker server and test-model cache; it does not clear a browser's local library. If port 4600 is busy, use `ANYRECALL_PORT=4601 docker compose up --build --wait` and open http://localhost:4601. Inspect startup failures with `docker compose logs`.
 
 ### Test
 
@@ -114,7 +114,7 @@ Saved originals and completed model downloads normally survive reopening the sam
 
 ## Save from WhatsApp (demo)
 
-For the pilot demo, a few allow-listed phones can also save to Campus Recall from WhatsApp, through Meta's test number. It is opt-in and separate from the app's local-only default:
+For the pilot demo, a few allow-listed phones can also save to AnyRecall from WhatsApp, through Meta's test number. It is opt-in and separate from the app's local-only default:
 
 - Message the bot and reply **AGREE** to its notice. Nothing is stored before that.
 - Forward photos, PDFs and notes to save them; start a message with `note ` to save it as a note. Type anything else to search what you sent, and pick a result to get the original back.
@@ -124,10 +124,10 @@ Unlike the app, the bot indexes and searches on the pilot server, and WhatsApp (
 
 ## Save from Telegram (demo)
 
-For the pilot demo, students can also save to Campus Recall from the team's Telegram bot (`@<your bot>`; during the demo it may be open only to the team and reviewers). It is opt-in and separate from the app's local-only default:
+For the pilot demo, students can also save to AnyRecall from the team's Telegram bot (`@<your bot>`; during the demo it may be open only to the team and reviewers). It is opt-in and separate from the app's local-only default:
 
 - Open the bot, tap **Start**, read the notice and tap **Log in with IITGN**: sign in with your IITGN Google account and press **Continue** to link the chat to it. Nothing is stored or searched before that.
-- Send or forward photos (as a file to keep full quality), PDFs and notes; start a message with `note ` to save it as a note. They go into your own Campus Recall cloud library, so they appear in the app once you use Auto-sync there. Type anything else to search your library, and tap a result to get the original back.
+- Send or forward photos (as a file to keep full quality), PDFs and notes; start a message with `note ` to save it as a note. They go into your own AnyRecall cloud library, so they appear in the app once you use Auto-sync there. Type anything else to search your library, and tap a result to get the original back.
 - `/open` gives a one-time link that opens your library in the app. `/logout` unlinks the chat; `/delete` erases only what you saved through Telegram (the whole library is removed from the app's Settings). `/help`, `/privacy` and `/stop` / `/resume` do what they say.
 
 Unlike the app, the bot indexes and searches on the pilot server, and Telegram keeps bot chats on its servers without end-to-end encryption. Whoever has your Telegram account can open your cloud library from the bot's one-time links. Read [the bot's privacy page](docs/pilot/telegram-privacy.md) first. How it works: [telegram.md](docs/pilot/telegram.md); BotFather setup and a local trial (`npm run pilot:telegram-local`): [telegram-setup.md](docs/pilot/telegram-setup.md); deployment: the Telegram section of [deployment.md](docs/pilot/deployment.md).
@@ -165,7 +165,7 @@ The production server stack has three containers: the built PWA/Node API, Postgr
 | Account sync, API, durable stores and deployment | `pilot/`              |
 | PWA caching                                      | `src/sw.ts`           |
 
-For frontend-only development with **Node 24**, run `npm ci` and `npm run dev`. This does not start the account API. `npm run build` produces `dist/`; `npm run preview` serves it locally. A subdirectory build uses `APP_BASE=/campus-recall/ npm run build`.
+For frontend-only development with **Node 24**, run `npm ci` and `npm run dev`. This does not start the account API. `npm run build` produces `dist/`; `npm run preview` serves it locally. A subdirectory build uses `APP_BASE=/anyrecall/ npm run build`.
 
 Native test entrypoints remain `npm test`, `npm run test:pilot:storage` (requires Docker), `npm run test:pilot:e2e` and `npm run test:pilot:models`. Native browser/model runs need the existing Chromium install, `npm run models:download` and production build; `./test.sh` automates those prerequisites.
 

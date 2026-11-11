@@ -1,4 +1,4 @@
-# Campus Recall automated Azure deployment
+# AnyRecall automated Azure deployment
 
 This is the operating guide for the GitHub-to-Azure pilot release pipeline. It is deliberately specific about what is set up and proven versus what is still open. It replaces neither the Azure runtime runbook in [`docs/pilot/deployment.md`](docs/pilot/deployment.md) nor the normal review process.
 

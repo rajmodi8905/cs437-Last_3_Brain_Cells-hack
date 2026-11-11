@@ -1,4 +1,4 @@
-# Campus Recall
+# AnyRecall
 
 **Team:** Raj Modi, Chaitanya, Nakshatra — IIT Gandhinagar  
 **Course:** CS437 Vibe Coding Hackathon, 2026–27, Semester 1
@@ -54,7 +54,7 @@ Our solutions aims to address this by extracting text from deliberately imported
 
 Our market research also found products that solve parts of this problem:
 
-| Existing product | What it solves | Limitation for our use case | How Campus Recall aims to address it |
+| Existing product | What it solves | Limitation for our use case | How AnyRecall aims to address it |
 | --- | --- | --- | --- |
 | **Pixel Screenshots** | Finds saved screenshots using natural-language search. | Its documented retrieval workflow focuses on screenshots, and availability is restricted to supported Pixel phones with an eligible Google Account. It does not establish a general PDF/notes/webpage library. | Search supported images, PDFs, notes, and webpage snapshots together, without an account. Target students' Android phones beyond the supported Pixel range, with compatibility verified during testing. |
 | **Siftlee** | Captures mixed content on iPhone, organizes it, and retrieves information with source references. | Its privacy policy allows submitted content and metadata to be processed by its service and third-party AI providers; this does not meet our requirement for entirely on-phone retrieval. | Run OCR, embedding creation, query matching, and original-file retrieval locally, with free core search and no cloud AI service or API key. |
@@ -79,7 +79,7 @@ Based on the interviews and our team discussion, we define the problem as follow
 
 ## Product scope and implementation status
 
-Campus Recall is a free, installable PWA for iPhone, Android, and laptops. A student saves supported originals, searches remembered meaning or visual appearance, and opens the corresponding original image, PDF page, note, snapshot, or media interval. Every device has a separate local library with manual transfer.
+AnyRecall is a free, installable PWA for iPhone, Android, and laptops. A student saves supported originals, searches remembered meaning or visual appearance, and opens the corresponding original image, PDF page, note, snapshot, or media interval. Every device has a separate local library with manual transfer.
 
 **Status, 3 November 2026:** S1–S15 are implemented and their acceptance checks pass. The required suites pass with 90 fast tests, 27 production Chromium tests and 11 actual-model tests; [CI run 41529035494](https://github.com/rajmodi8905/cs437-Last_3_Brain_Cells-hack/actions/runs/41529035494) confirms the behavioral candidate at `5420b37`. Device evidence retains its measured/owner-confirmed methods and build identities. [Policy fact review](docs/verification/2026-11-02-policy-review.md) and [dependency remediation](docs/verification/2026-11-02-dependency-remediation.md) are complete. [Current verification](docs/verification/README.md) records each statement's result. Deployment is the remaining release phase; host-specific validation belongs to that phase.
 

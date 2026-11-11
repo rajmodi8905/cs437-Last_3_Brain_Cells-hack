@@ -406,7 +406,7 @@ export function loadConfig(env: Record<string, string | undefined>): PilotConfig
     throw new Error('Use either Google sign-in or a development key, not both.');
   const clientId =
     googleId ??
-    (devKeyFile ? 'campus-recall-pilot-dev' : localTrial ? 'campus-recall-local-trial' : undefined);
+    (devKeyFile ? 'anyrecall-pilot-dev' : localTrial ? 'anyrecall-local-trial' : undefined);
   if (!clientId)
     throw new Error(
       'Set PILOT_GOOGLE_CLIENT_ID and PILOT_GOOGLE_CLIENT_SECRET (or a local development key).',

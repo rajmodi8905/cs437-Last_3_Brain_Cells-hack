@@ -1,5 +1,5 @@
 name: Bug report
-description: Report an observed defect or clearly identified unverified concern in Campus Recall.
+description: Report an observed defect or clearly identified unverified concern in AnyRecall.
 title: '[Bug]: '
 body:
   - type: markdown

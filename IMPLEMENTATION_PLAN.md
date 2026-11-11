@@ -1,4 +1,4 @@
-# Campus Recall: implementation and collaboration plan
+# AnyRecall: implementation and collaboration plan
 
 **Completed baseline, 3 November 2026:** S1–S15 implementation and acceptance verification are complete. [Current verification](docs/verification/README.md) records the results; [release status](docs/implementation/release-plan.md) identifies deployment as the release phase.
 
@@ -26,7 +26,7 @@ This chat implements Raj's package only, including all core interface and AI wor
 
 ## 2. Product and boundaries
 
-Campus Recall is a free, installable PWA. Its primary flow is:
+AnyRecall is a free, installable PWA. Its primary flow is:
 
 **Save → confirm local storage → process locally → search from memory → open the original source.**
 

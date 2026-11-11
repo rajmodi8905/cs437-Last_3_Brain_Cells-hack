@@ -124,7 +124,7 @@ const CONTINUE = `<form method="post"><button type="submit">Continue</button></f
 /** What linking means, shown before the student agrees by pressing Continue. */
 const consent = (privacyUrl: string | undefined) =>
   `<ul>` +
-  `<li>Photos, PDFs, notes and links you send or forward to the bot are saved in this account's Campus Recall cloud library, with the searches you type there.</li>` +
+  `<li>Photos, PDFs, notes and links you send or forward to the bot are saved in this account's AnyRecall cloud library, with the searches you type there.</li>` +
   `<li>Our server stores and processes your files to make them searchable, and sees your searches.</li>` +
   `<li>Telegram keeps bot chats on its own servers. Chats with bots are not end-to-end encrypted.</li>` +
   `<li>Whoever has this Telegram account can open your cloud library from the bot's one-time links (each works once, for 10 minutes).</li>` +
@@ -138,7 +138,7 @@ const consent = (privacyUrl: string | undefined) =>
 export const linkConfirmPage = (name: string, email: string, privacyUrl?: string) =>
   page(
     'Link Telegram',
-    `<h1>Link Telegram to Campus Recall</h1>` +
+    `<h1>Link Telegram to AnyRecall</h1>` +
       `<p>Link <strong>${escapeHtml(name)}</strong> to <strong>${escapeHtml(email)}</strong>?</p>` +
       consent(privacyUrl) +
       CONTINUE,
@@ -158,7 +158,7 @@ export const linkedElsewherePage = () =>
   page(
     'Already linked',
     `<h1>This Telegram account is already linked</h1>` +
-      `<p>It is linked to another Campus Recall account. Send /logout to the bot first, then /login again.</p>`,
+      `<p>It is linked to another AnyRecall account. Send /logout to the bot first, then /login again.</p>`,
   );
 
 /**
@@ -186,9 +186,9 @@ export const signInUnavailablePage = () =>
 /** Asks before opening the app as the linked account. */
 export const openConfirmPage = (email: string) =>
   page(
-    'Open Campus Recall',
-    `<h1>Open your Campus Recall library</h1>` +
-      `<p>Sign in to Campus Recall as <strong>${escapeHtml(email)}</strong> on this browser.</p>` +
+    'Open AnyRecall',
+    `<h1>Open your AnyRecall library</h1>` +
+      `<p>Sign in to AnyRecall as <strong>${escapeHtml(email)}</strong> on this browser.</p>` +
       `<p>Your device's own library is not uploaded unless you choose to include it.</p>` +
       CONTINUE,
   );
@@ -198,5 +198,5 @@ export const telegramLinkErrorPage = (purpose: TelegramLink['purpose']) =>
   page(
     'Link not valid',
     `<h1>This link doesn't work any more</h1>` +
-      `<p>Links work once, for 10 minutes. Send ${purpose === 'login' ? '/login' : '/open'} to the Campus Recall Telegram bot for a new one.</p>`,
+      `<p>Links work once, for 10 minutes. Send ${purpose === 'login' ? '/login' : '/open'} to the AnyRecall Telegram bot for a new one.</p>`,
   );

@@ -1,6 +1,6 @@
 import 'fake-indexeddb/auto';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import type { CampusRecallServices } from '../../src/app/services';
+import type { AnyRecallServices } from '../../src/app/services';
 import { AutoSyncController } from '../client/autosync';
 import { IndexedDbSyncStateStore } from '../client/idb';
 import { emptySnapshot } from '../client/types';
@@ -23,7 +23,7 @@ function services() {
         values.set(key, value);
       },
     },
-  } as unknown as CampusRecallServices;
+  } as unknown as AnyRecallServices;
 }
 
 /** A pilot server with one session; `online` switches the whole network off and on. */

@@ -12,12 +12,12 @@ import {
 import { pdfjs } from '../../src/shared/browser-assets';
 import { GEMMA, saveSearchModel } from '../../src/shared/searchModels';
 import { INDEX_VERSION, LocalEngine } from '../../src/engine';
-import { CampusRecallDatabase, DexieLibraryRepository } from '../../src/storage';
+import { AnyRecallDatabase, DexieLibraryRepository } from '../../src/storage';
 import { repositoryLibrary } from '../client/library';
 import type { IndexSegment } from '../contract';
 
-/** The engine host's own library database; never the app's `campus-recall`. */
-export const ENGINE_HOST_DATABASE = 'campus-recall-engine-host';
+/** The engine host's own library database; never the app's `anyrecall`. */
+export const ENGINE_HOST_DATABASE = 'anyrecall-engine-host';
 
 export interface HostIndexInput {
   bytes: Uint8Array;
@@ -244,7 +244,7 @@ export function createEngineHost(
 export async function openEngineHost() {
   // The default model only, whatever an earlier run of this profile chose.
   saveSearchModel(GEMMA);
-  const repository = new DexieLibraryRepository(new CampusRecallDatabase(ENGINE_HOST_DATABASE));
+  const repository = new DexieLibraryRepository(new AnyRecallDatabase(ENGINE_HOST_DATABASE));
   await repository.open();
   for (const item of await repository.listItems()) await repository.deleteItem(item.id);
   const engine = new LocalEngine(repository);

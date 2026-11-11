@@ -379,7 +379,7 @@ describe.each(backends)('WhatsApp channel: %s', (name, available, open) => {
       expect(Buffer.from(createHash('sha256').update(downloaded).digest()).toString('base64')).toBe(
         sha256Base64(bytes),
       );
-      expect(graph.textsTo(BSUID_A)).toEqual(['Saved to Campus Recall: Hostel notice board']);
+      expect(graph.textsTo(BSUID_A)).toEqual(['Saved to AnyRecall: Hostel notice board']);
       // The seam for server indexing: the stored item has an index job waiting.
       expect((await bot.getJob(jobId('index', wamid)))?.state).toBe('pending');
     });
@@ -454,7 +454,7 @@ describe.each(backends)('WhatsApp channel: %s', (name, available, open) => {
       expect((await deliver(body)).status).toBe(200);
       await worker.drain();
       expect(await itemsOf(OWNER_A)).toHaveLength(1);
-      expect(graph.textsTo(BSUID_A)).toEqual(['Saved to Campus Recall: Timetable']);
+      expect(graph.textsTo(BSUID_A)).toEqual(['Saved to AnyRecall: Timetable']);
     });
 
     it('stores two concurrent deliveries of one message once', async () => {
@@ -465,7 +465,7 @@ describe.each(backends)('WhatsApp channel: %s', (name, available, open) => {
       // Two workers at once, as with two server processes.
       await Promise.all([worker.drain(), worker.drain()]);
       expect(await itemsOf(OWNER_A)).toHaveLength(1);
-      expect(graph.textsTo(BSUID_A)).toEqual(['Saved to Campus Recall: Library closes at 2 am']);
+      expect(graph.textsTo(BSUID_A)).toEqual(['Saved to AnyRecall: Library closes at 2 am']);
     });
 
     it('a job retried after it had stored the item stores nothing new', async () => {
@@ -494,7 +494,7 @@ describe.each(backends)('WhatsApp channel: %s', (name, available, open) => {
       clock.now += 3600;
       await worker.drain();
       expect((await itemsOf(OWNER_A)).map((item) => item.globalId)).toEqual([globalIdFor(msg.id)]);
-      expect(graph.textsTo(BSUID_A)).toEqual(['Saved to Campus Recall: Bus leaves at 8']);
+      expect(graph.textsTo(BSUID_A)).toEqual(['Saved to AnyRecall: Bus leaves at 8']);
       expect((await bot.getJob(jobId('ingest', msg.id)))?.state).toBe('done');
     });
 
@@ -552,7 +552,7 @@ describe.each(backends)('WhatsApp channel: %s', (name, available, open) => {
       release();
       await first;
       expect(await itemsOf(OWNER_A)).toHaveLength(1);
-      expect(graph.textsTo(BSUID_A)).toEqual(['Saved to Campus Recall: Slow photo']);
+      expect(graph.textsTo(BSUID_A)).toEqual(['Saved to AnyRecall: Slow photo']);
     });
   });
 
@@ -602,7 +602,7 @@ describe.each(backends)('WhatsApp channel: %s', (name, available, open) => {
       expect(graph.state.sent).toEqual([
         expect.objectContaining({
           to: PHONE_A,
-          text: { body: 'Saved to Campus Recall: old payload', preview_url: false },
+          text: { body: 'Saved to AnyRecall: old payload', preview_url: false },
         }),
       ]);
       expect(graph.state.sent[0]).not.toHaveProperty('recipient');
@@ -651,7 +651,7 @@ describe.each(backends)('WhatsApp channel: %s', (name, available, open) => {
       expect(await itemsOf(OWNER_A)).toMatchObject([
         { kind: 'note', title: 'Buy lab coat', byteLength: 12 },
       ]);
-      expect(graph.textsTo(BSUID_A)).toEqual(['Saved to Campus Recall: Buy lab coat']);
+      expect(graph.textsTo(BSUID_A)).toEqual(['Saved to AnyRecall: Buy lab coat']);
     });
 
     it('saves a message that is only a link as a note with its source URL', async () => {
@@ -849,7 +849,7 @@ describe.each(backends)('WhatsApp channel: %s', (name, available, open) => {
       ]);
       expect((await itemsOf(OWNER_A)).map((item) => item.title)).toEqual(['first']);
       expect(await objects.list(`${OWNER_A}/`)).toHaveLength(1);
-      expect(graph.textsTo(BSUID_A)).toEqual(['Saved to Campus Recall: first', REPLIES.full]);
+      expect(graph.textsTo(BSUID_A)).toEqual(['Saved to AnyRecall: first', REPLIES.full]);
     });
   });
 
@@ -1014,7 +1014,7 @@ describe('WhatsApp worker parts', () => {
     worker.wake();
     for (let i = 0; i < 100 && graph.state.sent.length === 0; i++)
       await new Promise((resolve) => setTimeout(resolve, 10));
-    expect(graph.textsTo(BSUID_A)).toEqual(['Saved to Campus Recall: woken']);
+    expect(graph.textsTo(BSUID_A)).toEqual(['Saved to AnyRecall: woken']);
     await worker.stop();
   });
 });

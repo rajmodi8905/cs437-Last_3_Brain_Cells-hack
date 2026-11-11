@@ -5,7 +5,7 @@
 After the release-plan/issue-form PR is merged, give Nakshatra this whole prompt. It assigns investigation and reporting, not implementation. The teammate sending it supplies authorization for verified issue publication under their own account.
 
 ```text
-I am Nakshatra. Help me find and report real defects in Campus Recall. Raj owns all implementation and fixes; do not implement fixes or redesign anything.
+I am Nakshatra. Help me find and report real defects in AnyRecall. Raj owns all implementation and fixes; do not implement fixes or redesign anything.
 
 Repository: https://github.com/rajmodi8905/cs437-Last_3_Brain_Cells-hack
 Start with docs/implementation/nakshatra-quickstart.md. Prepare the checked-in synthetic kit using npm run qa:prepare; it includes library-30.zip, invalid cases, expected.json and a blank run ledger. Manual browser setup downloads are separate from CLI model assets. Laptop testing can start before the physical phone session.

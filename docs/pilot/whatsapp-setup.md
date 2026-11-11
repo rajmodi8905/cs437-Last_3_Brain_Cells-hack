@@ -20,7 +20,7 @@ On 11 November 2026 a call with the team's system-user token returned the test n
 ## 1. Meta developer app and test number
 
 1. Sign in at [developers.facebook.com](https://developers.facebook.com) with the account that manages the team's business portfolio, open **My Apps** and choose **Create app**.
-2. Name it (for example "Campus Recall pilot"), pick the use case **Connect with customers through WhatsApp**, and select the team's business portfolio (or let Meta create one).
+2. Name it (for example "AnyRecall pilot"), pick the use case **Connect with customers through WhatsApp**, and select the team's business portfolio (or let Meta create one).
 3. Open **WhatsApp → API Setup**. Meta adds a **test number** to a new test WhatsApp Business Account. Note the phone number ID and the WhatsApp Business Account ID shown there.
 4. The test number is free: it needs no payment method, and service replies (answers inside the 24-hour window after a student writes) are free up to 1,000 a month per business number. The bot only ever replies, so the demo stays inside that.
 
@@ -41,7 +41,7 @@ The test number can only message phones on its recipient list, at most five.
 
 The temporary token on the API Setup page lasts about a day; use a system user's token instead.
 
-1. Open business settings ([business.facebook.com/settings](https://business.facebook.com/settings)) → **Users → System users → Add**. Name it (for example "campus-recall-bot") and give it the **Admin** role.
+1. Open business settings ([business.facebook.com/settings](https://business.facebook.com/settings)) → **Users → System users → Add**. Name it (for example "anyrecall-bot") and give it the **Admin** role.
 2. **Assign assets**: the app (**Apps**, full control) and the WhatsApp account (**WhatsApp accounts**, full control).
 3. **Generate new token**: choose the app, set the expiry to **Never**, and tick `whatsapp_business_messaging` and `whatsapp_business_management`. Copy the token straight into its private file; Meta shows it once.
 
@@ -49,7 +49,7 @@ The temporary token on the API Setup page lasts about a day; use a system user's
 
 The first trial runs on a laptop: the pilot server with the channel on, memory storage, and an HTTPS tunnel so Meta and the phones can reach it.
 
-**Private folder.** Keep everything in `~/.config/campus-recall/whatsapp/`, outside the repository:
+**Private folder.** Keep everything in `~/.config/anyrecall/whatsapp/`, outside the repository:
 
 | File           | Content                                                                                                                        |
 | -------------- | ------------------------------------------------------------------------------------------------------------------------------ |
@@ -59,8 +59,8 @@ The first trial runs on a laptop: the pilot server with the channel on, memory s
 | `settings.env` | `KEY=value` lines: `PILOT_WHATSAPP_PHONE_NUMBER_ID`, optionally `PILOT_WHATSAPP_GRAPH_VERSION`, `PILOT_WHATSAPP_CONTACT_EMAIL` and `PILOT_WHATSAPP_PRIVACY_URL`; notes such as `META_APP_ID`, `WHATSAPP_BUSINESS_ACCOUNT_ID` and `WHATSAPP_TEST_NUMBER` are ignored |
 
 ```sh
-mkdir -p ~/.config/campus-recall/whatsapp && chmod 700 ~/.config/campus-recall/whatsapp
-chmod 600 ~/.config/campus-recall/whatsapp/*
+mkdir -p ~/.config/anyrecall/whatsapp && chmod 700 ~/.config/anyrecall/whatsapp
+chmod 600 ~/.config/anyrecall/whatsapp/*
 ```
 
 Write the secret files with an editor or by pasting into `pbpaste > file` (macOS), not with `echo`, so the values stay out of shell history.
@@ -102,8 +102,8 @@ Meta checks the callback URL when you save it, so the server must already be run
 5. Subscribe the app itself to the WhatsApp Business Account. The quickstart test number is often subscribed only to Meta's own "WA DevX Webhook Events 1P App", and then real messages never reach the callback URL even though the webhook is saved. Check, and subscribe if the app is missing, with the system-user token (no values on the command line history if you read them from the files):
 
    ```bash
-   curl -s "https://graph.facebook.com/v25.0/<WABA_ID>/subscribed_apps" -H "Authorization: Bearer $(cat ~/.config/campus-recall/whatsapp/access_token)"
-   curl -s -X POST "https://graph.facebook.com/v25.0/<WABA_ID>/subscribed_apps" -H "Authorization: Bearer $(cat ~/.config/campus-recall/whatsapp/access_token)"
+   curl -s "https://graph.facebook.com/v25.0/<WABA_ID>/subscribed_apps" -H "Authorization: Bearer $(cat ~/.config/anyrecall/whatsapp/access_token)"
+   curl -s -X POST "https://graph.facebook.com/v25.0/<WABA_ID>/subscribed_apps" -H "Authorization: Bearer $(cat ~/.config/anyrecall/whatsapp/access_token)"
    ```
 
    The list must then include the app's own name and ID.

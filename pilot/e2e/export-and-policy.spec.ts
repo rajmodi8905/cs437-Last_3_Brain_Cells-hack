@@ -15,7 +15,7 @@ test('pilot policies explain opt-in, operator access and export before inclusion
     ['terms', 'Terms and Conditions'],
   ]) {
     await page.goto(`/#/${route}`);
-    await expect(page).toHaveTitle(/Campus Recall/);
+    await expect(page).toHaveTitle(/AnyRecall/);
     await expect(page.getByRole('heading', { level: 1, name: heading, exact: true })).toBeVisible();
     await expect(page.locator('article.policy')).toContainText('Auto-sync');
     await expect(page.locator('article.policy')).toContainText(/not end-to-end encrypt/);

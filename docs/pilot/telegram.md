@@ -57,7 +57,7 @@ The first three come together or not at all, and the optional ones are refused w
 
 Webhook mode needs an HTTPS `PILOT_ORIGIN`, because Telegram delivers only to HTTPS. `PILOT_TELEGRAM_LOCAL_TRIAL=1` accepts memory storage (or a local storage connection string) with a local origin or a tunnel's HTTPS origin while `PILOT_HOST` is a loopback address. Google's OAuth client accepts only the pilot domain's callback, so a trial cannot use real Google sign-in: it may use development sign-in (`PILOT_DEV_KEY_FILE`) for linking, which is otherwise refused on any non-local origin. Behind a tunnel that is allowed only with the trial on, a loopback `PILOT_HOST`, no Google client and memory storage, and never for the WhatsApp trial; anyone who has the tunnel's address can then sign in as any IITGN email while the trial runs, so it holds nothing that lasts. Real IITGN login is tried on the Azure pilot. Login and app links need an HTTPS origin: with a local one, `/start`, `/login` and `/open` explain that they need a tunnel, and no link button is sent (Telegram does not accept loopback addresses in buttons, and a phone cannot open them).
 
-Allowed users are for the demo: someone else's message or tap is not recorded at all (no sender row, no message), and they get "Campus Recall on Telegram isn't open to everyone yet, so nothing you send here is saved." once per message. Usernames can change hands; prefer numeric IDs where they are known.
+Allowed users are for the demo: someone else's message or tap is not recorded at all (no sender row, no message), and they get "AnyRecall on Telegram isn't open to everyone yet, so nothing you send here is saved." once per message. Usernames can change hands; prefer numeric IDs where they are known.
 
 `main.ts` uses `PostgresBotStore` on Telegram's tables and `PostgresTelegramStore` with durable storage, memory stores otherwise; mounts the login and app link routes (and the webhook in webhook mode), with `announceTelegramLink` sending the "Linked" message straight from the link page's handler; starts the engine host once for both channels; starts `startTelegramBot` with `createTelegramIndexer`; then either calls `setWebhook` (webhook mode) or starts long polling. It logs the bot's @username from `getMe`. On `SIGTERM` or `SIGINT` it stops polling, stops the workers (sending waiting confirmations), closes the engine host and exits.
 
@@ -113,17 +113,17 @@ Commands are the bot's menu, exactly: `/start`, `/login`, `/help`, `/open`, `/lo
 
 The notice covers what is saved (what is sent, and the searches typed), that our server stores and processes files and sees searches, that Telegram keeps bot chats on its servers and chats with bots are not end-to-end encrypted, the 18+ age limit, `/logout`, `/delete` and the privacy link, and that nothing is saved before login.
 
-| Command    | Answer once linked                                                                             |
-| ---------- | ---------------------------------------------------------------------------------------------- |
-| `/start`   | "You're logged in as s•••a@iitgn.ac.in"                                                        |
-| `/login`   | "You're already logged in as …; to use another account, send /logout first, then /login"       |
-| `/help`    | What the bot does, the commands, that files keep full quality, and the contact email           |
-| `/privacy` | The privacy URL                                                                                |
-| `/stop`    | Stops saving and replying except to `/resume`; saved data is kept                              |
-| `/resume`  | Resumes after `/stop`                                                                          |
-| `/open`    | "Open your Campus Recall library in your browser…" with an **Open in browser** URL button (T6) |
-| `/logout`  | Unlinks this chat and revokes its unused links; what was saved stays in the library (T9)       |
-| `/delete`  | Asks to tap **Yes, erase my Telegram items** (callback data `delete`) within 10 minutes (T9)   |
+| Command    | Answer once linked                                                                           |
+| ---------- | -------------------------------------------------------------------------------------------- |
+| `/start`   | "You're logged in as s•••a@iitgn.ac.in"                                                      |
+| `/login`   | "You're already logged in as …; to use another account, send /logout first, then /login"     |
+| `/help`    | What the bot does, the commands, that files keep full quality, and the contact email         |
+| `/privacy` | The privacy URL                                                                              |
+| `/stop`    | Stops saving and replying except to `/resume`; saved data is kept                            |
+| `/resume`  | Resumes after `/stop`                                                                        |
+| `/open`    | "Open your AnyRecall library in your browser…" with an **Open in browser** URL button (T6)   |
+| `/logout`  | Unlinks this chat and revokes its unused links; what was saved stays in the library (T9)     |
+| `/delete`  | Asks to tap **Yes, erase my Telegram items** (callback data `delete`) within 10 minutes (T9) |
 
 Every button tap is answered with `answerCallbackQuery` so the app stops showing it as loading. A button whose one-time action is done is removed from its message with `editMessageReplyMarkup`: the login buttons once the user links (all of the user's outstanding login links are used up then) or sends `/logout`, and the delete button once tapped, whatever the outcome.
 
@@ -133,7 +133,7 @@ Emails in the chat are masked to the first and last letter of the name and the d
 
 **/delete (T9).** The button within 10 minutes of `/delete` unlinks as `/logout` does and then, under the account's lock, deletes every item recorded as saved through Telegram into that account, each as `DELETE /items/{id}` does: a tombstone at the next revision in the change feed (so every device removes it, and a stale device cannot bring it back), then its original and index objects. The record of those items and the account's result buttons go too. Items synced from the app, the vault's epoch and its sessions are untouched; the replies say that removing the whole library is **Remove cloud library** in the app's Settings. Message keys stay, so a redelivered update is recognised and an erased item is never recreated. The button without a request says to send `/delete` first; after 10 minutes the request expires.
 
-**Batched confirmations.** As on WhatsApp: "Saved to Campus Recall: <title>", or "Saved 3 items to Campus Recall: …" for a burst (3 seconds apart at most, 10 items at most).
+**Batched confirmations.** As on WhatsApp: "Saved to AnyRecall: <title>", or "Saved 3 items to AnyRecall: …" for a burst (3 seconds apart at most, 10 items at most).
 
 ## Messages
 
@@ -141,33 +141,33 @@ Every refusal and failure says what happened, names the file (in quotes) where t
 
 **Not saved.** Nothing is stored, and the reply comes at once.
 
-| Case                                                    | Reply                                                                                                                                                          |
-| ------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Voice message                                           | Can't save voice messages. I can save photos, PDFs, text notes and links.                                                                                      |
-| Audio file                                              | Can't save audio files. I can save photos, PDFs, text notes and links.                                                                                         |
-| Video                                                   | Can't save videos. I can save photos, PDFs, text notes and links.                                                                                              |
-| Video message (round video)                             | Can't save video messages. I can save photos, PDFs, text notes and links.                                                                                      |
-| GIF                                                     | Can't save GIFs. I can save photos, PDFs, text notes and links.                                                                                                |
-| Sticker                                                 | Can't save stickers. I can save photos, PDFs, text notes and links.                                                                                            |
-| Location or venue                                       | Can't save locations. Send a map link instead and I'll save it as a note.                                                                                      |
-| Contact                                                 | Can't save contacts. To keep someone's details, type them in a message that starts with 'note '.                                                               |
-| Anything else (a poll, dice)                            | Can't save this kind of message. I can save photos, PDFs, text notes and links.                                                                                |
-| Office document (`.docx`, `.pptx`, `.xlsx`, …)          | Can't save .docx files. Export it as a PDF and send that instead.                                                                                              |
-| Other image file (`.heic`, `.gif`, `.bmp`, …)           | Can't save .heic images. Send it as a photo, or as a JPEG, PNG or WebP file.                                                                                   |
-| Text file                                               | Can't save .txt files. Paste the text in a message that starts with 'note ' instead.                                                                           |
-| Other file type                                         | Can't save .ipynb files. I can save photos, PDFs, text notes and links. (Without a file name or known type: "Can't save this kind of file. …")                 |
-| PDF over 20 MB (Telegram declared its size)             | "Big notes.pdf" is 31.3 MB, over the 20 MB limit for PDFs, so it wasn't saved. Compress it or split it into smaller PDFs, then send them again.                |
-| Photo or image file over 20 MB                          | "poster.png" is 23.4 MB, over the 20 MB limit for photos, so it wasn't saved. Send a smaller copy, or send it as a photo instead of as a file.                 |
-| File Telegram will not hand over (its 20 MB bot limit)  | "Scan.pdf" is over Telegram's 20 MB download limit for bots, so it wasn't saved. Compress it or split it into smaller PDFs, then send them again.              |
-| Note over 20,000 characters                             | This note is 23,456 characters, over the 20,000-character limit for notes, so it wasn't saved. Split it into shorter notes and send them one by one.           |
-| Library full (the account's cloud quota, 200 MB)        | Your Campus Recall cloud library has reached its 200 MB limit, so "Mess menu.pdf" wasn't saved. Delete some items in the app to make room, then send it again. |
-| Empty file                                              | "blank.pdf" is empty, so it wasn't saved.                                                                                                                      |
-| Download from Telegram kept failing (after the retries) | Couldn't get that file from Telegram. Please send it again.                                                                                                    |
-| Any other failure on our side (after the retries)       | Something went wrong on our side. Please try again in a minute.                                                                                                |
+| Case                                                    | Reply                                                                                                                                                      |
+| ------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Voice message                                           | Can't save voice messages. I can save photos, PDFs, text notes and links.                                                                                  |
+| Audio file                                              | Can't save audio files. I can save photos, PDFs, text notes and links.                                                                                     |
+| Video                                                   | Can't save videos. I can save photos, PDFs, text notes and links.                                                                                          |
+| Video message (round video)                             | Can't save video messages. I can save photos, PDFs, text notes and links.                                                                                  |
+| GIF                                                     | Can't save GIFs. I can save photos, PDFs, text notes and links.                                                                                            |
+| Sticker                                                 | Can't save stickers. I can save photos, PDFs, text notes and links.                                                                                        |
+| Location or venue                                       | Can't save locations. Send a map link instead and I'll save it as a note.                                                                                  |
+| Contact                                                 | Can't save contacts. To keep someone's details, type them in a message that starts with 'note '.                                                           |
+| Anything else (a poll, dice)                            | Can't save this kind of message. I can save photos, PDFs, text notes and links.                                                                            |
+| Office document (`.docx`, `.pptx`, `.xlsx`, …)          | Can't save .docx files. Export it as a PDF and send that instead.                                                                                          |
+| Other image file (`.heic`, `.gif`, `.bmp`, …)           | Can't save .heic images. Send it as a photo, or as a JPEG, PNG or WebP file.                                                                               |
+| Text file                                               | Can't save .txt files. Paste the text in a message that starts with 'note ' instead.                                                                       |
+| Other file type                                         | Can't save .ipynb files. I can save photos, PDFs, text notes and links. (Without a file name or known type: "Can't save this kind of file. …")             |
+| PDF over 20 MB (Telegram declared its size)             | "Big notes.pdf" is 31.3 MB, over the 20 MB limit for PDFs, so it wasn't saved. Compress it or split it into smaller PDFs, then send them again.            |
+| Photo or image file over 20 MB                          | "poster.png" is 23.4 MB, over the 20 MB limit for photos, so it wasn't saved. Send a smaller copy, or send it as a photo instead of as a file.             |
+| File Telegram will not hand over (its 20 MB bot limit)  | "Scan.pdf" is over Telegram's 20 MB download limit for bots, so it wasn't saved. Compress it or split it into smaller PDFs, then send them again.          |
+| Note over 20,000 characters                             | This note is 23,456 characters, over the 20,000-character limit for notes, so it wasn't saved. Split it into shorter notes and send them one by one.       |
+| Library full (the account's cloud quota, 200 MB)        | Your AnyRecall cloud library has reached its 200 MB limit, so "Mess menu.pdf" wasn't saved. Delete some items in the app to make room, then send it again. |
+| Empty file                                              | "blank.pdf" is empty, so it wasn't saved.                                                                                                                  |
+| Download from Telegram kept failing (after the retries) | Couldn't get that file from Telegram. Please send it again.                                                                                                |
+| Any other failure on our side (after the retries)       | Something went wrong on our side. Please try again in a minute.                                                                                            |
 
 Sizes are in megabytes of 1,000,000 bytes, as the app's limits are, rounded up to one decimal (so 20,000,001 bytes reads 20.1 MB, never 20 MB). Without a file name the reply says "This PDF" or "This photo". The quota is the configured `PILOT_QUOTA_BYTES` (200 MB by default).
 
-**Saved, but not searchable.** The file is saved first ("Saved to Campus Recall: …"); if its index job then fails for good, the bot says why, once. The engine host returns the app's own reason (`src/engine/extract.ts`, `src/engine/index.ts`) and, for a refused PDF, its page count; `classifyIndexFailure` reads the kind.
+**Saved, but not searchable.** The file is saved first ("Saved to AnyRecall: …"); if its index job then fails for good, the bot says why, once. The engine host returns the app's own reason (`src/engine/extract.ts`, `src/engine/index.ts`) and, for a refused PDF, its page count; `classifyIndexFailure` reads the kind.
 
 | Reason (the app's message)                                           | Reply                                                                                                                                                                                                    |
 | -------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -186,9 +186,9 @@ Sizes are in megabytes of 1,000,000 bytes, as the app's limits are, rounded up t
 
 Typed text that is not a command or a save is searched with the shared search over the linked account's whole library: items saved through Telegram and items synced from the app, by meaning where they have a usable index (from the server's engine host or a device), by title otherwise. The answer is one message, "Best matches for “<query>”. Tap one to get it back." with the results numbered (title and the page and excerpt, or "still indexing" / "title match"), "Matched by keyword only right now." when search by meaning is off, and one button per result (at most five). Telegram's `callback_data` holds at most 64 bytes, so a button carries `p:` and a 12-character random token (9 random bytes in base64url); `tg_picks` keeps the token with the account, item and place for a day, and removes expired ones as new ones are made. A tap on an expired or unknown token answers "That result has expired. Search again to get it."; another account's token finds nothing in this user's account.
 
-A tapped result is sent back by the shared code: a JPEG or PNG up to 10 MB with `sendPhoto`, other photos and PDFs with `sendDocument` (multipart upload, the title as file name and the title and page as caption), a note as text (cut at Telegram's 4,096 characters with a pointer to the browser), and kinds the chat cannot carry with "Open it in your browser instead". Then "Open it in your browser (the link works once, for 10 minutes). Using Campus Recall from your home screen? Sign in there once with the same IITGN account and turn on Auto-sync (Include this device's library) — then everything you save here shows up there." with an **Open in browser** URL button and a fresh link.
+A tapped result is sent back by the shared code: a JPEG or PNG up to 10 MB with `sendPhoto`, other photos and PDFs with `sendDocument` (multipart upload, the title as file name and the title and page as caption), a note as text (cut at Telegram's 4,096 characters with a pointer to the browser), and kinds the chat cannot carry with "Open it in your browser instead". Then "Open it in your browser (the link works once, for 10 minutes). Using AnyRecall from your home screen? Sign in there once with the same IITGN account and turn on Auto-sync (Include this device's library) — then everything you save here shows up there." with an **Open in browser** URL button and a fresh link.
 
-The button says "browser", not "app", because a link always opens in the browser: on an iPhone a web link can never open the Campus Recall web app added to the home screen, and that app keeps its own separate sign-in. So `/open` and the message after a result say the same: the link opens the library in the browser, and the home-screen app needs one sign-in of its own with the same IITGN account, and the student turns on Auto-sync there with **Include this device's library** (as after any sign-in, P02), after which what is saved through Telegram appears there too: it is the same cloud library. `/help` lists `/open` as "open your library in your browser".
+The button says "browser", not "app", because a link always opens in the browser: on an iPhone a web link can never open the AnyRecall web app added to the home screen, and that app keeps its own separate sign-in. So `/open` and the message after a result say the same: the link opens the library in the browser, and the home-screen app needs one sign-in of its own with the same IITGN account, and the student turns on Auto-sync there with **Include this device's library** (as after any sign-in, P02), after which what is saved through Telegram appears there too: it is the same cloud library. `/help` lists `/open` as "open your library in your browser".
 
 ## While the student waits
 
@@ -210,7 +210,7 @@ Both kinds of link use the shared token code: 32 random bytes in the URL path, k
 
 The Continue `POST` (with that session) takes the link and, under the user's lock, links the user to the session's account (`tg_accounts`), records the consent time and notice version, and uses up the user's other login links. If the user is linked to another account, the page says to send `/logout` first and nothing changes. The page then says "Telegram is linked", and the bot sends "Linked to s•••a@iitgn.ac.in. Forward or send files to save them; type anything to search." and removes the used login buttons. Several Telegram users can link the same account, each only through that account's own sign-in.
 
-**App link** (`/api/v1/telegram/open/<token>`, from `/open` and after a result). `GET` shows "Sign in to Campus Recall as student@iitgn.ac.in on this browser" and Continue. The `POST` takes the link and, while the user is still linked to that account, opens a normal session for it (with the account's email, marked `via: "telegram"`), ends any session the browser had, and redirects to `/?signin=telegram#/settings`.
+**App link** (`/api/v1/telegram/open/<token>`, from `/open` and after a result). `GET` shows "Sign in to AnyRecall as student@iitgn.ac.in on this browser" and Continue. The `POST` takes the link and, while the user is still linked to that account, opens a normal session for it (with the account's email, marked `via: "telegram"`), ends any session the browser had, and redirects to `/?signin=telegram#/settings`.
 
 `GET /session` returns `"via": "telegram"` for such a session and no `kind`: it is the account's own, so the app behaves exactly as after Google sign-in, including P02 (the device's library is uploaded only after "Include this device's library", and the cloud library is listed once the device takes part). In the app, `signin=telegram` counts as an explicit Auto-sync activation only if the server confirms a session with `via: "telegram"` (`pilot/client/autosync.ts`, `confirmBotSignIn`); the parameter alone changes nothing, `signin=whatsapp` does not accept it, and it does not accept a WhatsApp session or the account's own sign-in. A session opened from a Telegram app link cannot itself link another Telegram user: linking always needs the account's own sign-in.
 

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
-import type { CampusRecallServices } from '../../src/app/services';
+import type { AnyRecallServices } from '../../src/app/services';
 import { downloadBlob } from '../../src/app/download';
 import { plainMessage } from '../../src/app/plainError';
 import { enterViewer } from '../../src/app/viewerHistory';
@@ -20,7 +20,7 @@ export function AutoSyncSection({
   services,
   notify = () => undefined,
 }: {
-  services: CampusRecallServices;
+  services: AnyRecallServices;
   /** Confirms a finished action with the app's notification. */
   notify?: (message: string) => void;
 }) {
@@ -90,8 +90,8 @@ export function AutoSyncSection({
       {/* Only useful before signing in: it explains how to sign in. */}
       {view.entry === 'insiit' && !signedIn && (
         <p className="notice" role="status">
-          You opened Campus Recall from INSIIT. INSIIT does not sign you in here. Set up Auto-sync
-          to sign in with your IITGN Google account.
+          You opened AnyRecall from INSIIT. INSIIT does not sign you in here. Set up Auto-sync to
+          sign in with your IITGN Google account.
         </p>
       )}
       {view.status === 'local-only' && (
@@ -397,7 +397,7 @@ export function AutoSyncSection({
                 try {
                   const archives = await controller.exportCloudLibrary();
                   for (const [index, archive] of archives.entries()) {
-                    downloadBlob(archive, `campus-recall-cloud-${index + 1}.zip`);
+                    downloadBlob(archive, `anyrecall-cloud-${index + 1}.zip`);
                   }
                   setExportStatus(
                     `${archives.length} export ZIP${archives.length === 1 ? '' : 's'} ready. Check your downloads.`,

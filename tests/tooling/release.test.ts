@@ -37,7 +37,7 @@ async function candidate(name: string, base = '/') {
   await writeFile(join(directory, 'asset-manifest.json'), await readFile(manifestPath));
   await writeFile(
     join(directory, 'index.html'),
-    `<title>Campus Recall</title><script src="${base}assets/main-abcdefgh.js"></script><link rel="manifest" href="${base}manifest.webmanifest">`,
+    `<title>AnyRecall</title><script src="${base}assets/main-abcdefgh.js"></script><link rel="manifest" href="${base}manifest.webmanifest">`,
   );
   await writeFile(join(directory, 'assets/main-abcdefgh.js'), '/* synthetic bundle */');
   await writeFile(
@@ -47,7 +47,7 @@ async function candidate(name: string, base = '/') {
   await writeFile(
     join(directory, 'manifest.webmanifest'),
     JSON.stringify({
-      name: 'Campus Recall',
+      name: 'AnyRecall',
       scope: './',
       start_url: './#/library',
       display: 'standalone',
@@ -59,7 +59,7 @@ async function candidate(name: string, base = '/') {
   return directory;
 }
 it('validates root and project-subdirectory packages with a deterministic content identity', async () => {
-  for (const base of ['/', '/campus-recall/']) {
+  for (const base of ['/', '/anyrecall/']) {
     const directory = await candidate(base === '/' ? 'root' : 'project', base);
     const a = await verifyRelease(directory, base, manifestPath);
     const b = await verifyRelease(directory, base, manifestPath);
@@ -69,9 +69,9 @@ it('validates root and project-subdirectory packages with a deterministic conten
   }
 });
 it('rejects the wrong base before a project-path deployment', async () => {
-  await expect(
-    verifyRelease(await candidate('base'), '/campus-recall/', manifestPath),
-  ).rejects.toThrow(/base/i);
+  await expect(verifyRelease(await candidate('base'), '/anyrecall/', manifestPath)).rejects.toThrow(
+    /base/i,
+  );
 });
 it('rejects a missing or altered required runtime', async () => {
   const directory = await candidate('runtime');

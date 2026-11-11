@@ -219,7 +219,7 @@ describe('Telegram messages: refusals', () => {
       "This note is 23,456 characters, over the 20,000-character limit for notes, so it wasn't saved. Split it into shorter notes and send them one by one.",
     );
     expect(TELEGRAM_REPLIES.full('Mess menu.pdf', 200_000_000)).toBe(
-      'Your Campus Recall cloud library has reached its 200 MB limit, so "Mess menu.pdf" wasn\'t saved. Delete some items in the app to make room, then send it again.',
+      'Your AnyRecall cloud library has reached its 200 MB limit, so "Mess menu.pdf" wasn\'t saved. Delete some items in the app to make room, then send it again.',
     );
     expect(TELEGRAM_REPLIES.empty('blank.pdf')).toBe('"blank.pdf" is empty, so it wasn\'t saved.');
   });
@@ -290,13 +290,13 @@ describe('Telegram messages: refusals', () => {
   it('opens links in the browser, and says the home-screen app needs its own sign-in', () => {
     // On an iPhone a link never opens the home-screen web app, which keeps its own sign-in.
     const homeScreen =
-      "Using Campus Recall from your home screen? Sign in there once with the same IITGN account and turn on Auto-sync (Include this device's library) — then everything you save here shows up there.";
+      "Using AnyRecall from your home screen? Sign in there once with the same IITGN account and turn on Auto-sync (Include this device's library) — then everything you save here shows up there.";
     expect(TELEGRAM_REPLIES.openButton).toBe('Open in browser');
     expect(TELEGRAM_REPLIES.openCta).toBe(
       `Open it in your browser (the link works once, for 10 minutes). ${homeScreen}`,
     );
     expect(TELEGRAM_REPLIES.open).toBe(
-      `Open your Campus Recall library in your browser (the link works once, for 10 minutes). ${homeScreen}`,
+      `Open your AnyRecall library in your browser (the link works once, for 10 minutes). ${homeScreen}`,
     );
     expect(TELEGRAM_REPLIES.help('team@example.test')).toContain(
       '/open: open your library in your browser',
@@ -308,7 +308,7 @@ describe('Telegram messages: refusals', () => {
 
   it('leaves the WhatsApp wording as it was', () => {
     expect(REPLIES.notSearchable('Timetable.pdf')).toBe(
-      'Couldn\'t make "Timetable.pdf" searchable, but it is still saved in Campus Recall.',
+      'Couldn\'t make "Timetable.pdf" searchable, but it is still saved in AnyRecall.',
     );
     expect(REPLIES.file).toBe("Can't save this kind of file yet. Send a PDF or a photo.");
   });

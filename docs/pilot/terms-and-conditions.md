@@ -4,7 +4,7 @@ Pilot version 2.2 · Updated 11 November 2026
 
 ## About this pilot
 
-Campus Recall is a free personal retrieval student project by Raj Modi, Chaitanya and Nakshatra for CS437. It is not an official IIT Gandhinagar service and does not imply institutional endorsement. This separate pilot adds optional Azure account storage and Auto-sync. Local only remains available without an account.
+AnyRecall is a free personal retrieval student project by Raj Modi, Chaitanya and Nakshatra for CS437. It is not an official IIT Gandhinagar service and does not imply institutional endorsement. This separate pilot adds optional Azure account storage and Auto-sync. Local only remains available without an account.
 
 Public launch follows hosted verification. Cloud access and cloud export end on 6 December 2026 at 17:47 IST (12:17 UTC). Export through Settings before then. This conservative 30-day window starts with Azure VM creation on 6 November 2026; public launch may happen later. This is an experimental service, without a promise of indefinite storage or availability. Keep independent copies.
 
@@ -20,7 +20,7 @@ The WhatsApp bot is an optional part of the pilot for people 18 or older. Using 
 
 ## Telegram bot (optional)
 
-The Telegram bot is an optional part of the pilot for people 18 or older. Using it means logging in from it with your IITGN Google account and agreeing, on the page that links the chat to that account, that what you send goes into your Campus Recall cloud library, that Telegram stores your chat with the bot on its servers without end-to-end encryption, that our server stores and processes what you send and the searches you type, and that whoever has your Telegram account can open your library from the bot's one-time links. Keep your Telegram account secure; /logout unlinks it. Send only material you have permission to store, and do not send identity documents, payment card or bank details, or other people's private information. The bot answers only with items you saved; it does not generate answers. It may be open only to some accounts during the demo, may stop or change without notice, and ends with the pilot. /stop pauses it, and /delete followed by its confirmation button erases what you saved through it. Telegram's own terms apply to your use of Telegram.
+The Telegram bot is an optional part of the pilot for people 18 or older. Using it means logging in from it with your IITGN Google account and agreeing, on the page that links the chat to that account, that what you send goes into your AnyRecall cloud library, that Telegram stores your chat with the bot on its servers without end-to-end encryption, that our server stores and processes what you send and the searches you type, and that whoever has your Telegram account can open your library from the bot's one-time links. Keep your Telegram account secure; /logout unlinks it. Send only material you have permission to store, and do not send identity documents, payment card or bank details, or other people's private information. The bot answers only with items you saved; it does not generate answers. It may be open only to some accounts during the demo, may stop or change without notice, and ends with the pilot. /stop pauses it, and /delete followed by its confirmation button erases what you saved through it. Telegram's own terms apply to your use of Telegram.
 
 ## Check original sources
 

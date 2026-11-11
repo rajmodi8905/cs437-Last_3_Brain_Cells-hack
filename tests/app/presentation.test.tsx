@@ -2,7 +2,7 @@
 import { afterEach, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { App } from '../../src/ui/App';
-import type { CampusRecallServices } from '../../src/app/services';
+import type { AnyRecallServices } from '../../src/app/services';
 import type { LibraryItem } from '../../src/shared';
 afterEach(() => {
   cleanup();
@@ -43,7 +43,7 @@ it('a replacement view can search and open the exact source using only injected 
       score: 0.8,
     },
   ]);
-  const services: CampusRecallServices = {
+  const services: AnyRecallServices = {
     initialize: vi.fn(async () => {}),
     subscribeLibrary(next) {
       next([item]);

@@ -64,9 +64,7 @@ export async function exportCloudVault(options: {
   function finish() {
     add(
       'manifest.json',
-      strToU8(
-        JSON.stringify({ format: 'campus-recall', version: 1, exportedAt: Date.now(), items }),
-      ),
+      strToU8(JSON.stringify({ format: 'anyrecall', version: 1, exportedAt: Date.now(), items })),
     );
     zip.end();
     if (failure) throw failure;

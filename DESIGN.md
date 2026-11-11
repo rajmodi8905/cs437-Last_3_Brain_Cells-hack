@@ -1,4 +1,4 @@
-# Campus Recall design context
+# AnyRecall design context
 
 The interface is a Swiss typographic system with neo-brutalist accents. It is a practical personal library: warm paper background, near-black ink, system Helvetica, one signal orange, and square corners everywhere. Type and rules carry the layout, not cards or icons.
 

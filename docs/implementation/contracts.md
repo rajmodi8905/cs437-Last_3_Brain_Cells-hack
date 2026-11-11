@@ -231,7 +231,7 @@ ZIP MIME type `application/zip`, with `manifest.json` and `originals/{itemId}` e
 
 ```ts
 interface ArchiveManifest {
-  format: 'campus-recall';
+  format: 'anyrecall';
   version: 1;
   exportedAt: number;
   items: Array<{

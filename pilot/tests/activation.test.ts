@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import type { CampusRecallServices } from '../../src/app/services';
+import type { AnyRecallServices } from '../../src/app/services';
 import { AutoSyncController } from '../client/autosync';
 
 const values = new Map<string, unknown>();
@@ -12,7 +12,7 @@ function services() {
         values.set(key, value);
       },
     },
-  } as unknown as CampusRecallServices;
+  } as unknown as AnyRecallServices;
 }
 afterEach(() => {
   vi.restoreAllMocks();

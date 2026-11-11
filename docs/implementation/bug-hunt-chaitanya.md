@@ -5,7 +5,7 @@
 After the release-plan/issue-form PR is merged, give Chaitanya this whole prompt. It assigns investigation and reporting, not implementation. The teammate sending it supplies authorization for verified issue publication under their own account.
 
 ```text
-I am Chaitanya. Help me find and report real defects in Campus Recall. Raj owns all implementation, important UI work and fixes; do not implement fixes, edit policies or redesign anything.
+I am Chaitanya. Help me find and report real defects in AnyRecall. Raj owns all implementation, important UI work and fixes; do not implement fixes, edit policies or redesign anything.
 
 Repository: https://github.com/rajmodi8905/cs437-Last_3_Brain_Cells-hack
 Start with docs/implementation/chaitanya-quickstart.md for my production preview, UI-stress inputs, controlled webpage server and C1-C15 ledger. It links the shared fixture setup. Generate a new kit directory with npm run qa:prepare and run npm run qa:webpages in a separate terminal for the desktop capture cases. Follow my own focus areas below; Raj implements all fixes.

@@ -21,9 +21,9 @@ test('each screen change focuses the new heading and names the screen in the tit
   page,
 }) => {
   await page.goto('/');
-  await expect(page).toHaveTitle('Campus Recall');
+  await expect(page).toHaveTitle('AnyRecall');
   await enter(page);
-  await expect(page).toHaveTitle('Library · Campus Recall');
+  await expect(page).toHaveTitle('Library · AnyRecall');
   await page.reload();
   // A full load leaves focus where the browser puts it.
   await expect(heading(page)).not.toBeFocused();
@@ -36,20 +36,20 @@ test('each screen change focuses the new heading and names the screen in the tit
     await nav.getByRole('link', { name: new RegExp(`^${link}`) }).click();
     await expect(heading(page)).toHaveText(name);
     await expect(heading(page)).toBeFocused();
-    await expect(page).toHaveTitle(`${title} · Campus Recall`);
+    await expect(page).toHaveTitle(`${title} · AnyRecall`);
   }
   await page.locator('.settings-link').click();
   await expect(heading(page)).toBeFocused();
-  await expect(page).toHaveTitle('Settings · Campus Recall');
+  await expect(page).toHaveTitle('Settings · AnyRecall');
   await page.getByRole('link', { name: 'Privacy Policy', exact: true }).click();
   await expect(page.getByRole('heading', { level: 1, name: 'Privacy Policy' })).toBeFocused();
-  await expect(page).toHaveTitle('Privacy Policy · Campus Recall');
+  await expect(page).toHaveTitle('Privacy Policy · AnyRecall');
   await page.goto('/#/terms');
   await expect(page.getByRole('heading', { level: 1, name: 'Terms and Conditions' })).toBeFocused();
-  await expect(page).toHaveTitle('Terms and Conditions · Campus Recall');
+  await expect(page).toHaveTitle('Terms and Conditions · AnyRecall');
   await page.goto('/#/nowhere');
   await expect(heading(page)).toBeFocused();
-  await expect(page).toHaveTitle('Page not found · Campus Recall');
+  await expect(page).toHaveTitle('Page not found · AnyRecall');
   // The skip link still moves focus to the main content.
   await page.goto('/#/library');
   await page.reload();
@@ -64,7 +64,7 @@ test('submitting a search keeps focus in the search box', async ({ page }) => {
   await search.fill('mess timings');
   await search.press('Enter');
   await expect(page).toHaveURL(/#\/search$/);
-  await expect(page).toHaveTitle('Search · Campus Recall');
+  await expect(page).toHaveTitle('Search · AnyRecall');
   await expect(search).toBeFocused();
 });
 

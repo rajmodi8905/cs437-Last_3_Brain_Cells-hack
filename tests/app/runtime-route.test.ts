@@ -4,7 +4,7 @@
 import { expect, it } from 'vitest';
 import { isOwnRuntimeRequest } from '../../src/app/runtimeRequest';
 
-const origin = 'https://campusrecall.example';
+const origin = 'https://anyrecall.example';
 
 it("serves only this app's own runtime files from the asset cache", () => {
   expect(isOwnRuntimeRequest(`${origin}/runtime/ort/ort-wasm-simd-threaded.wasm`, origin)).toBe(

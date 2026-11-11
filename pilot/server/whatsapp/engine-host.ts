@@ -262,7 +262,7 @@ export class PlaywrightEngineHost implements EngineHost {
     if (!this.profileDir) {
       this.ownProfile = !this.options.profileDir;
       this.profileDir =
-        this.options.profileDir ?? (await mkdtemp(join(tmpdir(), 'campus-recall-engine-host-')));
+        this.options.profileDir ?? (await mkdtemp(join(tmpdir(), 'anyrecall-engine-host-')));
     }
     const { chromium } = (await import('@playwright/test')) as Playwright;
     const context = await chromium.launchPersistentContext(this.profileDir, {

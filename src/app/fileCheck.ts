@@ -31,7 +31,7 @@ export function fileProblem(file: File): string | undefined {
       return `${name} is a HEIC photo. Convert it to JPEG or PNG to save it.`;
     // An extension the library accepts, but the browser did not recognise the file.
     if (!type || KNOWN_EXTENSIONS.has(type))
-      return `${name} is not a file type Campus Recall can save. Choose a ${SUPPORTED} file.`;
+      return `${name} is not a file type AnyRecall can save. Choose a ${SUPPORTED} file.`;
     return `${name} is ${article(type)} ${type} file. Choose a ${SUPPORTED} file.`;
   }
   const limit = sizeLimit(kind);

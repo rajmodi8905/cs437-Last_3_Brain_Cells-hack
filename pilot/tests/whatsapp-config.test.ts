@@ -9,12 +9,12 @@ import { GRAPH_API_VERSION } from '../server/whatsapp/graph';
 const G = { PILOT_GOOGLE_CLIENT_ID: 'c', PILOT_GOOGLE_CLIENT_SECRET: 's' };
 const DURABLE = {
   PILOT_DATABASE_URL: 'postgres://pilot@db.internal:5432/pilot',
-  PILOT_BLOB_ACCOUNT_URL: 'https://campusrecallpilot.blob.core.windows.net',
+  PILOT_BLOB_ACCOUNT_URL: 'https://anyrecallpilot.blob.core.windows.net',
 };
 const PUBLIC = { ...G, ...DURABLE, PILOT_ORIGIN: 'https://recall.example.in' };
 
 // Stand-in secret files; the values are made up for these tests.
-const dir = mkdtempSync(join(tmpdir(), 'campus-recall-whatsapp-config-'));
+const dir = mkdtempSync(join(tmpdir(), 'anyrecall-whatsapp-config-'));
 afterAll(() => rmSync(dir, { recursive: true, force: true }));
 const secret = (name: string, value: string) => {
   const path = join(dir, name);
@@ -143,7 +143,7 @@ describe('WhatsApp local trial behind an HTTPS tunnel', () => {
     expect(config).toMatchObject({
       origin: TUNNEL,
       host: '127.0.0.1',
-      clientId: 'campus-recall-local-trial',
+      clientId: 'anyrecall-local-trial',
       storage: { kind: 'memory' },
       localTrial: true,
     });

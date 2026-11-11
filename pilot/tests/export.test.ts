@@ -2,7 +2,7 @@ import 'fake-indexeddb/auto';
 import { randomUUID } from 'node:crypto';
 import { strFromU8, unzipSync } from 'fflate';
 import { afterEach, describe, expect, it } from 'vitest';
-import { CampusRecallDatabase, DexieLibraryRepository } from '../../src/storage';
+import { AnyRecallDatabase, DexieLibraryRepository } from '../../src/storage';
 import { ApiFailure, createApiClient, type ApiClient } from '../client/api';
 import { exportCloudVault } from '../client/export';
 import { MemoryLocalLibrary, MemorySyncStateStore } from '../client/memory';
@@ -58,7 +58,7 @@ describe('P15 whole cloud library export', () => {
         (path) => path === 'manifest.json' || /^originals\/[a-f0-9-]+$/.test(path),
       ),
     ).toBe(true);
-    const db = new CampusRecallDatabase(`campus-recall-test-${randomUUID()}`);
+    const db = new AnyRecallDatabase(`anyrecall-test-${randomUUID()}`);
     try {
       const library = new DexieLibraryRepository(db);
       const report = await library.importArchive(archives[0]);

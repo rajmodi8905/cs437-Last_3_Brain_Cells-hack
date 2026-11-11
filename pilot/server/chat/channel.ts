@@ -84,7 +84,7 @@ const EXTENSIONS: Record<string, string> = {
 };
 /** A file name for sending an item back: its title, safe characters only, with an extension. */
 export const fileName = (item: StoredItem) => {
-  const base = item.title.replace(/[\\/:*?"<>|\n\r\t]+/g, ' ').trim() || 'Campus Recall';
+  const base = item.title.replace(/[\\/:*?"<>|\n\r\t]+/g, ' ').trim() || 'AnyRecall';
   const extension = EXTENSIONS[item.mimeType] ?? '';
   return base.toLowerCase().endsWith(extension) ? base : `${base}${extension}`;
 };

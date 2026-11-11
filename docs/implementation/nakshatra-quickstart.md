@@ -9,8 +9,8 @@ This is the executable handoff for the [release plan](release-plan.md). It prepa
 Wait for the handoff PR containing this file, the scripts and issue form to merge into main. Inspect `git status` before changing an existing checkout; preserve unrelated work and do not reset/clean. For a separate clean checkout:
 
 ```bash
-git clone https://github.com/rajmodi8905/cs437-Last_3_Brain_Cells-hack.git campus-recall-qa
-cd campus-recall-qa
+git clone https://github.com/rajmodi8905/cs437-Last_3_Brain_Cells-hack.git anyrecall-qa
+cd anyrecall-qa
 git rev-parse HEAD
 node --version
 ```

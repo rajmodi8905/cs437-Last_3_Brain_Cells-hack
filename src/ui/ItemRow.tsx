@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useRef } from 'react';
 import { ArrowUpRight, MoreHorizontal } from 'lucide-react';
 import type { LibraryItem, SearchResult, SourceLocation } from '../shared';
-import type { CampusRecallModel } from '../app/useCampusRecall';
+import type { AnyRecallModel } from '../app/useAnyRecall';
 import { kindCodes, kindLabels } from './presentation';
 import { bytes, humanDate, time } from './hooks';
 import { enterViewer } from '../app/viewerHistory';
@@ -62,7 +62,7 @@ export function ItemRow({
 }: {
   value: LibraryItem;
   result?: SearchResult;
-  model: CampusRecallModel;
+  model: AnyRecallModel;
 }) {
   const {
     itemProgress,

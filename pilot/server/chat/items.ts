@@ -41,7 +41,8 @@ export function noteFromText(body: string, forwarded: boolean) {
 
 /**
  * A UUID v4 made from a channel's message ID, so processing a message again can never create a
- * second item. `namespace` keeps channels apart.
+ * second item. `namespace` keeps channels apart. The text hashed keeps the product's earlier
+ * name: changing it would give every message already saved on the server a different ID.
  */
 export function chatGlobalId(namespace: string, messageId: string) {
   const bytes = createHash('sha256').update(`campus-recall:${namespace}:${messageId}`).digest();

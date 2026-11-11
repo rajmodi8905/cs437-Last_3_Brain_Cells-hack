@@ -1,6 +1,6 @@
 // Auto-sync for the app: sign-in, explicit inclusion, a sync loop and the cloud list.
 // UI-agnostic; the Settings section subscribes to its view.
-import type { CampusRecallServices } from '../../src/app/services';
+import type { AnyRecallServices } from '../../src/app/services';
 import type { IndexedSegment, ItemKind, SearchableSegment, SourceLocation } from '../../src/shared';
 import { plainMessage } from '../../src/app/plainError';
 import {
@@ -62,9 +62,9 @@ interface WithSegments {
   };
 }
 
-const controllers = new WeakMap<CampusRecallServices, AutoSyncController>();
+const controllers = new WeakMap<AnyRecallServices, AutoSyncController>();
 /** One controller per app, so syncing continues on every screen, not only Settings. */
-export function getAutoSync(services: CampusRecallServices) {
+export function getAutoSync(services: AnyRecallServices) {
   let controller = controllers.get(services);
   if (!controller) {
     controller = new AutoSyncController(services);
@@ -110,7 +110,7 @@ export class AutoSyncController {
   private started?: Promise<void>;
 
   constructor(
-    private services: CampusRecallServices,
+    private services: AnyRecallServices,
     private apiBase = '/api/v1',
   ) {
     this.api = createApiClient({ base: apiBase });
@@ -519,7 +519,7 @@ export class AutoSyncController {
     const locks = (globalThis.navigator as Navigator | undefined)?.locks;
     if (!locks || !this.session) return work();
     return locks.request(
-      `campus-recall-sync-${this.session.account}`,
+      `anyrecall-sync-${this.session.account}`,
       { ifAvailable: true },
       async (lock) => (lock ? work() : undefined),
     );

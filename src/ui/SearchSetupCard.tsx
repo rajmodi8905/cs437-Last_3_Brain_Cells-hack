@@ -1,5 +1,5 @@
 import { LoaderCircle } from 'lucide-react';
-import type { CampusRecallModel } from '../app/useCampusRecall';
+import type { AnyRecallModel } from '../app/useAnyRecall';
 import { SetupProgress, downloadSize, remainingBytes } from './SetupProgress';
 import { isIosBrowserTab } from '../app/phone';
 
@@ -8,7 +8,7 @@ import { isIosBrowserTab } from '../app/phone';
  * one-time download at the moment of need and starts the same setup as Settings. Spec S7: the
  * download starts only when the button is pressed.
  */
-export function SearchSetupCard({ model }: { model: CampusRecallModel }) {
+export function SearchSetupCard({ model }: { model: AnyRecallModel }) {
   const { downloadBytes, progress, setup, ready, setupError, doSetup, searched, offline } = model;
   const size = downloadBytes ? downloadSize(downloadBytes) : '';
   const left = setup ? 0 : remainingBytes(progress);
@@ -46,8 +46,8 @@ export function SearchSetupCard({ model }: { model: CampusRecallModel }) {
       {/* Home Screen storage is separate from Safari's, so the download belongs in the Home Screen app. */}
       {isIosBrowserTab() && (
         <p className="setup-tip">
-          On iPhone, add Campus Recall to your Home Screen first (Share › Add to Home Screen).
-          Safari can clear website data after 7 days without use; the Home Screen app keeps it.
+          On iPhone, add AnyRecall to your Home Screen first (Share › Add to Home Screen). Safari
+          can clear website data after 7 days without use; the Home Screen app keeps it.
         </p>
       )}
       <button className="button primary" disabled={setup} onClick={() => void doSetup('search')}>

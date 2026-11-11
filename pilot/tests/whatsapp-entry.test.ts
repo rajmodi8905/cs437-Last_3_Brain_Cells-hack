@@ -2,7 +2,7 @@
 // Auto-sync activation, like returning from Google, and the address is cleaned. The browser
 // flow end to end is in pilot/e2e/whatsapp-link.spec.ts.
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import type { CampusRecallServices } from '../../src/app/services';
+import type { AnyRecallServices } from '../../src/app/services';
 import { AutoSyncController } from '../client/autosync';
 import { readEntry } from '../client/entry';
 
@@ -16,7 +16,7 @@ function services() {
         values.set(key, value);
       },
     },
-  } as unknown as CampusRecallServices;
+  } as unknown as AnyRecallServices;
 }
 afterEach(() => {
   vi.restoreAllMocks();

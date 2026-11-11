@@ -265,7 +265,7 @@ export function Landing() {
         <div className="wrap">
           <a className="brand" href="#/" onClick={jump('lp-top')}>
             <i aria-hidden="true" />
-            Campus Recall
+            AnyRecall
           </a>
           <nav aria-label="Page sections">
             <a href="#/" onClick={jump('lp-how')}>
@@ -432,7 +432,7 @@ export function Landing() {
               Start your library.
             </h2>
             <a className="btn rv" style={{ '--d': 1 } as React.CSSProperties} href="#/library">
-              Open Campus Recall &rarr;
+              Open AnyRecall &rarr;
             </a>
           </div>
         </section>

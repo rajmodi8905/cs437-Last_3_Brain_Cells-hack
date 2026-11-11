@@ -42,7 +42,7 @@ interface SettingRecord {
   value: unknown;
 }
 interface ArchiveManifest {
-  format: 'campus-recall';
+  format: 'anyrecall';
   version: 1;
   exportedAt: number;
   items: Array<{
@@ -59,7 +59,7 @@ interface ArchiveManifest {
   }>;
 }
 
-export class CampusRecallDatabase extends Dexie {
+export class AnyRecallDatabase extends Dexie {
   items!: Table<LibraryItem, string>;
   originals!: Table<OriginalRecord, string>;
   segments!: Table<IndexedSegment, string>;
@@ -67,7 +67,7 @@ export class CampusRecallDatabase extends Dexie {
   previews!: Table<PreviewRecord, string>;
   settings!: Table<SettingRecord, string>;
 
-  constructor(name = 'campus-recall') {
+  constructor(name = 'anyrecall') {
     super(name);
     this.version(1).stores({
       items: 'id, createdAt, kind, status, contentSha256',
@@ -279,7 +279,7 @@ function validateArchiveEntry(
 const fitsOneArchive = (items: LibraryItem[]) => planArchiveParts(items).length <= 1;
 
 export class DexieLibraryRepository implements ProcessingRepository {
-  constructor(public readonly database: CampusRecallDatabase) {}
+  constructor(public readonly database: AnyRecallDatabase) {}
   async open(): Promise<void> {
     await this.database.open();
   }
@@ -658,7 +658,7 @@ export class DexieLibraryRepository implements ProcessingRepository {
 
   private async buildArchive(items: LibraryItem[]): Promise<Blob> {
     const manifest: ArchiveManifest = {
-      format: 'campus-recall',
+      format: 'anyrecall',
       version: 1,
       exportedAt: Date.now(),
       items: [],
@@ -715,12 +715,12 @@ export class DexieLibraryRepository implements ProcessingRepository {
       });
       manifest = JSON.parse(strFromU8(files['manifest.json']!)) as ArchiveManifest;
     } catch {
-      throw error('INVALID_ARCHIVE', 'Archive is not a valid Campus Recall export.');
+      throw error('INVALID_ARCHIVE', 'Archive is not a valid AnyRecall export.');
     }
     if (
       !manifest ||
       typeof manifest !== 'object' ||
-      manifest.format !== 'campus-recall' ||
+      manifest.format !== 'anyrecall' ||
       manifest.version !== 1 ||
       !Array.isArray(manifest.items) ||
       manifest.items.length > ARCHIVE_LIMITS.maxItems ||

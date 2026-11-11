@@ -1,5 +1,5 @@
 import { liveQuery } from 'dexie';
-import { CampusRecallDatabase, DexieLibraryRepository } from '../storage';
+import { AnyRecallDatabase, DexieLibraryRepository } from '../storage';
 import { LocalEngine } from '../engine';
 import type { CustomModelConfig, SearchModel } from '../shared/searchModels';
 import { captureWebpage, extractHtml, extractPdfText, validateWebUrl } from '../engine/capture';
@@ -26,7 +26,7 @@ export interface CaptureService {
   validateWebUrl: typeof validateWebUrl;
 }
 /** Stable boundary for any future React skin or other presentation layer. */
-export interface CampusRecallServices {
+export interface AnyRecallServices {
   library: LibraryRepository;
   engine: ApplicationEngine;
   capture: CaptureService;
@@ -40,8 +40,8 @@ export interface CampusRecallServices {
     set(key: string, value: unknown): Promise<void>;
   };
 }
-export function createCampusRecallServices(): CampusRecallServices {
-  const library = new DexieLibraryRepository(new CampusRecallDatabase());
+export function createAnyRecallServices(): AnyRecallServices {
+  const library = new DexieLibraryRepository(new AnyRecallDatabase());
   const engine = new LocalEngine(library);
   return {
     library,

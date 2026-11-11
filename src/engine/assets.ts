@@ -1,6 +1,6 @@
 import { AppOperationError, type ProgressListener } from '../shared';
 import { GEMMA, type SearchModel } from '../shared/searchModels';
-export const ASSET_CACHE = 'campus-recall-assets-v1';
+export const ASSET_CACHE = 'anyrecall-assets-v1';
 export interface Asset {
   url: string;
   bytes: number;
@@ -72,7 +72,7 @@ async function download(
   const response = await fetch(url, {
     credentials: 'omit',
     signal,
-    headers: asset.url.startsWith('./') ? { 'X-Campus-Recall-Setup': '1' } : undefined,
+    headers: asset.url.startsWith('./') ? { 'X-AnyRecall-Setup': '1' } : undefined,
   });
   if (!response.ok || !response.body)
     throw new AppOperationError({

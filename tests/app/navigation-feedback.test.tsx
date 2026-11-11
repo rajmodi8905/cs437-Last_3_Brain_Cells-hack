@@ -5,7 +5,7 @@
 import { afterEach, expect, it, vi } from 'vitest';
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { App } from '../../src/ui/App';
-import type { CampusRecallServices } from '../../src/app/services';
+import type { AnyRecallServices } from '../../src/app/services';
 import type { LibraryItem, ProgressListener, SearchResult } from '../../src/shared';
 import { AppOperationError } from '../../src/shared';
 
@@ -42,7 +42,7 @@ function stubServices(items: LibraryItem[] = [note], found: SearchResult[] = [])
     },
     dispose: vi.fn(async () => {}),
   };
-  const services: CampusRecallServices = {
+  const services: AnyRecallServices = {
     initialize: vi.fn(async () => {}),
     subscribeLibrary(next) {
       next(items);
@@ -68,7 +68,7 @@ function stubServices(items: LibraryItem[] = [note], found: SearchResult[] = [])
       exportItems: vi.fn(async () => new Blob(['zip'])),
       importArchive: vi.fn(),
     },
-    engine: engine as unknown as CampusRecallServices['engine'],
+    engine: engine as unknown as AnyRecallServices['engine'],
     capture: {
       captureWebpage: vi.fn(),
       extractHtml: vi.fn(),
@@ -83,7 +83,7 @@ function stubServices(items: LibraryItem[] = [note], found: SearchResult[] = [])
   };
 }
 
-async function start(services: CampusRecallServices, hash = '/library') {
+async function start(services: AnyRecallServices, hash = '/library') {
   window.location.hash = hash;
   render(<App services={services} />);
   await waitFor(() => expect(services.initialize).toHaveBeenCalledOnce());
@@ -99,7 +99,7 @@ it('moves focus to the new heading and names the screen in the title, but not on
   const { services } = stubServices();
   await start(services);
   expect(document.activeElement).not.toBe(heading());
-  expect(document.title).toBe('Library · Campus Recall');
+  expect(document.title).toBe('Library · AnyRecall');
   for (const [hash, title, name] of [
     ['/settings', 'Settings', 'Settings'],
     ['/add', 'Add to library', 'Add to your library'],
@@ -109,16 +109,16 @@ it('moves focus to the new heading and names the screen in the title, but not on
   ]) {
     await go(hash);
     await waitFor(() => expect(heading().textContent).toBe(name));
-    expect(document.title).toBe(`${title} · Campus Recall`);
+    expect(document.title).toBe(`${title} · AnyRecall`);
     expect(document.activeElement).toBe(heading());
     expect(heading().getAttribute('tabindex')).toBe('-1');
   }
   await go('/privacy');
   const policy = await screen.findByRole('heading', { level: 1, name: 'Privacy Policy' });
-  expect(document.title).toBe('Privacy Policy · Campus Recall');
+  expect(document.title).toBe('Privacy Policy · AnyRecall');
   await waitFor(() => expect(document.activeElement).toBe(policy));
   await go('/terms');
-  await waitFor(() => expect(document.title).toBe('Terms and Conditions · Campus Recall'));
+  await waitFor(() => expect(document.title).toBe('Terms and Conditions · AnyRecall'));
 });
 
 it('keeps focus in the search box and announces how many results were found', async () => {
@@ -139,7 +139,7 @@ it('keeps focus in the search box and announces how many results were found', as
   const status = await screen.findByText('1 result for “mess timings”');
   expect(status.closest('[role="status"]')).toBeTruthy();
   expect(document.activeElement).toBe(box);
-  expect(document.title).toBe('Search · Campus Recall');
+  expect(document.title).toBe('Search · AnyRecall');
 
   (services.engine.search as ReturnType<typeof vi.fn>).mockResolvedValueOnce([]);
   fireEvent.change(box, { target: { value: 'boat club' } });

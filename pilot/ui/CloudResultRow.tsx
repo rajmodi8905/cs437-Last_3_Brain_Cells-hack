@@ -1,5 +1,5 @@
 import { useState, useSyncExternalStore } from 'react';
-import type { CampusRecallServices } from '../../src/app/services';
+import type { AnyRecallServices } from '../../src/app/services';
 import { downloadBlob } from '../../src/app/download';
 import { plainMessage } from '../../src/app/plainError';
 import type { SearchResult } from '../../src/shared';
@@ -21,7 +21,7 @@ export function CloudResultRow({
   notify,
 }: {
   result: SearchResult;
-  services: CampusRecallServices;
+  services: AnyRecallServices;
   /** Confirms a finished download. */
   notify?: (message: string) => void;
 }) {

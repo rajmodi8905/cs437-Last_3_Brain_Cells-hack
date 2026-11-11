@@ -4,7 +4,7 @@
 // copy. The student still saves with "Save locally". Nothing is sent anywhere.
 // This module runs in the service worker and the page, so it uses no DOM or React.
 
-export const SHARE_CACHE = 'campus-recall-share';
+export const SHARE_CACHE = 'anyrecall-share';
 /** Relative to the app scope; the manifest's share_target action points here. */
 export const SHARE_PATH = 'share-target';
 /** The Add screen's address after a share, with the share's id. */

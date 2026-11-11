@@ -1091,7 +1091,7 @@ describe.each(backends)('Telegram bot: %s', (name, available, open) => {
       expect((await t.post(`/telegram/link/${token}`, session.cookie)).status).toBe(404);
       const again = await t.get(`/telegram/link/${token}`, session.cookie);
       expect(again.status).toBe(404);
-      expect(await again.text()).toContain('Send /login to the Campus Recall Telegram bot');
+      expect(await again.text()).toContain('Send /login to the AnyRecall Telegram bot');
     });
 
     it('expires login links after 10 minutes and refuses malformed or app-link tokens', async () => {
@@ -1175,7 +1175,7 @@ describe.each(backends)('Telegram bot: %s', (name, available, open) => {
       const page = await t.get(`/telegram/open/${token}`);
       expect(page.status).toBe(200);
       const html = await page.text();
-      expect(html).toContain('Sign in to Campus Recall as <strong>student.a@iitgn.ac.in</strong>');
+      expect(html).toContain('Sign in to AnyRecall as <strong>student.a@iitgn.ac.in</strong>');
       expect(html).not.toContain('<script');
       expect(page.headers.get('content-security-policy')).toContain("default-src 'none'");
 
@@ -1205,7 +1205,7 @@ describe.each(backends)('Telegram bot: %s', (name, available, open) => {
       expect((await t.follow(token)).status).toBe(404);
       const again = await t.get(`/telegram/open/${token}`);
       expect(again.status).toBe(404);
-      expect(await again.text()).toContain('Send /open to the Campus Recall Telegram bot');
+      expect(await again.text()).toContain('Send /open to the AnyRecall Telegram bot');
     });
 
     it('expires app links after 10 minutes, and /logout revokes unused ones', async () => {
@@ -1850,7 +1850,7 @@ describe.each(backends)('Telegram bot: %s', (name, available, open) => {
       expect(texts).toContain(TELEGRAM_REPLIES.full('Second.pdf', quota));
       expect(texts).toContain(TELEGRAM_REPLIES.full(undefined, quota));
       expect(TELEGRAM_REPLIES.full('Second.pdf', 200_000_000)).toBe(
-        'Your Campus Recall cloud library has reached its 200 MB limit, so "Second.pdf" wasn\'t saved. Delete some items in the app to make room, then send it again.',
+        'Your AnyRecall cloud library has reached its 200 MB limit, so "Second.pdf" wasn\'t saved. Delete some items in the app to make room, then send it again.',
       );
       plainOnly(texts);
     });
@@ -1987,7 +1987,7 @@ describe.each(backends)('Telegram bot: %s', (name, available, open) => {
       expect(reply.text).not.toContain(TELEGRAM_REPLIES.keywordOnly);
       await runWith(t, waiting, textUpdate('cricket'));
       expect(t.tg.textsTo(USER_A.id).at(-1)).toBe(
-        'Nothing matched “cricket” in your Campus Recall library. Try other words.',
+        'Nothing matched “cricket” in your AnyRecall library. Try other words.',
       );
     });
   });

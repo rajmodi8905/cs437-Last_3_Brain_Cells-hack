@@ -6,7 +6,7 @@
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { App } from '../../src/ui/App';
-import type { CampusRecallServices } from '../../src/app/services';
+import type { AnyRecallServices } from '../../src/app/services';
 import type { LibraryItem } from '../../src/shared';
 import { createPersistenceRequest, isIosBrowserTab } from '../../src/app/phone';
 
@@ -36,7 +36,7 @@ const item = (id: string, title: string): LibraryItem => ({
 
 function stubServices(items: LibraryItem[]) {
   const preferences = new Map<string, unknown>([['intro-seen', true]]);
-  const services: CampusRecallServices = {
+  const services: AnyRecallServices = {
     initialize: vi.fn(async () => {}),
     subscribeLibrary(next) {
       next(items);
@@ -65,7 +65,7 @@ function stubServices(items: LibraryItem[]) {
       cancelItem: vi.fn(async () => {}),
       subscribeProgress: () => () => {},
       dispose: vi.fn(async () => {}),
-    } as unknown as CampusRecallServices['engine'],
+    } as unknown as AnyRecallServices['engine'],
     capture: {
       captureWebpage: vi.fn(),
       extractHtml: vi.fn(),
@@ -75,7 +75,7 @@ function stubServices(items: LibraryItem[]) {
   };
   return { services, preferences };
 }
-async function start(services: CampusRecallServices, hash = '/library') {
+async function start(services: AnyRecallServices, hash = '/library') {
   window.location.hash = hash;
   render(<App services={services} />);
   await waitFor(() => expect(services.initialize).toHaveBeenCalledOnce());
@@ -219,7 +219,7 @@ function installEvent() {
   });
   return { event, prompt };
 }
-const OFFER = 'Install Campus Recall for quick access and so your library is kept';
+const OFFER = 'Install AnyRecall for quick access and so your library is kept';
 
 it('offers to install once after a save, and remembers Not now', async () => {
   const { services, preferences } = stubServices([item('a', 'Mess timings')]);

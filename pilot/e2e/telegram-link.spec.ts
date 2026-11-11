@@ -138,7 +138,7 @@ test('a signed-in student links Telegram, and what they send the bot is listed i
 
   // The link page names both sides and links only on Continue.
   await page.goto(link);
-  await expect(page.getByRole('heading', { name: 'Link Telegram to Campus Recall' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Link Telegram to AnyRecall' })).toBeVisible();
   await expect(page.getByText(`Link Telegram @${USER_A.username} to ${EMAIL}?`)).toBeVisible();
   await expect(page.getByText('not end-to-end encrypted')).toBeVisible();
   await page.getByRole('button', { name: 'Continue' }).click();
@@ -153,7 +153,7 @@ test('a signed-in student links Telegram, and what they send the bot is listed i
 
   await send(textUpdate('note Hostel guest pass rules from Telegram'));
   expect(tg.textsTo(USER_A.id).at(-1)).toBe(
-    'Saved to Campus Recall: Hostel guest pass rules from Telegram',
+    'Saved to AnyRecall: Hostel guest pass rules from Telegram',
   );
 
   // The app: the same account, which behaves as after Google sign-in. Nothing is uploaded until
@@ -203,9 +203,7 @@ test('an Open in browser link opens the app as the linked account without upload
 
   // The link shows who will be signed in, and uses nothing up until Continue.
   await page.goto(link);
-  await expect(
-    page.getByRole('heading', { name: 'Open your Campus Recall library' }),
-  ).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Open your AnyRecall library' })).toBeVisible();
   await expect(page.getByText(EMAIL)).toBeVisible();
   await page.getByRole('button', { name: 'Continue' }).click();
 

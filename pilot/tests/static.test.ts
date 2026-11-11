@@ -14,7 +14,7 @@ beforeAll(async () => {
   const root = await mkdtemp(join(tmpdir(), 'pilot-static-'));
   await mkdir(join(root, 'assets'));
   await mkdir(join(root, 'runtime'));
-  await writeFile(join(root, 'index.html'), '<!doctype html><title>Campus Recall</title>');
+  await writeFile(join(root, 'index.html'), '<!doctype html><title>AnyRecall</title>');
   await writeFile(join(root, 'sw.js'), 'self.addEventListener("fetch", () => {});');
   await writeFile(join(root, 'assets', 'app-123.js'), 'console.log(1)');
   await writeFile(join(root, 'runtime', 'ort.wasm'), new Uint8Array([0, 97, 115, 109]));
@@ -35,7 +35,7 @@ describe('Pilot origin serves the built app and the API together', () => {
     expect(res.status).toBe(200);
     expect(res.headers.get('content-type')).toMatch(/^text\/html/);
     expect(res.headers.get('cache-control')).toBe('no-cache');
-    expect(await res.text()).toContain('Campus Recall');
+    expect(await res.text()).toContain('AnyRecall');
   });
 
   it('serves hashed assets as immutable and WASM with its MIME type', async () => {

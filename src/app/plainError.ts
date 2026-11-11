@@ -12,7 +12,7 @@ export interface PlainError {
 const GENERIC = 'Something went wrong, so that did not finish. Try again.';
 const CONNECTION = 'Could not connect. Check your internet connection and try again.';
 const SPACE =
-  'This device is out of space for Campus Recall. Free up some space or delete items you no longer need, then try again.';
+  'This device is out of space for AnyRecall. Free up some space or delete items you no longer need, then try again.';
 const SESSION = 'Your Auto-sync session needs refreshing. Reload the page and try again.';
 
 /** Auto-sync service error codes (pilot/contract PilotErrorCode). */

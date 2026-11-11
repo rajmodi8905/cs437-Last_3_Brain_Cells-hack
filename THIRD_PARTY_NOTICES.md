@@ -1,6 +1,6 @@
 # Third-party notices
 
-Campus Recall uses local open-source components and publicly downloaded models. Model weights and runtime binaries are excluded from Git. `scripts/model-assets.json` pins model URLs, SHA-256 hashes and byte lengths. `scripts/prepare-assets.mjs` derives runtime hashes from the locked npm packages. Preserve these notices when distributing the application.
+AnyRecall uses local open-source components and publicly downloaded models. Model weights and runtime binaries are excluded from Git. `scripts/model-assets.json` pins model URLs, SHA-256 hashes and byte lengths. `scripts/prepare-assets.mjs` derives runtime hashes from the locked npm packages. Preserve these notices when distributing the application.
 
 | Component | Use | License / source |
 | --- | --- | --- |

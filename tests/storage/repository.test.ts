@@ -1,16 +1,16 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { zipSync, strToU8 } from 'fflate';
-import { CampusRecallDatabase, DexieLibraryRepository } from '../../src/storage/index.js';
+import { AnyRecallDatabase, DexieLibraryRepository } from '../../src/storage/index.js';
 import type { IndexedSegment } from '../../src/shared/index.js';
 
 const makeNote = (text: string, title?: string) => ({ kind: 'note' as const, text, title });
 
 describe('DexieLibraryRepository', () => {
-  let database: CampusRecallDatabase;
+  let database: AnyRecallDatabase;
   let repository: DexieLibraryRepository;
 
   beforeEach(async () => {
-    database = new CampusRecallDatabase(`test-${crypto.randomUUID()}`);
+    database = new AnyRecallDatabase(`test-${crypto.randomUUID()}`);
     repository = new DexieLibraryRepository(database);
     await repository.open();
   });
@@ -63,7 +63,7 @@ describe('DexieLibraryRepository', () => {
     const bytes = new TextEncoder().encode(body);
     const digest = Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', bytes)), (byte) => byte.toString(16).padStart(2, '0')).join('');
     const manifest = {
-      format: 'campus-recall',
+      format: 'anyrecall',
       version: 1,
       exportedAt: Date.now(),
       items: [{
@@ -92,7 +92,7 @@ describe('DexieLibraryRepository', () => {
     const bytes = new TextEncoder().encode('x'.repeat(20_001));
     const digest = Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', bytes)), (byte) => byte.toString(16).padStart(2, '0')).join('');
     const manifest = {
-      format: 'campus-recall',
+      format: 'anyrecall',
       version: 1,
       exportedAt: Date.now(),
       items: [{
@@ -126,7 +126,7 @@ describe('DexieLibraryRepository', () => {
     const item = await repository.save({ kind: 'webpage', url: 'https://example.test/page', text: 'snapshot', title: 'Page' });
     const archive = await repository.exportItems([item.id]);
 
-    const restoredDatabase = new CampusRecallDatabase(`test-${crypto.randomUUID()}`);
+    const restoredDatabase = new AnyRecallDatabase(`test-${crypto.randomUUID()}`);
     const restored = new DexieLibraryRepository(restoredDatabase);
     await restored.open();
     const report = await restored.importArchive(archive);
@@ -148,7 +148,7 @@ describe('DexieLibraryRepository', () => {
     const hostel = await repository.save({ kind: 'note', text: 'Badminton at 6', title: 'Hostel group' });
     const archive = await repository.exportItems([club.id, hostel.id]);
 
-    const targetDatabase = new CampusRecallDatabase(`test-${crypto.randomUUID()}`);
+    const targetDatabase = new AnyRecallDatabase(`test-${crypto.randomUUID()}`);
     const target = new DexieLibraryRepository(targetDatabase);
     await target.open();
     const report = await target.importArchive(archive);
@@ -166,7 +166,7 @@ describe('DexieLibraryRepository', () => {
 
     // Either partial library, whichever position its item has in the archive, gains the other.
     for (const [kept, missing] of [[club, hostel], [hostel, club]]) {
-      const partialDatabase = new CampusRecallDatabase(`test-${crypto.randomUUID()}`);
+      const partialDatabase = new AnyRecallDatabase(`test-${crypto.randomUUID()}`);
       const partial = new DexieLibraryRepository(partialDatabase);
       await partial.open();
       await partial.importArchive(await repository.exportItems([kept!.id]));
@@ -190,7 +190,7 @@ describe('DexieLibraryRepository', () => {
   it('serializes concurrent imports so only one creates the item', async () => {
     const item = await repository.save({ kind: 'webpage', url: 'https://example.test/concurrent', text: 'snapshot', title: 'Page' });
     const archive = await repository.exportItems([item.id]);
-    const targetDatabase = new CampusRecallDatabase(`test-${crypto.randomUUID()}`);
+    const targetDatabase = new AnyRecallDatabase(`test-${crypto.randomUUID()}`);
     const targetRepository = new DexieLibraryRepository(targetDatabase);
     await targetRepository.open();
 

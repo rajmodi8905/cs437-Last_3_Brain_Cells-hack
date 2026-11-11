@@ -2,9 +2,9 @@
 
 Version 1.0 · Updated 23 October 2026
 
-## About Campus Recall
+## About AnyRecall
 
-Campus Recall is a free personal information-retrieval student project by Raj Modi, Chaitanya and Nakshatra for CS437. It is not an official IIT Gandhinagar service and does not imply institutional endorsement.
+AnyRecall is a free personal information-retrieval student project by Raj Modi, Chaitanya and Nakshatra for CS437. It is not an official IIT Gandhinagar service and does not imply institutional endorsement.
 
 ## Your imported material
 
@@ -24,7 +24,7 @@ Processing requires the app to remain open. Unfinished jobs resume after reopeni
 
 ## Websites and open-source software
 
-Webpage capture and external links use third-party websites, which have their own policies and availability limits. A browser may block capture. Campus Recall includes open-source software and downloads models governed by their respective licenses. Component and model notices are documented in THIRD_PARTY_NOTICES.md in the repository. Campus Recall does not claim ownership of those components.
+Webpage capture and external links use third-party websites, which have their own policies and availability limits. A browser may block capture. AnyRecall includes open-source software and downloads models governed by their respective licenses. Component and model notices are documented in THIRD_PARTY_NOTICES.md in the repository. AnyRecall does not claim ownership of those components.
 
 ## Updates and reporting problems
 

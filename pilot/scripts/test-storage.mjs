@@ -9,7 +9,7 @@ const AZURITE_KEY =
   'Eby8vdM02xNOcqFlqUwJPLlmEtlCDXJ1OUzFT50uSRZ6IFsuFq2UVErCz4I6tq/K1SZFPTOtr/KBHBeksoGMGw==';
 const docker = (...args) => execFileSync('docker', args, { encoding: 'utf8' }).trim();
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
-const id = `campus-recall-pilot-test-${process.pid}`;
+const id = `anyrecall-pilot-test-${process.pid}`;
 const started = [];
 
 try {

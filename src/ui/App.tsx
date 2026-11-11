@@ -1,7 +1,7 @@
 import { lazy, Suspense, useCallback, useEffect, useSyncExternalStore } from 'react';
 import { ArrowUpRight, Search, ShieldCheck, WifiOff, X } from 'lucide-react';
-import type { CampusRecallServices } from '../app/services';
-import { useCampusRecall } from '../app/useCampusRecall';
+import type { AnyRecallServices } from '../app/services';
+import { useAnyRecall } from '../app/useAnyRecall';
 import { Add } from './Add';
 import { Viewer } from './Viewer';
 import { Dialogs } from './Dialogs';
@@ -14,8 +14,8 @@ import { useViewerHistory } from '../app/viewerHistory';
 import { getAutoSync } from '../../pilot/client/autosync';
 import { CloudViewer } from '../../pilot/ui/CloudViewer';
 const Policy = lazy(() => import('./Policy').then((m) => ({ default: m.Policy })));
-export function App({ services }: { services: CampusRecallServices }) {
-  const model = useCampusRecall(services);
+export function App({ services }: { services: AnyRecallServices }) {
+  const model = useAnyRecall(services);
   // Title, focus and scroll position follow the screen (see useScreenChange).
   useScreenChange(model.screen);
   // Pilot Auto-sync runs app-wide once signed in and opted in.
@@ -99,10 +99,9 @@ export function App({ services }: { services: CampusRecallServices }) {
         Skip to content
       </a>
       <aside className="sidebar">
-        <a href="#/library" className="brand" aria-label="Campus Recall home">
+        <a href="#/library" className="brand" aria-label="AnyRecall home">
           <span className="brand-mark" aria-hidden="true" />
-          Campus
-          <strong>Recall</strong>
+          AnyRecall
         </a>
         <span className="sidebar-label">WORKSPACE</span>
         <nav aria-label="Main navigation">
@@ -131,14 +130,14 @@ export function App({ services }: { services: CampusRecallServices }) {
             Settings
           </a>
           <a className="sidebar-foot" href="#/">
-            About Campus Recall
+            About AnyRecall
           </a>
         </div>
       </aside>
       <div className="workspace">
         <header className="topbar">
           <a className="mobile-brand" href="#/library">
-            Campus Recall
+            AnyRecall
           </a>
           <form className="searchbox" onSubmit={runSearch} role="search">
             <Search size={19} />
@@ -208,7 +207,7 @@ export function App({ services }: { services: CampusRecallServices }) {
           {/* One offer, never beside another notice; on Library it takes the setup banner's place. */}
           {installOffer && !update && !error && screen === 'library' && (
             <div className="notice install-offer">
-              <span>Install Campus Recall for quick access and so your library is kept</span>
+              <span>Install AnyRecall for quick access and so your library is kept</span>
               <span className="button-row">
                 <button className="button secondary" onClick={() => void install()}>
                   Install

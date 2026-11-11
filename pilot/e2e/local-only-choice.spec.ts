@@ -10,17 +10,17 @@ test('Use Local only is described as a choice, and the INSIIT note goes once sig
   await page.getByRole('button', { name: 'Open my library' }).click();
   await page.goto('/#/settings');
   const sync = page.getByRole('region', { name: 'Auto-sync' });
-  await expect(sync).toContainText('You opened Campus Recall from INSIIT');
+  await expect(sync).toContainText('You opened AnyRecall from INSIIT');
   await sync.getByRole('button', { name: 'Set up Auto-sync' }).click();
   const localOnly = sync.getByRole('button', { name: 'Use Local only' });
   await expect(localOnly).toHaveAccessibleDescription(
     'Keep everything on this device. You can turn on Auto-sync later.',
   );
-  await expect(sync).toContainText('You opened Campus Recall from INSIIT');
+  await expect(sync).toContainText('You opened AnyRecall from INSIIT');
   const email = `choice.${Date.now()}@iitgn.ac.in`;
   await sync.getByLabel('IITGN email').fill(email);
   await sync.getByRole('button', { name: 'Sign in (development)' }).click();
   await expect(sync).toContainText(`Signed in as ${email}`);
-  await expect(sync).not.toContainText('You opened Campus Recall from INSIIT');
+  await expect(sync).not.toContainText('You opened AnyRecall from INSIIT');
   await expect(sync.getByRole('button', { name: 'Use Local only' })).toHaveCount(0);
 });

@@ -1,6 +1,6 @@
 import { createRoot } from 'react-dom/client';
-import { createCampusRecallServices } from './app/services';
+import { createAnyRecallServices } from './app/services';
 import { App } from './ui/App';
 import './ui/styles.css';
-const services = createCampusRecallServices();
+const services = createAnyRecallServices();
 createRoot(document.getElementById('root')!).render(<App services={services} />);

@@ -4,9 +4,7 @@ import { resolve } from 'node:path';
 // Deliberately separate from the quick pilot browser suite: this check runs pinned real models.
 // Download assets once with models:download, then run:
 // CR_PILOT_MODEL_EVIDENCE_DIR=/absolute/evidence npx playwright test --config pilot/real-model.config.ts
-const evidence = resolve(
-  process.env.CR_PILOT_MODEL_EVIDENCE_DIR ?? '/tmp/campus-recall-pilot-model',
-);
+const evidence = resolve(process.env.CR_PILOT_MODEL_EVIDENCE_DIR ?? '/tmp/anyrecall-pilot-model');
 const port = 4612;
 export default defineConfig({
   testDir: 'model-e2e',

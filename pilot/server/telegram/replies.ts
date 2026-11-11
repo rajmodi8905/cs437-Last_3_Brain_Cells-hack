@@ -24,7 +24,7 @@ const named = (name: string) => `"${clip(name, 80)}"`;
 const CAN_SAVE = 'I can save photos, PDFs, text notes and links.';
 /** The home-screen app keeps its own sign-in, which a link from the chat cannot reach. */
 const HOME_SCREEN =
-  "Using Campus Recall from your home screen? Sign in there once with the same IITGN account and turn on Auto-sync (Include this device's library) — then everything you save here shows up there.";
+  "Using AnyRecall from your home screen? Sign in there once with the same IITGN account and turn on Auto-sync (Include this device's library) — then everything you save here shows up there.";
 
 const OFFICE = new Set([
   'doc',
@@ -77,9 +77,9 @@ export interface TooBigFile {
 export const TELEGRAM_REPLIES = {
   notice: (privacyUrl: string) =>
     [
-      'Hi! This is Campus Recall. Log in with your IITGN Google account, then send or forward photos, PDFs and notes here to keep them in your Campus Recall library, and type anything to search it.',
+      'Hi! This is AnyRecall. Log in with your IITGN Google account, then send or forward photos, PDFs and notes here to keep them in your AnyRecall library, and type anything to search it.',
       '',
-      '• What you send here is saved to your Campus Recall cloud library, with the searches you type.',
+      '• What you send here is saved to your AnyRecall cloud library, with the searches you type.',
       '• Our server stores and processes your files to make them searchable, and sees your searches.',
       '• Telegram keeps bot chats on its own servers. Chats with bots are not end-to-end encrypted.',
       '• You must be 18 or older to use this.',
@@ -98,10 +98,10 @@ export const TELEGRAM_REPLIES = {
   loginWhileLinked: (email: string) =>
     `You're already logged in as ${maskEmail(email)}. To use another account, send /logout first, then /login.`,
   loggedOut: (email: string) =>
-    `Logged out: this chat is no longer linked to ${maskEmail(email)}, and its unused links no longer work. What you saved stays in your Campus Recall library. Send /login to link again.`,
+    `Logged out: this chat is no longer linked to ${maskEmail(email)}, and its unused links no longer work. What you saved stays in your AnyRecall library. Send /login to link again.`,
   help: (contactEmail: string) =>
     [
-      "Log in with /login, then send or forward photos, PDFs and notes to save them to your Campus Recall library. Photos keep their full quality when you send them as a file. Start a message with 'note ' to save it as a note, or send a single link. Type anything else to search your library.",
+      "Log in with /login, then send or forward photos, PDFs and notes to save them to your AnyRecall library. Photos keep their full quality when you send them as a file. Start a message with 'note ' to save it as a note, or send a single link. Type anything else to search your library.",
       '',
       '/login: link your IITGN account',
       '/open: open your library in your browser',
@@ -112,7 +112,7 @@ export const TELEGRAM_REPLIES = {
       '',
       `Questions: ${contactEmail}`,
     ].join('\n'),
-  privacy: (privacyUrl: string) => `How Campus Recall handles your data: ${privacyUrl}`,
+  privacy: (privacyUrl: string) => `How AnyRecall handles your data: ${privacyUrl}`,
   stopped:
     "Stopped. I won't save anything or reply until you send /resume. What you saved is kept.",
   started: "Welcome back. I'm saving and replying again.",
@@ -120,20 +120,20 @@ export const TELEGRAM_REPLIES = {
   /** A button tapped while stopped (a short pop-up). */
   resumeFirst: "I'm paused. Send /resume to use me again.",
   deleteAsk:
-    "This erases the items you saved here through Telegram from your Campus Recall library, on every device, and logs this chat out. Items you added in the app stay; to remove everything, use Remove cloud library in the app's Settings. Tap the button within 10 minutes to go ahead.",
+    "This erases the items you saved here through Telegram from your AnyRecall library, on every device, and logs this chat out. Items you added in the app stay; to remove everything, use Remove cloud library in the app's Settings. Tap the button within 10 minutes to go ahead.",
   deleteButton: 'Yes, erase my Telegram items',
   deleted: (count: number) =>
-    `Done. ${count === 1 ? '1 item' : `${count} items`} you saved through Telegram ${count === 1 ? 'is' : 'are'} erased from your Campus Recall library, and this chat is logged out. Everything else in your library stays; to remove it all, use Remove cloud library in the app's Settings.`,
+    `Done. ${count === 1 ? '1 item' : `${count} items`} you saved through Telegram ${count === 1 ? 'is' : 'are'} erased from your AnyRecall library, and this chat is logged out. Everything else in your library stays; to remove it all, use Remove cloud library in the app's Settings.`,
   deleteExpired:
     'That erase button has expired (it works for 10 minutes). Nothing was erased; send /delete again if you still want to erase what you saved here.',
   deleteNotAsked: 'Send /delete first if you want to erase what you saved here.',
-  open: `Open your Campus Recall library in your browser (the link works once, for 10 minutes). ${HOME_SCREEN}`,
+  open: `Open your AnyRecall library in your browser (the link works once, for 10 minutes). ${HOME_SCREEN}`,
   /** A link opens in the browser: on an iPhone it can never open the home-screen app. */
   openButton: 'Open in browser',
   noLinks:
     "Links need the pilot's HTTPS address. In a local trial, start it again with --origin https://<tunnel host>, then send /login or /open.",
   savedMany: (titles: string[]) =>
-    `Saved ${titles.length} items to Campus Recall: ${titles.map((t) => clip(t, 40)).join(', ')}`,
+    `Saved ${titles.length} items to AnyRecall: ${titles.map((t) => clip(t, 40)).join(', ')}`,
   results: (query: string) => `Best matches for ${quote(query)}. Tap one to get it back.`,
   keywordOnly: 'Search by meaning is off right now, so these only match words in titles.',
   /** Under results that include items not searchable by meaning yet. */
@@ -143,7 +143,7 @@ export const TELEGRAM_REPLIES = {
   searchWaiting:
     'Searching… a file you just sent is still being processed, this can take a moment.',
   noResults: (query: string, keywordOnly: boolean) =>
-    `Nothing matched ${quote(query)} in your Campus Recall library.${
+    `Nothing matched ${quote(query)} in your AnyRecall library.${
       keywordOnly
         ? ' Search by meaning is off right now, so only titles were matched.'
         : ' Try other words.'
@@ -156,7 +156,7 @@ export const TELEGRAM_REPLIES = {
   unknownCommand: (command: string) =>
     `I don't know ${clip(command, 40)}. Send /help to see the commands I understand.`,
   notOpen:
-    "Campus Recall on Telegram isn't open to everyone yet, so nothing you send here is saved. Thanks for your interest!",
+    "AnyRecall on Telegram isn't open to everyone yet, so nothing you send here is saved. Thanks for your interest!",
 
   // What cannot be saved, and what can.
   voice: `Can't save voice messages. ${CAN_SAVE}`,
@@ -203,7 +203,7 @@ export const TELEGRAM_REPLIES = {
   notSaved: (name?: string) =>
     `Couldn't save ${name ? named(name) : 'this'}. Please send it again.`,
   full: (name: string | undefined, quotaBytes: number) =>
-    `Your Campus Recall cloud library has reached its ${formatMegabytes(quotaBytes)} limit, so ${
+    `Your AnyRecall cloud library has reached its ${formatMegabytes(quotaBytes)} limit, so ${
       name ? named(name) : 'this'
     } wasn't saved. Delete some items in the app to make room, then send it again.`,
   downloadFailed: "Couldn't get that file from Telegram. Please send it again.",

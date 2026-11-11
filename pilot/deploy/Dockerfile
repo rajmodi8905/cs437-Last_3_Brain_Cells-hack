@@ -47,7 +47,7 @@ ENTRYPOINT ["node", "/app/checker-entrypoint.mjs"]
 
 FROM ${NODE_IMAGE} AS runtime
 ARG SOURCE_REVISION=uncommitted
-LABEL org.opencontainers.image.title="Campus Recall pilot" \
+LABEL org.opencontainers.image.title="AnyRecall pilot" \
       org.opencontainers.image.revision="${SOURCE_REVISION}"
 ENV NODE_ENV=production \
     PILOT_HOST=0.0.0.0 \

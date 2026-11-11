@@ -4,7 +4,7 @@ import { loadConfig } from '../server/config';
 const G = { PILOT_GOOGLE_CLIENT_ID: 'c', PILOT_GOOGLE_CLIENT_SECRET: 's' };
 const DURABLE = {
   PILOT_DATABASE_URL: 'postgres://pilot@db.internal:5432/pilot',
-  PILOT_BLOB_ACCOUNT_URL: 'https://campusrecallpilot.blob.core.windows.net',
+  PILOT_BLOB_ACCOUNT_URL: 'https://anyrecallpilot.blob.core.windows.net',
 };
 
 describe('Pilot server configuration', () => {
@@ -35,7 +35,7 @@ describe('Pilot server configuration', () => {
         databaseUrl: 'postgres://pilot@db.internal:5432/pilot',
         schema: 'pilot',
         blob: {
-          accountUrl: 'https://campusrecallpilot.blob.core.windows.net',
+          accountUrl: 'https://anyrecallpilot.blob.core.windows.net',
           container: 'pilot',
         },
         backup: { container: 'pilot-backups', everyHours: 24, keep: 14 },
@@ -107,7 +107,7 @@ describe('Pilot server configuration', () => {
         PILOT_DEV_KEY_FILE: '/tmp/dev-private.pem',
         PILOT_ORIGIN: 'http://127.0.0.1:4600',
       }),
-    ).toMatchObject({ clientId: 'campus-recall-pilot-dev', devKeyFile: '/tmp/dev-private.pem' });
+    ).toMatchObject({ clientId: 'anyrecall-pilot-dev', devKeyFile: '/tmp/dev-private.pem' });
     expect(
       loadConfig({
         PILOT_DEV_KEY_FILE: '/tmp/dev-private.pem',

@@ -24,7 +24,7 @@ const server = createServer((request, response) => {
     case '/':
       response.writeHead(200, { 'Content-Type': 'text/plain;charset=utf-8' });
       response.end(
-        `Synthetic webpage fixtures. Use Campus Recall Add > Webpage to capture ${root}/allowed, /large, /blocked, /error and /unsupported. /blocked intentionally has no CORS header. This server is desktop loopback only; Ctrl+C stops it.`,
+        `Synthetic webpage fixtures. Use AnyRecall Add > Webpage to capture ${root}/allowed, /large, /blocked, /error and /unsupported. /blocked intentionally has no CORS header. This server is desktop loopback only; Ctrl+C stops it.`,
       );
       break;
     case '/allowed':

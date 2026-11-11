@@ -3,8 +3,8 @@
 //
 //   npm run pilot:telegram-local [-- --origin https://<tunnel host>] [--port 4600] [--contact you@iitgn.ac.in]
 //
-// Settings come from a private folder outside the repository, ~/.config/campus-recall/telegram/
-// (or CAMPUS_RECALL_TELEGRAM_DIR): the file bot_token, and optionally settings.env with plain
+// Settings come from a private folder outside the repository, ~/.config/anyrecall/telegram/
+// (or ANYRECALL_TELEGRAM_DIR): the file bot_token, and optionally settings.env with plain
 // PILOT_* settings. This script never reads bot_token; it passes its path, and the server reads
 // it. Nothing secret goes on a command line or in the output. Long polling needs no public
 // address; --origin (an HTTPS tunnel to this port) is needed for /login and /open links on a
@@ -31,7 +31,7 @@ const { values } = parseArgs({
 });
 if (!/^\d{1,5}$/.test(values.port)) fail('--port must be a port number.');
 const dir =
-  process.env.CAMPUS_RECALL_TELEGRAM_DIR || join(homedir(), '.config', 'campus-recall', 'telegram');
+  process.env.ANYRECALL_TELEGRAM_DIR || join(homedir(), '.config', 'anyrecall', 'telegram');
 if (!existsSync(dir)) fail(`Create ${dir} first (see docs/pilot/telegram-setup.md).`);
 
 // The token: only checked to exist and be private; its contents are read by the server.

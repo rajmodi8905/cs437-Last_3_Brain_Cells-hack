@@ -8,7 +8,7 @@ import { readFile } from 'node:fs/promises';
 import { strFromU8, strToU8, unzipSync, zipSync } from 'fflate';
 
 const HARNESS = 'http://127.0.0.1:4173/tests/harness.html';
-const APP_DB = 'campus-recall';
+const APP_DB = 'anyrecall';
 
 type ArchiveFiles = Record<string, Uint8Array>;
 /** Re-zips an exported archive after editing its files and manifest in place. */
@@ -36,7 +36,7 @@ function addNote(files: ArchiveFiles, manifest: any, title: string) {
   });
   return id;
 }
-const zipFile = (buffer: Buffer, name = 'campus-recall-backup.zip') => ({
+const zipFile = (buffer: Buffer, name = 'anyrecall-backup.zip') => ({
   name,
   mimeType: 'application/zip',
   buffer,
@@ -116,7 +116,7 @@ async function harnessTab(context: BrowserContext, database: string) {
   await page.waitForFunction(() => !!(window as any).harness);
   await page.evaluate(async (name) => {
     const h = (window as any).harness;
-    const repository = new h.DexieLibraryRepository(new h.CampusRecallDatabase(name));
+    const repository = new h.DexieLibraryRepository(new h.AnyRecallDatabase(name));
     await repository.open();
     (window as any).repository = repository;
   }, database);
@@ -183,7 +183,7 @@ async function mixedArchive(context: BrowserContext) {
   await page.close();
   const bytes = Buffer.from(exported.bytes);
   // Passed as an in-memory file: a just-written ZIP on disk can be locked by antivirus scanning.
-  const file = { name: 'campus-recall-backup.zip', mimeType: 'application/zip', buffer: bytes };
+  const file = { name: 'anyrecall-backup.zip', mimeType: 'application/zip', buffer: bytes };
   return { file, items: exported.items as any[], bytes };
 }
 
@@ -354,7 +354,7 @@ test('[S12] reopening during processing recovers the claim under the processing 
     const repository = (window as any).repository;
     const item = await repository.save({ kind: 'note', text: 'Synthetic interrupted note.' });
     return new Promise<any>((resolve) => {
-      void navigator.locks.request('campus-recall-processor', async () => {
+      void navigator.locks.request('anyrecall-processor', async () => {
         resolve({ item, claim: await repository.claimNextJob() });
         await new Promise(() => {});
       });
@@ -363,7 +363,7 @@ test('[S12] reopening during processing recovers the claim under the processing 
   // While that tab is alive, another tab can neither take the lock nor reset the active claim.
   expect(
     await observer.evaluate(() =>
-      navigator.locks.request('campus-recall-processor', { ifAvailable: true }, async (lock) => {
+      navigator.locks.request('anyrecall-processor', { ifAvailable: true }, async (lock) => {
         if (!lock) return 'busy';
         await (window as any).repository.recoverInterruptedJobs();
         return 'recovered';
@@ -377,7 +377,7 @@ test('[S12] reopening during processing recovers the claim under the processing 
   await worker.reload();
   await worker.waitForFunction(() => !!(window as any).harness);
   const recovered = await observer.evaluate(() =>
-    navigator.locks.request('campus-recall-processor', { ifAvailable: true }, async (lock) => {
+    navigator.locks.request('anyrecall-processor', { ifAvailable: true }, async (lock) => {
       if (!lock) return undefined;
       const repository = (window as any).repository;
       await repository.recoverInterruptedJobs();

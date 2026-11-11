@@ -1,6 +1,6 @@
 # Architecture and frontend replacement
 
-Campus Recall has no hosted REST backend or inference endpoint. Its application API consists of asynchronous TypeScript contracts and request-ID-based worker messages. User data stays in the browser library. Public download URLs and explicitly requested webpages are the network boundaries.
+AnyRecall has no hosted REST backend or inference endpoint. Its application API consists of asynchronous TypeScript contracts and request-ID-based worker messages. User data stays in the browser library. Public download URLs and explicitly requested webpages are the network boundaries.
 
 ## Module boundaries
 
@@ -8,7 +8,7 @@ Campus Recall has no hosted REST backend or inference endpoint. Its application 
 | --- | --- | --- |
 | `src/main.tsx` | Creates one service instance and mounts the chosen view | Mount a replacement frontend here |
 | `src/app/services.ts` | Composes Dexie, the local engine, capture, preferences and live library subscription | Keep this contract and composition when changing the skin |
-| `src/app/useCampusRecall.ts` | React controller: loading, actions, search generations, notifications and app lifecycle | Reuse its state/actions, or replace it for a different interaction model |
+| `src/app/useAnyRecall.ts` | React controller: loading, actions, search generations, notifications and app lifecycle | Reuse its state/actions, or replace it for a different interaction model |
 | `src/ui/App.tsx` | Navigation, app shell and source-preview placement | Replace freely |
 | `src/ui/screens/` | Library/search and Settings presentation | Redesign one screen at a time |
 | `src/ui/Add.tsx`, `Viewer.tsx`, `ItemRow.tsx`, `Dialogs.tsx` | Capture forms, source rendering, rows and dialogs | Replace individually; their data uses shared contracts |
@@ -20,7 +20,7 @@ Campus Recall has no hosted REST backend or inference endpoint. Its application 
 | `src/app/model-client.ts`, `model-protocol.ts` | Typed worker transport and backend fallback | Preserve when redesigning screens |
 | `src/sw.ts` | App-shell precache and cached runtime reads | Preserve offline behavior; rebuild after changing assets |
 
-Views receive a `CampusRecallServices` instance through `<App services={services} />`. They do not instantiate a database, inspect Dexie tables, or import extraction/model implementations. Add receives a save contract and capture service; Viewer receives original/backup operations. The application layer never imports the current UI or CSS.
+Views receive a `AnyRecallServices` instance through `<App services={services} />`. They do not instantiate a database, inspect Dexie tables, or import extraction/model implementations. Add receives a save contract and capture service; Viewer receives original/backup operations. The application layer never imports the current UI or CSS.
 
 The composition root creates services once per page, outside React rendering. Do not construct a new database/engine inside each screen or component render. `subscribeLibrary` returns an unsubscribe function; `subscribeProgress` does likewise. Subscription errors surface in the UI instead of silently leaving a stale library.
 

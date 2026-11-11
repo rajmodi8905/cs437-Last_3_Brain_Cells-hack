@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
-import type { CampusRecallModel } from '../app/useCampusRecall';
-export function useModalFocus(model: CampusRecallModel) {
+import type { AnyRecallModel } from '../app/useAnyRecall';
+export function useModalFocus(model: AnyRecallModel) {
   const { firstUse, rename, deleting, setRename, setDeleting } = model;
   useEffect(() => {
     const dialog = document.querySelector<HTMLElement>('.modal');

@@ -261,7 +261,7 @@ async function offerInstall(context: BrowserContext) {
     );
   });
 }
-const OFFER = 'Install Campus Recall for quick access and so your library is kept';
+const OFFER = 'Install AnyRecall for quick access and so your library is kept';
 
 test('Chromium gets one install offer after the first save, and Not now is remembered', async ({
   page,
@@ -311,7 +311,7 @@ test.describe('in iPhone Safari', () => {
       'Mozilla/5.0 (iPhone; CPU iPhone OS 18_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.6 Mobile/15E148 Safari/604.1',
   });
   const TIP =
-    'On iPhone, add Campus Recall to your Home Screen first (Share › Add to Home Screen). Safari can clear website data after 7 days without use; the Home Screen app keeps it.';
+    'On iPhone, add AnyRecall to your Home Screen first (Share › Add to Home Screen). Safari can clear website data after 7 days without use; the Home Screen app keeps it.';
 
   test('the search download card suggests the Home Screen before downloading', async ({ page }) => {
     await enter(page);
@@ -331,7 +331,7 @@ test.describe('in iPhone Safari', () => {
     await enter(page);
     await page.goto('/#/search');
     await expect(page.locator('.setup-card')).toBeVisible();
-    await expect(page.getByText(/add Campus Recall to your Home Screen/)).toHaveCount(0);
+    await expect(page.getByText(/add AnyRecall to your Home Screen/)).toHaveCount(0);
   });
 });
 
@@ -339,7 +339,7 @@ test('Android Chrome does not show the iPhone tip', async ({ page }) => {
   await enter(page);
   await page.goto('/#/search');
   await expect(page.locator('.setup-card')).toBeVisible();
-  await expect(page.getByText(/add Campus Recall to your Home Screen/)).toHaveCount(0);
+  await expect(page.getByText(/add AnyRecall to your Home Screen/)).toHaveCount(0);
 });
 
 /** Waits until the service worker controls the page, as it does in the installed app. */

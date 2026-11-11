@@ -2,7 +2,7 @@ import { useEffect, useRef } from 'react';
 // The source viewer has one entry in browser history, so Back (and Android's back gesture)
 // closes it instead of leaving the screen. The entry carries this mark in history.state and
 // keeps the screen's address, so hash routing never sees it.
-const MARK = 'campusRecallViewer';
+const MARK = 'anyRecallViewer';
 /** The address the viewer opened at. Back to it, without the mark, means Back left the viewer. */
 let openedAt: string | undefined;
 /** True between our own history.back() and the popstate it causes. */

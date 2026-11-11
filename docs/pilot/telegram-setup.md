@@ -5,7 +5,7 @@ How to create the bot for the opt-in Telegram channel ([telegram.md](telegram.md
 ## 1. Create the bot with BotFather
 
 1. In Telegram, open [@BotFather](https://t.me/BotFather) (check the blue verified mark) and send `/newbot`.
-2. Send the bot's **name**, shown in chats (for example "Campus Recall").
+2. Send the bot's **name**, shown in chats (for example "AnyRecall").
 3. Send its **username**: unique, ending in `bot`. This is the `@<your bot>` people search for.
 4. BotFather answers with the **token** (`<numbers>:<letters>`). Anyone with it controls the bot. Copy it straight into its private file (step 3), never into a chat, issue or terminal command. If it leaks, send `/revoke` to BotFather and replace the file.
 
@@ -25,7 +25,7 @@ Optional, all through BotFather:
   delete - Erase what you saved here
   ```
 
-- `/setdescription`: what people see before they tap Start, for example "Save photos, PDFs and notes to your Campus Recall library and search them. Tap Start, read what is stored, and log in with your IITGN account."
+- `/setdescription`: what people see before they tap Start, for example "Save photos, PDFs and notes to your AnyRecall library and search them. Tap Start, read what is stored, and log in with your IITGN account."
 - `/setabouttext`: a one-line profile text, and `/setuserpic`: the bot's picture (for example `public/icon-512.png`).
 
 Bots see only messages sent to them in private chats; the server ignores groups, so no privacy-mode change is needed.
@@ -38,7 +38,7 @@ Bots see only messages sent to them in private chats; the server ignores groups,
 
 The first trial runs on a laptop: the pilot server with the channel on, memory storage, and long polling, so no public address or webhook is needed.
 
-**Private folder.** Keep everything in `~/.config/campus-recall/telegram/`, outside the repository:
+**Private folder.** Keep everything in `~/.config/anyrecall/telegram/`, outside the repository:
 
 | File           | Content                                                                                                                                                 |
 | -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -46,9 +46,9 @@ The first trial runs on a laptop: the pilot server with the channel on, memory s
 | `settings.env` | optional `KEY=value` lines: `PILOT_TELEGRAM_CONTACT_EMAIL`, `PILOT_TELEGRAM_ALLOWED_USERS`, `PILOT_TELEGRAM_PRIVACY_URL`, `PILOT_TELEGRAM_NOTICE_VERSION`; other lines are ignored |
 
 ```sh
-mkdir -p ~/.config/campus-recall/telegram && chmod 700 ~/.config/campus-recall/telegram
-pbpaste > ~/.config/campus-recall/telegram/bot_token   # macOS, right after copying the token
-chmod 600 ~/.config/campus-recall/telegram/*
+mkdir -p ~/.config/anyrecall/telegram && chmod 700 ~/.config/anyrecall/telegram
+pbpaste > ~/.config/anyrecall/telegram/bot_token   # macOS, right after copying the token
+chmod 600 ~/.config/anyrecall/telegram/*
 ```
 
 Write the token with `pbpaste` or an editor, not with `echo`, so it stays out of shell history. An example `settings.env`:

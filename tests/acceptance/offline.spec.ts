@@ -24,7 +24,7 @@ test('production processing, semantic search and source viewing remain local off
   await context.setOffline(true);
   const report = await page.evaluate(async () => {
     const h = (window as any).harness;
-    const repository = new h.DexieLibraryRepository(new h.CampusRecallDatabase());
+    const repository = new h.DexieLibraryRepository(new h.AnyRecallDatabase());
     await repository.open();
     await repository.database.settings.put({ key: 'intro-seen', value: true });
     const engine = new h.LocalEngine(repository);
@@ -97,7 +97,7 @@ test('production processing, semantic search and source viewing remain local off
   await expect(page.getByRole('heading', { name: 'Privacy Policy', exact: true })).toBeVisible();
   // Evicted model assets must not trigger automatic remote repair during private use.
   await page.evaluate(async () => {
-    const cache = await caches.open('campus-recall-assets-v1');
+    const cache = await caches.open('anyrecall-assets-v1');
     const key = (await cache.keys()).find((k) => k.url.endsWith('/onnx/model_q4.onnx_data'));
     if (key) await cache.delete(key);
   });

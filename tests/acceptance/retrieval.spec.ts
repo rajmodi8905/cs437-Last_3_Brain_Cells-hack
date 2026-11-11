@@ -30,7 +30,7 @@ for (const scenario of [
     const report = await page.evaluate(async (corpus) => {
       const h = (window as any).harness;
       const repository = new h.DexieLibraryRepository(
-        new h.CampusRecallDatabase(`heldout-${crypto.randomUUID()}`),
+        new h.AnyRecallDatabase(`heldout-${crypto.randomUUID()}`),
       );
       await repository.open();
       const engine = new h.LocalEngine(repository);

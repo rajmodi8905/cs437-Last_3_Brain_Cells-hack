@@ -57,7 +57,7 @@ test("[S16] a student's own model is pinned, verified, calibrated and used offli
     localStorage.clear();
     const h = (window as any).harness;
     const repository = new h.DexieLibraryRepository(
-      new h.CampusRecallDatabase(`s16-${crypto.randomUUID()}`),
+      new h.AnyRecallDatabase(`s16-${crypto.randomUUID()}`),
     );
     await repository.open();
     const engine = new h.LocalEngine(repository);

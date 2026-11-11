@@ -90,7 +90,7 @@ Each message gets at most one reply: the reply is marked in `wa_inbound` before 
 
 The limits are the app's `LIMITS`, and items pass the same `validateCloudItem` check as uploads. The title is the caption, else the document's file name, else the first words of the note (cut at a word within 60 code points), else `WhatsApp photo <date>` or `WhatsApp PDF <date>`; titles are at most 120 code points. `createdAt` is the message timestamp in milliseconds.
 
-Nothing else is saved, and the bot says why in one short line: voice notes and other audio, video, stickers, other documents (Word, PowerPoint, Excel), locations, contacts, and files WhatsApp could not deliver (error 131052, over its 100 MB limit). Reactions and system notices get no answer. A saved item is confirmed with "Saved to Campus Recall: <title>"; with the conversation (below), a burst is confirmed in one message. Without the conversation, typed text that is not saved gets "Forward things here to save them, or start a message with 'note ' to save it as a note."; with it, typed text is a search.
+Nothing else is saved, and the bot says why in one short line: voice notes and other audio, video, stickers, other documents (Word, PowerPoint, Excel), locations, contacts, and files WhatsApp could not deliver (error 131052, over its 100 MB limit). Reactions and system notices get no answer. A saved item is confirmed with "Saved to AnyRecall: <title>"; with the conversation (below), a burst is confirmed in one message. Without the conversation, typed text that is not saved gets "Forward things here to save them, or start a message with 'note ' to save it as a note."; with it, typed text is a search.
 
 ## Conversation
 
@@ -117,7 +117,7 @@ A command is the whole typed message, ignoring case, extra spaces and a final fu
 | `PRIVACY`        | The privacy URL                                                                                                     |
 | `STOP`           | Stops saving and replying except to `START`; says saved data is kept until `DELETE ALL` (sent after `START`)        |
 | `START`          | Resumes after `STOP` ("I'm already on." otherwise)                                                                  |
-| `OPEN`           | "Open your WhatsApp library in Campus Recall: <link>", and that the link works once, for 10 minutes                 |
+| `OPEN`           | "Open your WhatsApp library in AnyRecall: <link>", and that the link works once, for 10 minutes                 |
 | `DELETE ALL`     | Asks for `CONFIRM DELETE` within 10 minutes                                                                         |
 | `CONFIRM DELETE` | Erases everything (W9) when `DELETE ALL` came within 10 minutes; otherwise says the request expired or was not made |
 | `AGREE`          | Consent (above); afterwards "You're already set up."                                                                |
@@ -134,7 +134,7 @@ The sender and message IDs stay, so a repeated webhook delivery is still recogni
 
 ### Batched confirmations
 
-With `onSaved`, each saved message's reply is claimed (`claimReply`) and its title waits in memory for that sender. The confirmation goes out when no other save arrives for `batchMs` (3 seconds), or at once when `batchMax` (10) titles are waiting. One title keeps "Saved to Campus Recall: <title>"; several give "Saved 3 items to Campus Recall: <title>, <title>, <title>", each title cut to 40 code points. Because the reply is claimed before it waits, a crash can lose a confirmation but never sends one twice. Refusals are still answered at once.
+With `onSaved`, each saved message's reply is claimed (`claimReply`) and its title waits in memory for that sender. The confirmation goes out when no other save arrives for `batchMs` (3 seconds), or at once when `batchMax` (10) titles are waiting. One title keeps "Saved to AnyRecall: <title>"; several give "Saved 3 items to AnyRecall: <title>, <title>, <title>", each title cut to 40 code points. Because the reply is claimed before it waits, a crash can lose a confirmation but never sends one twice. Refusals are still answered at once.
 
 ### Search (W8)
 
@@ -165,7 +165,7 @@ A `list_reply` names a row. The item is read from the sender's own vault only; a
 - Other kinds (audio, video or web pages, which reach the vault only from a device library included in a WhatsApp session) are not sent; the answer is "This one can't be sent in WhatsApp. Open it in the app instead."
 - A note is sent as its text, cut at 4,096 code points with a pointer to the app.
 
-A CTA URL message follows: "Open it in Campus Recall. The link works once, for 10 minutes.", with the button "Open in app" and a fresh link. The pick is answered once, like any message.
+A CTA URL message follows: "Open it in AnyRecall. The link works once, for 10 minutes.", with the button "Open in app" and a fresh link. The pick is answered once, like any message.
 
 ## Opening the app (W6)
 
@@ -189,7 +189,7 @@ Every stored item has an `index:<wamid>` job. `createWhatsAppIndexer({ store, ob
 
 `pilot/engine-host/index.html` and `main.ts` are built on their own with `npm run build:engine-host` (`ENGINE_HOST_BUILD=1`), into `.cache/engine-host-dist/`, from the same engine source as the app. The published app build in `dist/` is unchanged: it does not contain the page, so the release check still passes and the pilot site never serves it, and the service worker precache is as before.
 
-The page (`pilot/engine-host/host.ts`) opens its own library database, `campus-recall-engine-host`, never the app's `campus-recall`, removes anything an interrupted run left there, sets the default model (`saveSearchModel(GEMMA)`; a student's own S16 model is never used, because custom-model indexes never sync) and runs the app's `setupModels`, which fetches every pinned file once, checks its SHA-256 and keeps it in the asset cache the model worker reads. It then exposes `window.engineHost`:
+The page (`pilot/engine-host/host.ts`) opens its own library database, `anyrecall-engine-host`, never the app's `anyrecall`, removes anything an interrupted run left there, sets the default model (`saveSearchModel(GEMMA)`; a student's own S16 model is never used, because custom-model indexes never sync) and runs the app's `setupModels`, which fetches every pinned file once, checks its SHA-256 and keeps it in the asset cache the model worker reads. It then exposes `window.engineHost`:
 
 - `ready()` resolves with `{ indexVersion }` once models are set up.
 - `index({ bytesBase64, kind, mimeType, title, createdAt, sourceUrl? })` saves the original with `DexieLibraryRepository.save` exactly as the Add screen does (a file, or a note's text), runs `engine.indexItem`, waits for `ready` or `failed`, reads the segments the way Auto-sync reads a device's before publishing them, deletes the temporary item and returns `{ ok: true, indexVersion, contentSha256, segments, ms }` with segments in `IndexBundle.segments` form, or `{ ok: false, error: { code, message } }` when the engine or the library refused the original. A note keeps no `sourceUrl`, as in the app; the index does not depend on it.
@@ -217,7 +217,7 @@ For each job the indexer:
 2. Reads the original from the object store and calls `engine.index` with the item's kind, MIME type, title and capture time. The engine's `contentSha256` must equal the item's.
 3. Builds the bundle (`globalId`, `contentSha256`, `searchMetadataDigest` of the title it indexed with, the engine's `indexVersion`, dimension 768, segments) and, under the owner's lock, reads the item again. Deleted meanwhile: nothing is published. Renamed meanwhile: search embeds the title, so it indexes again with the new title (up to three passes, then the job is retried). Otherwise it publishes through `publishIndexBundle`.
 
-Failures follow the job queue: an engine host failure or timeout is retried after 30 seconds, doubling up to an hour; after the sixth attempt the job is `failed`. An original the engine refuses, or a bundle that cannot fit the quota, fails at once (`PermanentJobError`). When an index job fails for good the student is told once: "Couldn't make "<title>" searchable, but it is still saved in Campus Recall.", or for the quota "Your Campus Recall library is full, so "<title>" was saved but can't be searched yet." The message's "Saved" reply was already sent, so "once" comes from the job: only the claim that moved it to `failed` answers. Nothing re-queues a quota failure when space is freed yet.
+Failures follow the job queue: an engine host failure or timeout is retried after 30 seconds, doubling up to an hour; after the sixth attempt the job is `failed`. An original the engine refuses, or a bundle that cannot fit the quota, fails at once (`PermanentJobError`). When an index job fails for good the student is told once: "Couldn't make "<title>" searchable, but it is still saved in AnyRecall.", or for the quota "Your AnyRecall library is full, so "<title>" was saved but can't be searched yet." The message's "Saved" reply was already sent, so "once" comes from the job: only the claim that moved it to `failed` answers. Nothing re-queues a quota failure when space is freed yet.
 
 ### Measurements
 

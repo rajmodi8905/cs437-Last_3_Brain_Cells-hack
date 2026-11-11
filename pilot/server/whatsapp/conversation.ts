@@ -76,7 +76,7 @@ const quote = (query: string) => `“${clip(query, 60)}”`;
 export const BOT_REPLIES = {
   notice: (privacyUrl: string) =>
     [
-      'Hi! This is Campus Recall. Send or forward photos, PDFs and notes here to keep them in your own library, then search them here or in the app.',
+      'Hi! This is AnyRecall. Send or forward photos, PDFs and notes here to keep them in your own library, then search them here or in the app.',
       '',
       '• We save the photos, PDFs and notes you send here, and the searches you type.',
       '• WhatsApp (Meta) decrypts messages to pass them to us and may keep them for up to 30 days.',
@@ -102,7 +102,7 @@ export const BOT_REPLIES = {
       '',
       `Questions: ${contactEmail}`,
     ].join('\n'),
-  privacy: (privacyUrl: string) => `How Campus Recall handles your data: ${privacyUrl}`,
+  privacy: (privacyUrl: string) => `How AnyRecall handles your data: ${privacyUrl}`,
   stopped:
     "Stopped. I won't save anything or reply until you send START. What you saved is kept; send START and then DELETE ALL to erase it.",
   started: "Welcome back. I'm saving and replying again.",
@@ -117,9 +117,9 @@ export const BOT_REPLIES = {
   deleteNotAsked: 'Send DELETE ALL first if you want to erase everything.',
   nothingStored: 'Nothing is saved for you yet.',
   open: (url: string) =>
-    `Open your WhatsApp library in Campus Recall: ${url}\nThe link works once, for 10 minutes.`,
+    `Open your WhatsApp library in AnyRecall: ${url}\nThe link works once, for 10 minutes.`,
   savedMany: (titles: string[]) =>
-    `Saved ${titles.length} items to Campus Recall: ${titles.map((t) => clip(t, 40)).join(', ')}`,
+    `Saved ${titles.length} items to AnyRecall: ${titles.map((t) => clip(t, 40)).join(', ')}`,
   results: (query: string) => `Best matches for ${quote(query)}. Pick one to get it back.`,
   keywordOnly: 'Matched by keyword only right now.',
   noResults: (query: string, keywordOnly: boolean) =>
@@ -128,7 +128,7 @@ export const BOT_REPLIES = {
     }`,
   gone: "That item isn't in your library any more.",
   appOnly: "This one can't be sent in WhatsApp. Open it in the app instead.",
-  openCta: 'Open it in Campus Recall. The link works once, for 10 minutes.',
+  openCta: 'Open it in AnyRecall. The link works once, for 10 minutes.',
   noteTooLong: '(Cut short here; open it in the app to read the rest.)',
 };
 
