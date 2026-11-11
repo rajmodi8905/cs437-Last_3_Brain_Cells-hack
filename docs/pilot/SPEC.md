@@ -1,6 +1,6 @@
 # Pilot specification: account Auto-sync
 
-Status: draft, 5 November 2026. These statements cover only the one-month Auto-sync pilot. The root `SPEC.md` (S1 to S15) and its tests stay unchanged and must keep passing; nothing here replaces them. A statement is green only when its test runs against real behavior. Emulators and test identities are allowed during development, but hosted claims (P13, P14) need the real Azure deployment and real signed-in browsers.
+These statements cover only the one-month Auto-sync pilot. The root `SPEC.md` (S1 to S15) and its tests stay unchanged and must keep passing; nothing here replaces them. A statement is green only when its test runs against real behavior. Emulators and test identities are allowed during development, but hosted claims (P13, P14) need the real Azure deployment and real signed-in browsers.
 
 The wire format, states and limits referred to below are defined in [protocol.md](protocol.md). Machine-checkable types live in `pilot/contract/`.
 

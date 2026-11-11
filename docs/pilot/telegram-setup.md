@@ -17,7 +17,7 @@ Optional, all through BotFather:
   start - Start and read what is stored
   login - Link your IITGN account
   help - What I can do
-  open - Open your library in the app
+  open - Open your library in your browser
   logout - Unlink this chat
   privacy - How your data is handled
   stop - Pause the bot
@@ -30,7 +30,7 @@ Optional, all through BotFather:
 
 Bots see only messages sent to them in private chats; the server ignores groups, so no privacy-mode change is needed.
 
-## 2. Find your Telegram user ID (for the demo's allowed list)
+## 2. Find your Telegram user ID (for the allowed list)
 
 `PILOT_TELEGRAM_ALLOWED_USERS` can limit the bot to the team and reviewers. Numeric user IDs are better than usernames, which people can change or give up. To find yours, run the local trial with your @username in the list, send the bot a message, and stop; or ask a trusted ID bot. Do not post IDs in public issues.
 
@@ -68,7 +68,7 @@ npm run pilot:telegram-local
 
 `--contact you@iitgn.ac.in` can replace `PILOT_TELEGRAM_CONTACT_EMAIL` in `settings.env`; `--port` changes the port (4600). The script (`pilot/scripts/telegram-local.mjs`) passes the token file to the server by path and never reads, prints or puts the token on a command line. It builds the server bundle and starts it on `127.0.0.1` with `PILOT_TELEGRAM_LOCAL_TRIAL=1`, long polling, memory storage (everything is lost when it stops), development sign-in with a throwaway key in the ignored `.cache/pilot-dev-key/` (made once by `pilot/scripts/dev-key.mjs`), and the privacy link set to `docs/pilot/telegram-privacy.md` on GitHub's `main` unless `settings.env` sets one. Wait for `Telegram bot @… is answering.` (and `Telegram engine host ready in … s.` with the models).
 
-**Why development sign-in.** The bot works on the student's own IITGN account, so linking needs that account's sign-in. Google's OAuth client accepts only the pilot domain's callback, so a laptop cannot use real Google sign-in; the trial uses the development one instead (type an `@iitgn.ac.in` email; the same identity checks refuse other domains). The server allows it only on this trial: listening on loopback, and behind a tunnel only with memory storage, never on a public deployment. While the tunnel runs, anyone who has its address can sign in as any IITGN email, so share it with nobody and stop the trial when done. Real IITGN login is tried on the Azure pilot (section 4).
+**Why development sign-in.** The bot works on the student's own IITGN account, so linking needs that account's sign-in. Google's OAuth client accepts only the pilot domain's callback, so a laptop cannot use real Google sign-in; the trial uses the development one instead (type an `@iitgn.ac.in` email; the same identity checks refuse other domains). The server allows it only on this trial: listening on loopback, and behind a tunnel only with memory storage, never on a public deployment. While the tunnel runs, anyone who has its address can sign in as any IITGN email, so share it with nobody and stop the trial when done. Real IITGN login runs on the Azure pilot (section 4).
 
 **Links on a phone.** Login and app links need an HTTPS address, because Telegram and a phone cannot open the laptop's `127.0.0.1`. Without `--origin`, `/start`, `/login` and `/open` explain that. Start a tunnel in a second terminal and pass its address:
 
@@ -98,6 +98,8 @@ On the VM the channel runs in webhook mode: Telegram posts updates to `https://<
 2. Put the token and the secret into `/etc/campus-recall/secrets/telegram_bot_token` and `telegram_webhook_secret`, and the settings into `.env` ([deployment.md](deployment.md), "Telegram channel (opt-in)").
 3. Install `compose.telegram.yaml` next to `compose.yaml` and start the app. At start the server calls `setWebhook` with the pilot's URL, the secret and only `message` and `callback_query` updates, and logs `Telegram webhook set.`
 4. Check real IITGN login from a phone: **Start**, **Log in with IITGN**, Google's account chooser (IITGN accounts only), back on "Link Telegram … to …?", **Continue**, and "Linked to …" in the chat. A personal Gmail account is refused with Settings' "not eligible" message.
+
+The pilot's bot was deployed on 12 November 2026, when the owner checked login and linking, saving PDFs, search, getting an original back and the browser link on an iPhone ([telegram.md](telegram.md#checked-on-the-pilot)).
 
 Telegram keeps undelivered updates for 24 hours, so a short restart loses nothing. Switching back to a local trial removes the webhook (`deleteWebhook`); the next start of the VM's app sets it again.
 

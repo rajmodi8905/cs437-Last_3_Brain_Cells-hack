@@ -1,6 +1,6 @@
 # WhatsApp channel
 
-Status: fourth slice, November 2026. Students message the bot's WhatsApp number (Meta WhatsApp Cloud API). After they agree to a short notice, the pilot server stores each supported file or note as an ordinary cloud item in a vault for that sender, so it appears in that vault's change feed like any upload, and indexes it with the app's own engine so the app's cloud search finds it. Typed text is a search answered in the chat, a picked result sends the original back, and a one-time link opens the vault in the app. The statements are W1 to W9 in [SPEC.md](SPEC.md); the design and its sources are in `research/2026-11-10-technical-whatsapp-bot.md`.
+Students message the bot's WhatsApp number (Meta WhatsApp Cloud API). After they agree to a short notice, the pilot server stores each supported file or note as an ordinary cloud item in a vault for that sender, so it appears in that vault's change feed like any upload, and indexes it with the app's own engine so the app's cloud search finds it. Typed text is a search answered in the chat, a picked result sends the original back, and a one-time link opens the vault in the app. The statements are W1 to W9 in [SPEC.md](SPEC.md); the design and its sources are in `research/2026-11-10-technical-whatsapp-bot.md`. The channel is off by default. With Meta's free test number it reaches at most five listed phones ([whatsapp-setup.md](whatsapp-setup.md)); opening it to students needs a verified WhatsApp Business account. The pilot's demo uses the Telegram channel ([telegram.md](telegram.md)), which is built on the same core.
 
 The code is in `pilot/server/whatsapp/`, with the parts it shares with the Telegram channel (job runner, saving under the owner's lock, search, sending a result back, batching, erasing and the `ChatChannel` renderer interface) in `pilot/server/chat/` ([telegram.md](telegram.md), "The shared core"). The channel is on only when its settings are given (below); without them the server behaves as before, no Chromium starts and the WhatsApp paths answer `NOT_FOUND`. Meta setup and a local trial are in [whatsapp-setup.md](whatsapp-setup.md), deployment in [deployment.md](deployment.md) and the privacy page the bot links to in [whatsapp-privacy.md](whatsapp-privacy.md).
 
@@ -231,7 +231,7 @@ Failures follow the job queue: an engine host failure or timeout is retried afte
 | Search two bundles (warm page)                                     | 0.3 s     |
 | Search right after a browser restart (includes setup)              | 1.8 s     |
 
-Peak resident memory, summed over Chromium's processes (which counts shared pages more than once, so it overstates): about 0.9 GB after setup, 1.7–2.1 GB while indexing, and 1.9–2.2 GB at the highest over three runs, once both the text and picture models were loaded. The Node test process stayed at about 0.25 GB, so Chromium plus Node peaked at 2.1–2.4 GB. The vectors equal the app's own for the same files exactly (the same count and locations, largest difference 0, cosine 1.0), and indexing the PDF again on a restarted browser gave identical numbers. Production numbers on the 2-vCPU Linux VM still need measuring ([2026-11-23-whatsapp-demo.md](2026-11-23-whatsapp-demo.md)). In the runtime image (Linux ARM64 in Docker Desktop, read-only root, all capabilities dropped), the engine host was ready 3.3 s after start and the container used about 330 MB idle.
+Peak resident memory, summed over Chromium's processes (which counts shared pages more than once, so it overstates): about 0.9 GB after setup, 1.7–2.1 GB while indexing, and 1.9–2.2 GB at the highest over three runs, once both the text and picture models were loaded. The Node test process stayed at about 0.25 GB, so Chromium plus Node peaked at 2.1–2.4 GB. The vectors equal the app's own for the same files exactly (the same count and locations, largest difference 0, cosine 1.0), and indexing the PDF again on a restarted browser gave identical numbers. These are laptop numbers; none were taken on the pilot's 2-vCPU Linux VM. In the runtime image (Linux ARM64 in Docker Desktop, read-only root, all capabilities dropped), the engine host was ready 3.3 s after start and the container used about 330 MB idle.
 
 ## Seams
 
@@ -244,11 +244,10 @@ Peak resident memory, summed over Chromium's processes (which counts shared page
 
 Tests: `pilot/tests/whatsapp-conversation.test.ts` (W1, commands, W9, batching, W8 with `FakeEngineHost`, W6 links; memory stores, and PostgreSQL and Azurite with `npm run test:pilot:storage`), `pilot/tests/whatsapp-entry.test.ts` (the app's `signin=whatsapp` handling), `pilot/e2e/whatsapp-link.spec.ts` (opening the app from a link in Chromium) and `pilot/model-e2e/whatsapp-search.spec.ts` (W8 with the real models: the bot's and the app's top result agree). The two Playwright specs run their own in-process pilot server with the channel; the shared test servers keep it off.
 
-## Not done yet
+## Limits
 
-- Measurements on the VM and the phone demo record ([2026-11-23-whatsapp-demo.md](2026-11-23-whatsapp-demo.md)).
-- Clean-up of old `wa_inbound` rows, finished jobs and expired `wa_links` rows (expired links cannot be used, but stay until then).
+- Old `wa_inbound` rows, finished jobs and expired `wa_links` rows are kept; an expired link cannot be used.
 - A new notice version does not ask senders who agreed to an older one to agree again; the version is only stored.
-- Waiting confirmations live in the worker's memory: a crash or restart can lose one (never send it twice).
+- Waiting confirmations live in the worker's memory: a crash or restart can lose one, and never sends one twice.
 - After a WhatsApp session includes a device library, the bot searches those items too; its "only things you sent here are searched" then means this vault.
 - Without an engine host, keyword search matches titles only, not note text.

@@ -1,6 +1,6 @@
 # Telegram channel
 
-Status: November 2026, for the 24 November demo. Students open the team's Telegram bot, tap Start and log in with their IITGN Google account. From then on the pilot server stores each supported file or note they send as an ordinary cloud item in that account's own cloud library (the one the app's Auto-sync uses, so the items appear in the app), indexes it with the app's own engine, answers typed searches over the whole library in the chat with result buttons that send the original back, and opens the account in the app from a one-time link. Nothing is stored or searched before login. It runs on the same core as the WhatsApp channel ([whatsapp.md](whatsapp.md)); the statements are T1 to T9 in [SPEC.md](SPEC.md).
+Students open the team's Telegram bot, tap Start and log in with their IITGN Google account. From then on the pilot server stores each supported file or note they send as an ordinary cloud item in that account's own cloud library (the one the app's Auto-sync uses, so the items appear in the app), indexes it with the app's own engine, answers typed searches over the whole library in the chat with result buttons that send the original back, and opens the account in the app from a one-time link. Nothing is stored or searched before login. It runs on the same core as the WhatsApp channel ([whatsapp.md](whatsapp.md)); the statements are T1 to T9 in [SPEC.md](SPEC.md). The channel was deployed on the Azure pilot on 12 November 2026 ([Checked on the pilot](#checked-on-the-pilot)).
 
 The channel is on only when its settings are given (below). Without them the server behaves as before and the Telegram paths answer `NOT_FOUND`. WhatsApp and Telegram can run alone or together; the engine host is started once for both. BotFather setup and a local trial are in [telegram-setup.md](telegram-setup.md), deployment in [deployment.md](deployment.md) and the privacy page the bot links to in [telegram-privacy.md](telegram-privacy.md).
 
@@ -57,7 +57,7 @@ The first three come together or not at all, and the optional ones are refused w
 
 Webhook mode needs an HTTPS `PILOT_ORIGIN`, because Telegram delivers only to HTTPS. `PILOT_TELEGRAM_LOCAL_TRIAL=1` accepts memory storage (or a local storage connection string) with a local origin or a tunnel's HTTPS origin while `PILOT_HOST` is a loopback address. Google's OAuth client accepts only the pilot domain's callback, so a trial cannot use real Google sign-in: it may use development sign-in (`PILOT_DEV_KEY_FILE`) for linking, which is otherwise refused on any non-local origin. Behind a tunnel that is allowed only with the trial on, a loopback `PILOT_HOST`, no Google client and memory storage, and never for the WhatsApp trial; anyone who has the tunnel's address can then sign in as any IITGN email while the trial runs, so it holds nothing that lasts. Real IITGN login is tried on the Azure pilot. Login and app links need an HTTPS origin: with a local one, `/start`, `/login` and `/open` explain that they need a tunnel, and no link button is sent (Telegram does not accept loopback addresses in buttons, and a phone cannot open them).
 
-Allowed users are for the demo: someone else's message or tap is not recorded at all (no sender row, no message), and they get "AnyRecall on Telegram isn't open to everyone yet, so nothing you send here is saved." once per message. Usernames can change hands; prefer numeric IDs where they are known.
+With allowed users set, someone else's message or tap is not recorded at all (no sender row, no message), and they get "AnyRecall on Telegram isn't open to everyone yet, so nothing you send here is saved." once per message. Usernames can change hands; prefer numeric IDs where they are known.
 
 `main.ts` uses `PostgresBotStore` on Telegram's tables and `PostgresTelegramStore` with durable storage, memory stores otherwise; mounts the login and app link routes (and the webhook in webhook mode), with `announceTelegramLink` sending the "Linked" message straight from the link page's handler; starts the engine host once for both channels; starts `startTelegramBot` with `createTelegramIndexer`; then either calls `setWebhook` (webhook mode) or starts long polling. It logs the bot's @username from `getMe`. On `SIGTERM` or `SIGINT` it stops polling, stops the workers (sending waiting confirmations), closes the engine host and exits.
 
@@ -232,11 +232,14 @@ The bot token is part of every Bot API URL. It is read from its file by the serv
 - `pilot/e2e/telegram-link.spec.ts` (`npm run test:pilot:e2e`): in Chromium, development sign-in in the app, the bot's login link and Continue, a note sent to the bot listed in the app for that email once the device's library is included (nothing uploaded before), and an app link signing a second browser in as that email.
 - `pilot/model-e2e/telegram-search.spec.ts` (`npm run test:pilot:models`): with the real models, the bot linked to an account; its top result equals the app's for the engine host fixtures (on 11 November 2026 on a Mac: the PDF at page 2 and the photo, for both). `pilot/model-e2e/telegram-index-errors.spec.ts`: a 71-page PDF made in the test and a damaged PDF go through the real engine host and the bot; the chat gets the 71-page reply above and the unreadable-PDF reply, and both stay saved.
 
-## Not done yet
+## Checked on the pilot
 
-- A demo record on real phones, real IITGN Google sign-in from a login link on the Azure pilot, and measurements on the VM (as for WhatsApp, [2026-11-23-whatsapp-demo.md](2026-11-23-whatsapp-demo.md)).
-- Clean-up of old `tg_inbound` rows, finished jobs and expired `tg_links` rows; expired `tg_picks` rows go only when new buttons are made.
-- A user removed from `PILOT_TELEGRAM_ALLOWED_USERS` keeps their link and what they saved, but cannot reach the bot to send `/logout` or `/delete`; they can still delete items in the app, or unlink them by hand if asked.
+On 12 November 2026 the bot was deployed on the Azure pilot, and the owner checked it on an iPhone: IITGN login from the bot's link and linking, saving PDFs, search by meaning, getting the original back from a result button, the **Open in browser** link, and Google sign-in inside the home-screen app ([protocol.md](protocol.md), "Checked on 12 November 2026"). This is the owner's report from one phone, separate from the automated tests above.
+
+## Limits
+
+- Old `tg_inbound` rows, finished jobs and expired `tg_links` rows are kept; an expired link cannot be used. Expired `tg_picks` rows are removed when new buttons are made.
+- A user removed from `PILOT_TELEGRAM_ALLOWED_USERS` keeps their link and what they saved, but cannot reach the bot to send `/logout` or `/delete`; they can still delete items in the app, and the team can unlink them by hand.
 - If the "Linked" message cannot be sent (for example Telegram is down), the link still holds and the login button stays; the next message works as linked.
-- Waiting confirmations live in the worker's memory, as on WhatsApp.
+- Waiting confirmations live in the worker's memory, as on WhatsApp: a crash or restart can lose one, and never sends one twice.
 - Without an engine host, keyword search matches titles only.
