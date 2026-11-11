@@ -1,6 +1,6 @@
 # Terms and Conditions
 
-Pilot version 2.0 · Updated 6 November 2026
+Pilot version 2.2 · Updated 11 November 2026
 
 ## About this pilot
 
@@ -13,6 +13,14 @@ Public launch follows hosted verification. Cloud access and cloud export end on 
 You retain ownership of imported material. You are responsible for permission to store and use it, including material about other people. Auto-sync is restricted to verified IITGN Google Workspace accounts. Do not share your browser session or attempt to access someone else's vault.
 
 Signing in does not upload your library. Explicitly including a library uploads originals, metadata, compatible embeddings and extracted content to your private Azure account vault. Authorized project operators can access this content; storage is not end-to-end encrypted. Read the Privacy Policy before including a library. Processing and search remain on your devices without cloud inference.
+
+## WhatsApp bot (optional)
+
+The WhatsApp bot is an optional part of the pilot for people 18 or older. Using it means agreeing to its notice by replying AGREE, and accepting that WhatsApp (Meta) decrypts and keeps your messages to it for up to 30 days and that our server stores and processes what you send and the searches you type. Send only material you have permission to store, and do not send identity documents, payment card or bank details, or other people's private information. The bot answers only with items you saved; it does not generate answers. It runs on Meta's test number, which may stop or change without notice, and it ends with the pilot. STOP pauses it, and DELETE ALL followed by CONFIRM DELETE erases what you saved through it. WhatsApp's and Meta's own terms apply to your use of WhatsApp.
+
+## Telegram bot (optional)
+
+The Telegram bot is an optional part of the pilot for people 18 or older. Using it means logging in from it with your IITGN Google account and agreeing, on the page that links the chat to that account, that what you send goes into your Campus Recall cloud library, that Telegram stores your chat with the bot on its servers without end-to-end encryption, that our server stores and processes what you send and the searches you type, and that whoever has your Telegram account can open your library from the bot's one-time links. Keep your Telegram account secure; /logout unlinks it. Send only material you have permission to store, and do not send identity documents, payment card or bank details, or other people's private information. The bot answers only with items you saved; it does not generate answers. It may be open only to some accounts during the demo, may stop or change without notice, and ends with the pilot. /stop pauses it, and /delete followed by its confirmation button erases what you saved through it. Telegram's own terms apply to your use of Telegram.
 
 ## Check original sources
 

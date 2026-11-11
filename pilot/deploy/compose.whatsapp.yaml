@@ -1,0 +1,40 @@
+# The opt-in WhatsApp channel (docs/pilot/whatsapp-setup.md). Copied next to compose.yaml as
+# /opt/campus-recall/compose.whatsapp.yaml, it turns the channel on: deploy-release.sh then uses
+# both files and fills the models folder. Without this file the channel is off and nothing below
+# applies. Plain settings come from .env; the three secrets are files, never environment values.
+services:
+  app:
+    environment:
+      PILOT_WHATSAPP_VERIFY_TOKEN_FILE: /run/secrets/whatsapp_verify_token
+      PILOT_WHATSAPP_APP_SECRET_FILE: /run/secrets/whatsapp_app_secret
+      PILOT_WHATSAPP_ACCESS_TOKEN_FILE: /run/secrets/whatsapp_access_token
+      PILOT_WHATSAPP_PHONE_NUMBER_ID: ${PILOT_WHATSAPP_PHONE_NUMBER_ID:?Set Meta's phone number ID}
+      PILOT_WHATSAPP_GRAPH_VERSION: ${PILOT_WHATSAPP_GRAPH_VERSION:-}
+      PILOT_WHATSAPP_PRIVACY_URL: ${PILOT_WHATSAPP_PRIVACY_URL:?Set the WhatsApp privacy page URL}
+      PILOT_WHATSAPP_CONTACT_EMAIL: ${PILOT_WHATSAPP_CONTACT_EMAIL:?Set the contact email}
+      PILOT_WHATSAPP_NOTICE_VERSION: ${PILOT_WHATSAPP_NOTICE_VERSION:-}
+      PILOT_ENGINE_HOST_DIST: /app/engine-host
+      PILOT_ENGINE_HOST_MODELS: /app/models
+      PILOT_ENGINE_HOST_STATE_DIR: /app/engine-state
+    secrets: [whatsapp_verify_token, whatsapp_app_secret, whatsapp_access_token]
+    volumes:
+      # Pinned model files, filled and hash-checked at release; read-only for the app.
+      - ${PILOT_DATA_DIR:-/srv/campus-recall}/models:/app/models:ro
+      # Chromium's profile (the model cache), emptied at every start and stop. Owned by uid 1000.
+      - ${PILOT_DATA_DIR:-/srv/campus-recall}/engine-host:/app/engine-state
+    # Node plus headless Chromium: about 2.4 GB at the highest on a Mac (docs/pilot/whatsapp.md).
+    # The 8 GiB VM keeps room for PostgreSQL (512 MB), Caddy (128 MB) and the system.
+    mem_limit: 3g
+    # Chromium runs several processes with many threads each; the limit counts threads.
+    pids_limit: 1024
+    shm_size: 512m
+    # Time to send waiting confirmations and close Chromium on stop.
+    stop_grace_period: 30s
+
+secrets:
+  whatsapp_verify_token:
+    file: ${PILOT_SECRETS_DIR:-/etc/campus-recall/secrets}/whatsapp_verify_token
+  whatsapp_app_secret:
+    file: ${PILOT_SECRETS_DIR:-/etc/campus-recall/secrets}/whatsapp_app_secret
+  whatsapp_access_token:
+    file: ${PILOT_SECRETS_DIR:-/etc/campus-recall/secrets}/whatsapp_access_token

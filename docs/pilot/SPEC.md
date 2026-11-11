@@ -93,3 +93,123 @@ The wire format, states and limits referred to below are defined in [protocol.md
 **Statement:** Before the announced end date users can export their cloud originals; pilot metrics are aggregate counts only and never include document names, text or queries.
 
 **Test:** Export a vault and compare hashes with the stored originals; inspect the metrics records and confirm they hold no document or query content.
+
+## WhatsApp channel (opt-in)
+
+These statements cover the optional WhatsApp channel ([whatsapp.md](whatsapp.md)): students message the bot's number, agree to its notice, and the pilot server stores what they send in a vault for that sender, indexes it, answers searches in the chat and opens that vault in the app from a one-time link. A student who never messages the bot sees no change, and P01 to P15 are unchanged. Tests run against a stand-in for Meta's Graph API with webhook deliveries in Meta's documented format; claims about the real Meta number need their own evidence.
+
+### W1 — Consent before anything is stored
+
+**Statement:** Nothing a sender sends is stored, in their vault or as message content, until they reply `AGREE` to the consent notice. The notice is sent once, and the consent time and notice version are recorded.
+
+**Test:** A new sender's forwarded note, photo and `note ` message store no item, download no media and keep only each message's ID and type; they get the notice once (it names what is saved, Meta's decryption and 30-day retention, server processing, the 18+ age limit, `DELETE ALL` and the privacy link, and ends "Reply AGREE to start."), and a later message gets no second notice. An `AGREE` before the notice only gets the notice, a notice that could not be sent goes out with the next message, and a `START` after a `STOP` before consent asks for `AGREE`. A save still downloading when `DELETE ALL` is confirmed by another worker stores nothing and sends no confirmation. After `AGREE` the consent time and version are stored, the student is asked to send earlier things again, and a note is saved. `HELP` and `PRIVACY` work before consent, and each sender consents for themselves.
+
+### W2 — Exact original
+
+**Statement:** A file saved from WhatsApp is stored byte for byte: its SHA-256 equals the `sha256` WhatsApp sent with it, and downloading it through `GET /items/{globalId}/original` returns identical bytes.
+
+**Test:** Send a photo (base64 `sha256`, direct URL) and a PDF (looked up by media ID, hex `sha256`); compare the stored item's hash and the downloaded bytes with the source. Bytes that do not match are never stored.
+
+### W3 — No duplicates from retries
+
+**Statement:** A webhook delivered more than once, delivered concurrently, or a job retried after a crash or a lapsed lease never creates a second item or sends a second confirmation.
+
+**Test:** Deliver the same webhook twice and three times at once, run two workers together, crash a job after it published its item, and let a stalled worker finish after another took over its job; assert one item and one confirmation each time.
+
+### W4 — Signed deliveries only
+
+**Statement:** A webhook request with a missing or wrong `X-Hub-Signature-256` is rejected before its body is parsed, and nothing from it is stored or answered.
+
+**Test:** Send deliveries with no signature, a signature made with another secret, a malformed header and a body changed after signing; assert 401 or 403, no recorded message, no job, no item and no reply.
+
+### W5 — One vault per sender
+
+**Statement:** Each sender's items are stored only in that sender's vault (`wa:<business-scoped user ID>`), and cannot be read with another sender's session or a Google account's session.
+
+**Test:** Two senders each save a note; each vault holds only its own item and storage key; reading the first sender's original with the second sender's or a Google account's session returns `NOT_FOUND`, and their change feeds do not list it.
+
+### W6 — Open the app from WhatsApp
+
+**Statement:** `OPEN` (and the link after a search result) gives a one-time link, valid for 10 minutes and stored only as a hash, whose confirmation page opens a normal session for that sender's `wa:` vault after a same-origin `POST`. The app then lists and searches the vault's items without uploading the device's own library (P02). An expired, used or unknown link opens nothing.
+
+**Test:** The link's 32-byte token is in the path and only its SHA-256 is stored. `GET` shows a page with a strict CSP, no scripts or external resources and the masked identity, and uses nothing up; `POST` from the pilot origin redirects to `/?signin=whatsapp#/settings` with a session cookie like other sessions, whose `/session` shows the masked label and whose writes still need CSRF. A second use, a use after 10 minutes, another or no `Origin`, and unknown or malformed tokens get the error page and no cookie (a refused origin leaves the link usable). The session cannot read another sender's original. In the app (Playwright), following the link shows "Signed in as WhatsApp ••••3210" and lists the WhatsApp item while "Include this device's library" is still offered and nothing is uploaded; a client test checks that listing the vault sends only `GET` requests.
+
+### W7 — Server indexing with the app's engine
+
+**Statement:** The server indexes an opted-in WhatsApp item with the app's own engine and default model and publishes a bundle with the current `INDEX_VERSION` that passes the P05 checks; the app's cloud search then finds it.
+
+**Test:** With pinned real models, the engine host indexes `sample-03.pdf` and `sample-01.jpg`; both bundles pass `validateIndexBundle` with the app's `INDEX_VERSION`, their segments equal what the app stores for the same files, and the app's search over them returns the PDF at page 2 for its fixture question. With a stand-in engine, a stored item's bundle is published like `PUT /items/{id}/index` (same checks, quota, object key and change feed); a deleted item gets none, a renamed one is indexed with its new title, failures are retried with the job backoff, and a refused original or full quota fails the job once and tells the student once.
+
+### W8 — Search in WhatsApp
+
+**Statement:** Typed text that is not a command or a save is a search of only the sender's items, answered with a list of at most five results within Meta's limits; picking one sends the original back with a link to open the app. For a fixture library, the bot's top result is the same item and location the app's own search returns.
+
+**Test:** With pinned real models, the bot indexes `sample-03.pdf` and `sample-01.jpg` sent over WhatsApp; for the queries of the W7 test its top rows are the PDF at page 2 and the photo, and the app, signed in through the bot's link, returns the same item and location first. With a stand-in engine: the list has at most five rows, titles of at most 24 code points, descriptions of at most 72 with the page and an excerpt, a 20-character button and row IDs of the global ID and location; items still being indexed match by title and say so; without an engine, or when it fails, search is by keyword and says so; no match says "only things you sent here are searched"; another sender's items are never found. A picked PDF is uploaded byte for byte and sent as a document with its title and page, a photo as an image, a note as text, each followed by an "Open in app" link that works; another vault's or a deleted item is reported as gone, and a pick is answered once.
+
+### W9 — DELETE ALL
+
+**Statement:** `DELETE ALL` followed by `CONFIRM DELETE` within 10 minutes erases the sender's vault through the same reset as `DELETE /vault` (objects deleted, epoch moves), revokes that vault's app links and sessions, and keeps only what dedupe needs. Nothing is erased without confirmation, and other senders are untouched.
+
+**Test:** Without `CONFIRM DELETE`, with it before any request, or 601 seconds after the request, items stay. Confirmed within 10 minutes: no live items, the epoch moves, the original and index objects are gone, a link-opened session and another session for the vault get 401, an unused link no longer opens, the stored message keeps only its ID and type, the sender's number and consent are cleared, a repeated delivery of an erased message does not bring it back and the next message gets the consent notice again; the other sender's items, session and consent are unchanged.
+
+## Telegram channel (opt-in)
+
+These statements cover the optional Telegram channel ([telegram.md](telegram.md)): students open the bot in Telegram and link it to their IITGN Google account, and the pilot server then stores what they send in that account's own cloud library (the one the app's Auto-sync uses), indexes it, answers searches in the chat and opens the account in the app from one-time links. It reuses the WhatsApp channel's core, so W1 to W9 and P01 to P15 are unchanged, and a student who never opens the bot sees no change. Tests run against a stand-in for the Telegram Bot API with updates in Telegram's documented format, and with test-signed ID tokens (the development signer, or a stand-in for Google's token endpoint) in place of Google; claims about the real bot and real IITGN sign-in need their own evidence on the pilot.
+
+### T1 — Login before anything is stored
+
+**Statement:** Until a Telegram user links an IITGN account, nothing they send is stored (no item, no message content, no download) and nothing is searched. `/start` and `/login` answer with a notice (what is saved, that our server stores and processes files and sees searches, that chats with bots are not end-to-end encrypted, the 18+ age limit, `/logout`, `/delete` and the privacy link) and a "Log in with IITGN" button carrying a one-time login link; `/help` and `/privacy` work without login; any other message gets "Log in first with /login." Linking records the consent time and notice version.
+
+**Test:** A new user's forwarded text, photo, `note ` message and a typed search store no item in any vault, fetch no file, call no engine and keep only each message's key and type; each gets "Log in first with /login." `/start` sends the notice with its button, and only the login token's SHA-256 is kept, with the message carrying the button. `/open`, `/delete`, `/logout` and button taps before login get the same line. After linking, the consent time and version are stored and a note is saved; `/stop` pauses until `/resume`. A save still downloading when `/delete` is confirmed or `/logout` is handled by another worker, or when the user's link no longer points at that account, stores nothing and sends no confirmation.
+
+### T2 — Exact original
+
+**Statement:** A file saved from Telegram is stored byte for byte in the linked account: its size equals the size Telegram declared, its SHA-256 is computed by the server from the downloaded bytes, and `GET /items/{globalId}/original` with the account's own session returns identical bytes. Of a photo's sizes the largest is saved. Files over the app's limits are refused before they are downloaded.
+
+**Test:** Send a photo in two sizes and a PDF document; only the largest size and the PDF are fetched, and the stored hash, size and downloaded bytes equal the source. A download one byte short is not stored and the job is retried, then stored correctly. A PDF or photo declared over 20 MB, or one Telegram refuses as too big, is refused with the app's message and nothing is downloaded. Voice notes, audio, video, stickers, Office documents and locations are refused with the same reasons as WhatsApp. Forwarded text (`forward_origin` or `forward_date`), `note ` and `save ` messages and a single link are saved as notes (and recorded as saved through Telegram), a forwarded `/help` is saved rather than answered, and other typed text is a search.
+
+### T3 — No duplicates from redelivery
+
+**Statement:** An update delivered more than once or concurrently, worked by two workers, or a job retried after a crash never creates a second item or sends a second reply. Messages are deduplicated by chat and message ID and button taps by callback query ID.
+
+**Test:** Deliver the same update twice and three times at once, run two workers together, crash a job after it published its item and retry it, and deliver it again later; assert one item, one confirmation and one record of it as saved through Telegram. A redelivered result button tap is answered once. Long polling stores the next offset after each batch, so a restarted poller asks from it; an update seen by two pollers before an offset was stored is recorded once.
+
+### T4 — Webhook secret token
+
+**Statement:** In webhook mode, a request to `/api/v1/telegram/webhook` whose `X-Telegram-Bot-Api-Secret-Token` is missing or does not match the configured secret (compared in constant time) is rejected before its body is read, and nothing from it is stored or answered.
+
+**Test:** Post an update with no header, a wrong one and one with an extra character; assert 401 or 403, no recorded update, no job and no reply. `setWebhook` is called with the secret token and only `message` and `callback_query` updates; long polling calls `deleteWebhook` before polling. Group chats, other bots and malformed updates are ignored.
+
+### T5 — Linked accounts kept apart
+
+**Statement:** A Telegram user's items go only into the account they linked (`google:<sub>`), never into a separate Telegram vault, and appear in that account's change feed for the app; they cannot be read with another account's session, and another account's result button finds nothing. A Telegram user links to one account at a time, and a second Telegram user can link to an account only through that account's own sign-in (a session opened from a Telegram app link does not count).
+
+**Test:** Two users link two accounts and each saves a note; each account holds only its own item and storage key, its own session's change feed lists it and the other's does not, reading it with the other account's session returns `NOT_FOUND`, no `tg:` vault has any change, and the first user's result button tapped by the second answers that the item is not in their library. A second Telegram user's login link opened without a session, or with a session from the first user's app link, shows sign-in and links nothing; with the account's own sign-in it links, and both users then save into that account. User IDs that are not positive whole numbers, and bots, are refused.
+
+### T6 — Login and app links
+
+**Statement:** The login button's link (`/api/v1/telegram/link/{token}`) and `/open` (and the button after a search result, `/api/v1/telegram/open/{token}`) are one-time links: 32 random bytes in the path, stored only as their SHA-256, valid for 10 minutes and used at most once, each only for its own purpose. A login link's page, with a valid session from the account's own sign-in, asks "Link Telegram <name> to <email>?" with the consent wording, and its same-origin Continue `POST` links the user, after which the bot says "Linked to <masked email>" and the used login buttons are removed. Without such a session the page starts Google sign-in (state, nonce and PKCE as for P12) and Google's return comes back only to that login link's page; non-IITGN accounts are refused. Relinking to another account needs `/logout` first. An app link's page shows the account's email, and its same-origin `POST` opens a normal session for the linked account (as after its own sign-in, so P02 holds) while the user is still linked to it.
+
+**Test:** `GET` shows a page with a strict CSP and no scripts and uses nothing up; another or no `Origin` gets 403 and the link stays usable; `POST` links the user to the session's `google:` account, records it, the chat gets "Linked to s•••a@iitgn.ac.in…" and the button is removed; a second use, a use after 10 minutes, a malformed token and the other purpose's path get the error page. On a Google server, the page redirects to `/auth/google/start?return=<this path>`, Google gets state, nonce and the S256 challenge, and the callback (exchanging the code with the matching verifier) returns to the link page with a session; `return` values other than a login link path (other origins, `//host`, `..`, app links, Settings) get 400; a return cookie not made for that attempt is ignored; personal, other-domain or wrong-nonce returns open no session and link nothing. Development sign-in on the page refuses a non-IITGN email and returns an IITGN one to the link. `/login` while linked says to send `/logout` first, and after `/logout` the user links another account and saves there. An app link `POST` redirects to `/?signin=telegram#/settings` with a session whose `/session` has the account's email and `via: "telegram"` and no `kind`, lists the account's Telegram-saved and app-synced items, and still needs CSRF for writes. In the app, `signin=telegram` activates Auto-sync only with such a session (not a WhatsApp one or the account's own sign-in), and `signin=whatsapp` not with it. In Chromium (Playwright): development sign-in in the app, the bot's login link, Continue, a note sent to the bot, and the app lists it for that email once the device's library is included, with nothing uploaded before; an app link signs a second browser in as that email with nothing uploaded.
+
+### T7 — Server indexing with the app's engine
+
+**Statement:** The server indexes a Telegram item with the same engine host and indexer as WhatsApp items (W7) and publishes its bundle into the linked account like `PUT /items/{id}/index`.
+
+**Test:** With a stand-in engine, a saved PDF gets a published bundle for its current original under the account's vault and epoch, made from its title and bytes. The real-model checks of W7 cover the engine host itself.
+
+### T8 — Search in Telegram
+
+**Statement:** Typed text that is not a command or a save is a search of the linked account's whole library (items saved through Telegram and items synced from the app, by meaning where they have a usable index, by title otherwise), answered with at most five results and one button per result; each button's data is a short random token (within Telegram's 64 bytes) stored with the item, place and account and valid for a day. Tapping one sends the original back with an "Open in app" button, and every tap is acknowledged. For a fixture library, the bot's top result is the same item and location the app's own search returns for that account.
+
+**Test:** With pinned real models, the bot, linked to an account, indexes `sample-03.pdf` and `sample-01.jpg` sent as files; for the queries of the W7 test its top buttons are the PDF at page 2 and the photo, and the app, signed in as that account through the bot's app link with the device's (empty) library included, returns the same item and location first. With a stand-in engine: seven notes give five buttons of `p:` and 12 characters; a note synced from the app with its index is found and sent back; a picked photo is sent with `sendPhoto` and a PDF with `sendDocument`, both byte for byte with the title (and page) as caption, a note as text, each followed by a working "Open in app" link; items still being indexed match by title and keyword-only search says so; no match says so; an expired or unknown button says the result expired; every tap is answered with `answerCallbackQuery`.
+
+### T9 — /delete and /logout
+
+**Statement:** `/delete` followed by its "Yes, erase my Telegram items" button within 10 minutes erases only the items saved through Telegram into the linked account, each through the same steps as `DELETE /items/{id}` (a tombstone in the change feed so other devices remove it, then its original and index objects), revokes the user's links and result buttons, and unlinks; it never removes the rest of the library, its epoch or its sessions, and its replies say that removing everything is in the app's Settings. `/logout` unlinks and revokes the user's unused links and keeps what was saved. Tapped one-time buttons are removed from the chat. Other users are untouched.
+
+**Test:** The button without `/delete`, or 601 seconds after it, erases nothing (and its button is removed). Within 10 minutes: the Telegram-saved PDF and note are tombstones at the next revision in the account's change feed, their objects are gone, the note synced from the app and its object stay, the epoch is unchanged, the account's own and app-link sessions still work, the user is unlinked, an unused app link and the result buttons no longer work, the stored message keeps only its key and type, the username and consent are cleared, a redelivered update does not bring the item back and the next message gets "Log in first with /login."; the other user's items, link and consent are unchanged. After `/logout` the saved note stays, unused app and login links no longer open and their buttons are removed, another user's links still work, and messages get "Log in first with /login."
+
+### Telegram transport and safety checks
+
+Beyond T1 to T9: replies to one chat are spaced at least a second apart (Telegram allows about one message a second per chat) and HTTP 429 is waited out for Telegram's `retry_after`; downloads stop as soon as they pass the limit; the bot token appears in no error, log line or description, whether Telegram refuses a call, the server cannot be reached or the token is wrong; with `PILOT_TELEGRAM_ALLOWED_USERS` set, anyone else gets a "not open yet" reply and nothing of theirs is stored; settings are all or none and errors name the setting, never a value; a local trial may use development sign-in for linking only while listening on loopback, and behind a tunnel only with memory storage; linked accounts, links, Telegram-saved items and sessions opened from a Telegram link are kept on memory and PostgreSQL alike and survive a backup and restore (`pilot/tests/telegram-transport.test.ts`, `telegram-config.test.ts`, `telegram-store.test.ts`, `telegram-entry.test.ts`).

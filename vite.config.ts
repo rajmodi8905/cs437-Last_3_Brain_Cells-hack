@@ -22,7 +22,14 @@ export default defineConfig({
           outDir: '.cache/acceptance-dist',
           rollupOptions: { input: ['index.html', 'tests/harness.html'] },
         }
-      : undefined,
+      : process.env.ENGINE_HOST_BUILD === '1'
+        ? {
+            // The pilot's engine host page (docs/pilot/whatsapp.md) runs the same engine code but
+            // is built apart from the app, so the published app build stays unchanged.
+            outDir: '.cache/engine-host-dist',
+            rollupOptions: { input: ['pilot/engine-host/index.html'] },
+          }
+        : undefined,
   plugins: [
     react(),
     VitePWA({
