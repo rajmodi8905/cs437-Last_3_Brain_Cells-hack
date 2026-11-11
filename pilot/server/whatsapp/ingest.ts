@@ -176,7 +176,7 @@ export type GateHook = (input: {
 /** Where replies to a sender go: the BSUID when there is one, else the phone number. */
 export const addressOf = (sender: WhatsAppSender): WhatsAppAddress | undefined =>
   !sender.userId.startsWith('phone-')
-    ? { bsuid: sender.userId }
+    ? { bsuid: sender.userId, ...(sender.waId ? { waId: sender.waId } : {}) }
     : sender.waId
       ? { waId: sender.waId }
       : undefined;
