@@ -1,6 +1,7 @@
 /// <reference types="node" />
 // The Telegram channel's storage: the shared BotStore on Telegram's own tables, kept apart from
-// WhatsApp's, the polling offset and result buttons, and backups. PostgreSQL runs with
+// WhatsApp's, the polling offset and result buttons, linked accounts, login and app links, items
+// saved through Telegram, sessions opened from a Telegram link, and backups. PostgreSQL runs with
 // npm run test:pilot:storage; otherwise it is reported as skipped, never as passed.
 import { randomUUID } from 'node:crypto';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -12,6 +13,7 @@ import {
   MemoryTelegramStore,
   TELEGRAM_TABLES,
   type ResultPick,
+  type TelegramLink,
   type TelegramStateStore,
 } from '../server/telegram/store';
 import { PostgresBotStore } from '../server/whatsapp/postgres';
@@ -81,6 +83,92 @@ describe.each(states)('Telegram state: %s', (name, available, open) => {
   });
 });
 
+const link = (over: Partial<TelegramLink> = {}): TelegramLink => ({
+  tokenHash: 'a'.repeat(64),
+  purpose: 'login',
+  userId: user.userId,
+  ownerKey: user.ownerKey,
+  label: 'Telegram @student_a',
+  createdAt: 100,
+  expiresAt: 700,
+  ...over,
+});
+const account = {
+  userId: user.userId,
+  ownerKey: 'google:subject-a',
+  email: 'student.a@iitgn.ac.in',
+  linkedAt: 100,
+};
+
+describe.each(states)('Telegram accounts and links: %s', (name, available, open) => {
+  if (!available) {
+    it.skip(`needs PILOT_TEST_DATABASE_URL (run npm run test:pilot:storage) for ${name}`);
+    return;
+  }
+
+  it('links one account per Telegram user, replaces it on relink and unlinks', async () => {
+    const state = await open();
+    expect(await state.getAccount(user.userId)).toBeUndefined();
+    await state.linkAccount(account);
+    expect(await state.getAccount(user.userId)).toEqual(account);
+    await state.linkAccount({ ...account, ownerKey: 'google:subject-b', linkedAt: 200 });
+    expect(await state.getAccount(user.userId)).toEqual({
+      ...account,
+      ownerKey: 'google:subject-b',
+      linkedAt: 200,
+    });
+    await state.unlinkAccount(user.userId);
+    expect(await state.getAccount(user.userId)).toBeUndefined();
+  });
+
+  it('finds links by purpose until they expire, uses them once and revokes them per user', async () => {
+    const state = await open();
+    await state.createLink(link());
+    await state.setLinkMessage('a'.repeat(64), 1234);
+    await state.createLink(
+      link({ tokenHash: 'b'.repeat(64), purpose: 'open', ownerKey: 'google:subject-a' }),
+    );
+    await state.createLink(link({ tokenHash: 'c'.repeat(64), userId: '700000002' }));
+    expect(await state.peekLink('a'.repeat(64), 'login', 699)).toEqual(link({ messageId: 1234 }));
+    // A login link is not an app link, nor the reverse.
+    expect(await state.peekLink('a'.repeat(64), 'open', 100)).toBeUndefined();
+    expect(await state.takeLink('b'.repeat(64), 'login', 100)).toBeUndefined();
+    expect(await state.peekLink('a'.repeat(64), 'login', 700)).toBeUndefined();
+    expect(await state.takeLink('b'.repeat(64), 'open', 100)).toMatchObject({ purpose: 'open' });
+    expect(await state.takeLink('b'.repeat(64), 'open', 100)).toBeUndefined();
+    // An expired link is removed by taking it, and opens nothing.
+    expect(await state.takeLink('a'.repeat(64), 'login', 700)).toBeUndefined();
+    expect(await state.peekLink('a'.repeat(64), 'login', 100)).toBeUndefined();
+    await state.createLink(link({ tokenHash: 'd'.repeat(64) }));
+    await state.createLink(link({ tokenHash: 'e'.repeat(64), purpose: 'open' }));
+    expect((await state.revokeLinks(user.userId, 'login')).map((l) => l.tokenHash)).toEqual([
+      'd'.repeat(64),
+    ]);
+    expect((await state.revokeLinks(user.userId)).map((l) => l.tokenHash)).toEqual([
+      'e'.repeat(64),
+    ]);
+    expect(await state.peekLink('c'.repeat(64), 'login', 100)).toBeDefined();
+  });
+
+  it('records items saved through Telegram once per account and forgets them', async () => {
+    const state = await open();
+    const saved = (globalId: string, ownerKey = 'google:subject-a') => ({
+      ownerKey,
+      globalId,
+      userId: user.userId,
+      savedAt: 100,
+    });
+    await state.recordSaved(saved('g-1'));
+    await state.recordSaved(saved('g-1'));
+    await state.recordSaved(saved('g-2'));
+    await state.recordSaved(saved('g-3', 'google:subject-b'));
+    expect((await state.savedItems('google:subject-a')).sort()).toEqual(['g-1', 'g-2']);
+    await state.forgetSaved('google:subject-a', ['g-1', 'g-2']);
+    expect(await state.savedItems('google:subject-a')).toEqual([]);
+    expect(await state.savedItems('google:subject-b')).toEqual(['g-3']);
+  });
+});
+
 describe('Telegram BotStore on PostgreSQL', () => {
   it.skipIf(!DATABASE)(
     'uses its own tables, so WhatsApp workers never see Telegram jobs or links',
@@ -142,6 +230,8 @@ describe('Telegram BotStore on PostgreSQL', () => {
         'tg_links',
         'tg_state',
         'tg_picks',
+        'tg_accounts',
+        'tg_saved',
       ]),
     );
     const pilot = await postgres();
@@ -151,6 +241,24 @@ describe('Telegram BotStore on PostgreSQL', () => {
     await bot.claimReply('m:1:2');
     await state.setOffset(77);
     await state.createPicks([pick('dddddddddddd', 5000)], 100);
+    await state.linkAccount(account);
+    await state.createLink(link({ messageId: 99, expiresAt: 5000 }));
+    await state.recordSaved({
+      ownerKey: account.ownerKey,
+      globalId: 'g-1',
+      userId: user.userId,
+      savedAt: 100,
+    });
+    const viaTelegram = {
+      id: 'f'.repeat(64),
+      csrf: 'csrf',
+      ownerKey: account.ownerKey,
+      email: account.email,
+      expiresAt: 9_000_000_000,
+      via: 'telegram' as const,
+    };
+    await pilot.createSession(viaTelegram);
+    await pilot.createSession({ ...viaTelegram, id: 'e'.repeat(64), via: undefined });
     const target = new MemoryObjectStore();
     const backup = await backupDatabase({ store: pilot, target, now: () => 1_762_300_000_000 });
     expect(backup.counts).toMatchObject({
@@ -159,6 +267,10 @@ describe('Telegram BotStore on PostgreSQL', () => {
       tg_jobs: 1,
       tg_state: 1,
       tg_picks: 1,
+      tg_links: 1,
+      tg_accounts: 1,
+      tg_saved: 1,
+      sessions: 2,
     });
     const restored = await restoreDatabase({
       source: target,
@@ -177,5 +289,12 @@ describe('Telegram BotStore on PostgreSQL', () => {
     expect(await again.recordInbound(user, inbound('m:1:2'))).toBe(false);
     expect(await againState.getOffset()).toBe(77);
     expect(await againState.getPick('dddddddddddd', 100)).toEqual(pick('dddddddddddd', 5000));
+    expect(await againState.getAccount(user.userId)).toEqual(account);
+    expect(await againState.peekLink('a'.repeat(64), 'login', 100)).toEqual(
+      link({ messageId: 99, expiresAt: 5000 }),
+    );
+    expect(await againState.savedItems(account.ownerKey)).toEqual(['g-1']);
+    expect(await restored.store.getSession('f'.repeat(64))).toEqual(viaTelegram);
+    expect(await restored.store.getSession('e'.repeat(64))).not.toHaveProperty('via');
   });
 });

@@ -159,6 +159,32 @@ const MIGRATIONS = [
   CREATE INDEX tg_picks_owner ON tg_picks (owner_key);
   CREATE INDEX tg_picks_expiry ON tg_picks (expires_at);
   `,
+  // 6: Telegram users link their IITGN Google account, and the bot saves into that account's own
+  // vault (docs/pilot/telegram.md). `tg_links` now holds one-time login and app links per
+  // Telegram user; links made before this step opened a separate Telegram vault and are dropped.
+  // `sessions.via` marks a session opened from a Telegram app link. Times in seconds.
+  `
+  CREATE TABLE tg_accounts (
+    user_id text PRIMARY KEY,
+    owner_key text NOT NULL,
+    email text NOT NULL,
+    linked_at bigint NOT NULL
+  );
+  CREATE INDEX tg_accounts_owner ON tg_accounts (owner_key);
+  DELETE FROM tg_links;
+  ALTER TABLE tg_links ADD COLUMN purpose text NOT NULL DEFAULT 'open';
+  ALTER TABLE tg_links ADD COLUMN user_id text;
+  ALTER TABLE tg_links ADD COLUMN message_id bigint;
+  CREATE INDEX tg_links_user ON tg_links (user_id);
+  CREATE TABLE tg_saved (
+    owner_key text NOT NULL,
+    global_id text NOT NULL,
+    user_id text NOT NULL,
+    saved_at bigint NOT NULL,
+    PRIMARY KEY (owner_key, global_id)
+  );
+  ALTER TABLE sessions ADD COLUMN via text;
+  `,
 ];
 
 const SCHEMA = /^[a-z_][a-z0-9_]{0,62}$/;
@@ -182,6 +208,8 @@ export const BACKUP_TABLES = [
   'tg_links',
   'tg_state',
   'tg_picks',
+  'tg_accounts',
+  'tg_saved',
 ] as const;
 export type BackupTable = (typeof BACKUP_TABLES)[number];
 /** The database version this code writes and can restore. */
@@ -378,13 +406,20 @@ export class PostgresPilotStore implements PilotStore {
 
   async createSession(session: Session) {
     await this.database.query(
-      'INSERT INTO sessions (id, csrf, owner_key, email, expires_at) VALUES ($1, $2, $3, $4, $5)',
-      [session.id, session.csrf, session.ownerKey, session.email, session.expiresAt],
+      'INSERT INTO sessions (id, csrf, owner_key, email, expires_at, via) VALUES ($1, $2, $3, $4, $5, $6)',
+      [
+        session.id,
+        session.csrf,
+        session.ownerKey,
+        session.email,
+        session.expiresAt,
+        session.via ?? null,
+      ],
     );
   }
-  async getSession(id: string) {
+  async getSession(id: string): Promise<Session | undefined> {
     const { rows } = await this.database.query(
-      'SELECT id, csrf, owner_key, email, expires_at FROM sessions WHERE id = $1',
+      'SELECT id, csrf, owner_key, email, expires_at, via FROM sessions WHERE id = $1',
       [id],
     );
     const row = rows[0];
@@ -395,6 +430,7 @@ export class PostgresPilotStore implements PilotStore {
           ownerKey: row.owner_key,
           email: row.email,
           expiresAt: Number(row.expires_at),
+          ...(row.via === 'telegram' ? { via: 'telegram' as const } : {}),
         }
       : undefined;
   }
