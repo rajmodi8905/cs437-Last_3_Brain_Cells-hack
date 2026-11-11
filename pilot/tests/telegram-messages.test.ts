@@ -290,7 +290,7 @@ describe('Telegram messages: refusals', () => {
   it('opens links in the browser, and says the home-screen app needs its own sign-in', () => {
     // On an iPhone a link never opens the home-screen web app, which keeps its own sign-in.
     const homeScreen =
-      'Using Campus Recall from your home screen? Sign in there once with the same IITGN account — everything you save here shows up automatically.';
+      "Using Campus Recall from your home screen? Sign in there once with the same IITGN account and turn on Auto-sync (Include this device's library) — then everything you save here shows up there.";
     expect(TELEGRAM_REPLIES.openButton).toBe('Open in browser');
     expect(TELEGRAM_REPLIES.openCta).toBe(
       `Open it in your browser (the link works once, for 10 minutes). ${homeScreen}`,

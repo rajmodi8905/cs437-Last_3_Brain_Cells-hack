@@ -24,7 +24,7 @@ const named = (name: string) => `"${clip(name, 80)}"`;
 const CAN_SAVE = 'I can save photos, PDFs, text notes and links.';
 /** The home-screen app keeps its own sign-in, which a link from the chat cannot reach. */
 const HOME_SCREEN =
-  'Using Campus Recall from your home screen? Sign in there once with the same IITGN account — everything you save here shows up automatically.';
+  "Using Campus Recall from your home screen? Sign in there once with the same IITGN account and turn on Auto-sync (Include this device's library) — then everything you save here shows up there.";
 
 const OFFICE = new Set([
   'doc',
