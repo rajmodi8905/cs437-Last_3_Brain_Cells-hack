@@ -122,6 +122,16 @@ For the pilot demo, a few allow-listed phones can also save to Campus Recall fro
 
 Unlike the app, the bot indexes and searches on the pilot server, and WhatsApp (Meta) decrypts messages to the bot and keeps them for up to 30 days. Read [the bot's privacy page](docs/pilot/whatsapp-privacy.md) first. How it works: [whatsapp.md](docs/pilot/whatsapp.md); Meta setup and a local trial: [whatsapp-setup.md](docs/pilot/whatsapp-setup.md); deployment: the WhatsApp section of [deployment.md](docs/pilot/deployment.md).
 
+## Save from Telegram (demo)
+
+For the pilot demo, students can also save to Campus Recall from the team's Telegram bot (`@<your bot>`; during the demo it may be open only to the team and reviewers). It is opt-in and separate from the app's local-only default:
+
+- Open the bot, tap **Start**, read the notice and tap **Agree**. Nothing is stored before that.
+- Send or forward photos (as a file to keep full quality), PDFs and notes; start a message with `note ` to save it as a note. Type anything else to search what you sent, and tap a result to get the original back.
+- `/open` gives a one-time link that opens your Telegram library in the app. `/help`, `/privacy`, `/stop` / `/resume` and `/delete` do what they say.
+
+Unlike the app, the bot indexes and searches on the pilot server, and Telegram keeps bot chats on its servers without end-to-end encryption. Read [the bot's privacy page](docs/pilot/telegram-privacy.md) first. How it works: [telegram.md](docs/pilot/telegram.md); BotFather setup and a local trial (`npm run pilot:telegram-local`): [telegram-setup.md](docs/pilot/telegram-setup.md); deployment: the Telegram section of [deployment.md](docs/pilot/deployment.md).
+
 ## Supported content
 
 | Input                       | Limit                       | Searchable content                                   |
