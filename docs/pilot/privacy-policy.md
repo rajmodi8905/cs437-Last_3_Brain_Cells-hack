@@ -1,6 +1,6 @@
 # Privacy Policy
 
-Pilot version 2.1 · Updated 11 November 2026
+Pilot version 2.2 · Updated 11 November 2026
 
 Campus Recall is a student project by Raj Modi, Chaitanya and Nakshatra. This policy covers the separate Auto-sync pilot. It does not change the earlier local-only submission. Public launch follows hosted verification. Cloud access and cloud export end on 6 December 2026 at 17:47 IST (12:17 UTC); export your cloud library through Settings before then. This conservative 30-day window starts with Azure VM creation on 6 November 2026, not a claim that public launch has already happened. Do not rely on this experimental service as your only copy of important material.
 
@@ -23,6 +23,14 @@ The pilot also has a WhatsApp bot for the demo. It is opt-in: it stores nothing 
 The bot saves the photos, PDFs and notes you send or forward to it into a private library for your WhatsApp account on the pilot's Azure storage, with your WhatsApp user ID, the phone number WhatsApp gives us, your consent time and each message's ID. Unlike the app, the bot works on the server: our server extracts text and builds the search index for what you send, and sees the searches you type to the bot. WhatsApp (Meta) decrypts messages to the bot to pass them to us and keeps them for up to 30 days, under Meta's own terms. A one-time link (OPEN) opens that library in the app; the app does not upload the library already on your device unless you include it.
 
 STOP pauses the bot. DELETE ALL followed by CONFIRM DELETE erases your bot library, consent, phone number and app links, keeping only message IDs so a repeated delivery is not saved again; backups and recovery copies expire as described below. The bot ends with the pilot on 6 December 2026 at 17:47 IST (12:17 UTC). Details: docs/pilot/whatsapp-privacy.md in the repository, which the bot's PRIVACY command links to.
+
+## Optional Telegram bot
+
+The pilot also has a Telegram bot for the demo. It is opt-in: it stores and searches nothing until you log in from it with your IITGN Google account and confirm linking the chat to that account, and you must be 18 or older to use it. Everything in this section applies only to students who use the bot; for everyone else the rest of this policy is unchanged.
+
+The bot saves the photos, PDFs and notes you send or forward to it into your own Campus Recall cloud library on the pilot's Azure storage (the library the app's Auto-sync uses), with a record of which items came through Telegram, your Telegram user ID, the IITGN account it is linked to, your @username if you have one, your consent time and each message's ID. Unlike the app, the bot works on the server: our server extracts text and builds the search index for what you send, and searches your library for the searches you type to the bot. Telegram stores chats with bots on its own servers; they are not end-to-end encrypted, under Telegram's own terms. One-time links (/open) open your library in the app; the app does not upload the library already on your device unless you include it. Whoever has your linked Telegram account can open your cloud library this way; each link works once for 10 minutes, and /logout stops unused ones.
+
+/stop pauses the bot. /logout unlinks the chat and keeps what you saved. /delete followed by its "Yes, erase my Telegram items" button erases the items you saved through Telegram from your library and unlinks the chat, keeping only message IDs so a repeated delivery is not saved again; the rest of your library stays (remove it with Remove cloud library in the app). Backups and recovery copies expire as described below. The bot ends with the pilot on 6 December 2026 at 17:47 IST (12:17 UTC). Details: docs/pilot/telegram-privacy.md in the repository, which the bot's /privacy command links to.
 
 ## Requests and technical records
 

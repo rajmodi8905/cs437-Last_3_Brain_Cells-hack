@@ -17,6 +17,12 @@ export interface Session {
   ownerKey: string;
   email: string;
   expiresAt: number;
+  /**
+   * `telegram` for a session opened from a Telegram bot's one-time app link rather than the
+   * account's own sign-in. It works like any session of that account, but cannot link a Telegram
+   * user (docs/pilot/telegram.md).
+   */
+  via?: 'telegram';
 }
 
 /** An upload in progress. Its chunk bytes live in the object store under `stagingKey`. */

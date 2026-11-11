@@ -18,12 +18,14 @@ if (process.env.PILOT_DATABASE_PASSWORD_FILE) {
   process.env.PILOT_DATABASE_URL = `postgresql://pilot:${encodeURIComponent(password)}@postgres:5432/pilot`;
 }
 
-// The WhatsApp secrets are read by the server from their files (config.ts), so they never enter
-// the environment that the engine host's Chromium inherits. Only check them here.
+// The WhatsApp and Telegram secrets are read by the server from their files (config.ts), so they
+// never enter the environment that the engine host's Chromium inherits. Only check them here.
 for (const name of [
   'PILOT_WHATSAPP_VERIFY_TOKEN_FILE',
   'PILOT_WHATSAPP_APP_SECRET_FILE',
   'PILOT_WHATSAPP_ACCESS_TOKEN_FILE',
+  'PILOT_TELEGRAM_BOT_TOKEN_FILE',
+  'PILOT_TELEGRAM_WEBHOOK_SECRET_FILE',
 ]) {
   if (process.env[name]) await readSecret(process.env[name]);
 }

@@ -2,7 +2,7 @@
 
 Status: fourth slice, November 2026. Students message the bot's WhatsApp number (Meta WhatsApp Cloud API). After they agree to a short notice, the pilot server stores each supported file or note as an ordinary cloud item in a vault for that sender, so it appears in that vault's change feed like any upload, and indexes it with the app's own engine so the app's cloud search finds it. Typed text is a search answered in the chat, a picked result sends the original back, and a one-time link opens the vault in the app. The statements are W1 to W9 in [SPEC.md](SPEC.md); the design and its sources are in `research/2026-11-10-technical-whatsapp-bot.md`.
 
-The code is in `pilot/server/whatsapp/`. The channel is on only when its settings are given (below); without them the server behaves as before, no Chromium starts and the WhatsApp paths answer `NOT_FOUND`. Meta setup and a local trial are in [whatsapp-setup.md](whatsapp-setup.md), deployment in [deployment.md](deployment.md) and the privacy page the bot links to in [whatsapp-privacy.md](whatsapp-privacy.md).
+The code is in `pilot/server/whatsapp/`, with the parts it shares with the Telegram channel (job runner, saving under the owner's lock, search, sending a result back, batching, erasing and the `ChatChannel` renderer interface) in `pilot/server/chat/` ([telegram.md](telegram.md), "The shared core"). The channel is on only when its settings are given (below); without them the server behaves as before, no Chromium starts and the WhatsApp paths answer `NOT_FOUND`. Meta setup and a local trial are in [whatsapp-setup.md](whatsapp-setup.md), deployment in [deployment.md](deployment.md) and the privacy page the bot links to in [whatsapp-privacy.md](whatsapp-privacy.md).
 
 ## Settings and startup
 

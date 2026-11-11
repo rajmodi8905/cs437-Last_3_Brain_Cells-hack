@@ -4,11 +4,14 @@
 // original back (W8), one-time app links (W6) and DELETE ALL (W9). It plugs into the worker
 // through its `gate`, `onText` and `onSaved` hooks; without them the worker behaves as before.
 import type { SourceLocation } from '../../../src/shared';
-import type { ObjectStore, PilotStore, StoredItem } from '../store';
-import { resetOwnerVault } from '../vault-reset';
+import { createSaveBatches, realSchedule } from '../chat/batch';
+import { clip, type ChatChannel, type ResultRow } from '../chat/channel';
+import { eraseOwner } from '../chat/erase';
+import { MAX_RESULTS, searchOwner } from '../chat/search';
+import { sendBack as sendPicked } from '../chat/send-back';
+import type { ObjectStore, PilotStore } from '../store';
 import type { EngineHost } from './engine-host';
-import type { GraphClient } from './graph';
-import { ownerSearchItems } from './indexer';
+import type { GraphClient, WhatsAppAddress } from './graph';
 import {
   addressOf,
   REPLIES as INGEST_REPLIES,
@@ -35,13 +38,9 @@ export const META_LIMITS = {
   caption: 1024,
   text: 4096,
 };
-/** Results in a search reply; the app shows five too. */
-const MAX_RESULTS = 5;
 /** WhatsApp sends photos up to 5 MB as images; larger ones go as documents. */
 const MAX_IMAGE_SEND_BYTES = 5 * 1024 * 1024;
 const SEND_AS_IMAGE = new Set(['image/jpeg', 'image/png']);
-/** Kinds sent back in the chat; others (from an included device library) open in the app. */
-const SENDABLE = new Set(['image', 'pdf', 'note']);
 
 export interface ConversationOptions {
   bot: BotStore;
@@ -67,25 +66,11 @@ export interface ConversationOptions {
   log?: (message: string, detail?: unknown) => void;
 }
 
-const codePoints = (text: string) => Array.from(text);
-const graphemes = new Intl.Segmenter('en', { granularity: 'grapheme' });
-/**
- * At most `max` code points (how Meta counts), ending in an ellipsis when cut. The cut falls
- * between whole characters, so an emoji or an accented letter is never split.
- */
-export function clip(text: string, max: number) {
-  const flat = text.replace(/\s+/g, ' ').trim();
-  if (codePoints(flat).length <= max) return flat;
-  let kept = '';
-  let used = 0;
-  for (const { segment } of graphemes.segment(flat)) {
-    const size = codePoints(segment).length;
-    if (used + size > max - 1) break;
-    kept += segment;
-    used += size;
-  }
-  return `${kept.trimEnd()}…`;
-}
+// Shared with the Telegram channel (pilot/server/chat/); kept here for existing callers. `clip`
+// counts code points, as Meta does.
+export { clip };
+export type { ResultRow };
+export { keywordScore } from '../chat/search';
 const quote = (query: string) => `“${clip(query, 60)}”`;
 
 export const BOT_REPLIES = {
@@ -191,44 +176,6 @@ export function parseRowId(id: string): { globalId: string; location: SourceLoca
   return { globalId: match[1], location };
 }
 
-const KIND_LABEL: Record<string, string> = {
-  pdf: 'PDF',
-  image: 'Photo',
-  note: 'Note',
-  audio: 'Audio',
-  video: 'Video',
-};
-const where = (location: SourceLocation) =>
-  location.kind === 'page'
-    ? `p. ${location.page}`
-    : location.kind === 'time'
-      ? `at ${Math.floor(location.startMs / 60000)}:${String(Math.floor(location.startMs / 1000) % 60).padStart(2, '0')}`
-      : undefined;
-
-/** One row of a search reply. */
-export interface ResultRow {
-  globalId: string;
-  location: SourceLocation;
-  title: string;
-  description: string;
-}
-
-/** Lowercase words of three or more letters or digits, for keyword matching. */
-const words = (text: string) =>
-  new Set(
-    text
-      .toLowerCase()
-      .split(/[^\p{L}\p{N}]+/u)
-      .filter((word) => word.length >= 3 || /^\d+$/.test(word)),
-  );
-/** How many of the query's words the title contains; 0 means no match. */
-export function keywordScore(query: string, title: string) {
-  const inTitle = [...words(title)];
-  let score = 0;
-  for (const word of words(query)) if (inTitle.some((w) => w.startsWith(word))) score++;
-  return score;
-}
-
 /** The interactive list Meta shows for a search, within its limits. */
 export function resultsList(query: string, rows: ResultRow[], keywordOnly: boolean) {
   return {
@@ -251,31 +198,47 @@ export function resultsList(query: string, rows: ResultRow[], keywordOnly: boole
   };
 }
 
-const EXTENSIONS: Record<string, string> = {
-  'application/pdf': '.pdf',
-  'image/jpeg': '.jpg',
-  'image/png': '.png',
-  'image/webp': '.webp',
-};
-const fileName = (item: StoredItem) => {
-  const base = item.title.replace(/[\\/:*?"<>|\n\r\t]+/g, ' ').trim() || 'Campus Recall';
-  const extension = EXTENSIONS[item.mimeType] ?? '';
-  return base.toLowerCase().endsWith(extension) ? base : `${base}${extension}`;
-};
+/**
+ * WhatsApp's renderer for the shared conversation parts: results as an interactive list, a JPEG
+ * or PNG up to 5 MB as an image and anything else as a document, and a CTA URL message for links.
+ */
+export function createWhatsAppChannel(graph: GraphClient): ChatChannel<WhatsAppAddress> {
+  return {
+    textLimit: META_LIMITS.text,
+    captionLimit: META_LIMITS.caption,
+    sendText: (to, text) => graph.sendText(to, text),
+    sendResults: (to, query, rows, keywordOnly) =>
+      graph.sendInteractive(to, resultsList(query, rows, keywordOnly)),
+    async sendFile(to, { item, bytes, caption, filename }) {
+      const asImage =
+        item.kind === 'image' &&
+        SEND_AS_IMAGE.has(item.mimeType) &&
+        bytes.length <= MAX_IMAGE_SEND_BYTES;
+      const mediaId = await graph.uploadMedia(bytes, item.mimeType, filename);
+      await graph.sendMedia(
+        to,
+        asImage
+          ? { type: 'image', mediaId, caption }
+          : { type: 'document', mediaId, caption, filename },
+      );
+    },
+    sendOpenButton: (to, url) =>
+      graph.sendInteractive(to, {
+        type: 'cta_url',
+        body: { text: BOT_REPLIES.openCta },
+        action: {
+          name: 'cta_url',
+          parameters: { display_text: clip('Open in app', META_LIMITS.ctaLabel), url },
+        },
+      }),
+  };
+}
 
 export function createWhatsAppConversation(options: ConversationOptions) {
   const { bot, store, objects, graph } = options;
   const now = options.nowSeconds ?? (() => Math.floor(Date.now() / 1000));
   const log = options.log ?? ((message, detail) => console.error(message, detail));
-  const batchMs = options.batchMs ?? 3000;
-  const batchMax = options.batchMax ?? 10;
-  const schedule =
-    options.schedule ??
-    ((run: () => void, ms: number) => {
-      const timer = setTimeout(run, ms);
-      timer.unref?.();
-      return () => clearTimeout(timer);
-    });
+  const channel = createWhatsAppChannel(graph);
 
   /** Claims the message's one reply, then sends; a failed send is logged, never repeated. */
   async function answer(wamid: string, sender: WhatsAppSender, send: () => Promise<void>) {
@@ -289,40 +252,25 @@ export function createWhatsAppConversation(options: ConversationOptions) {
 
   // Batched confirmations: the reply of each saved message is claimed before it waits here, so
   // a crash can lose a confirmation but nothing is ever confirmed twice.
-  const batches = new Map<
-    string,
-    { sender: WhatsAppSender; titles: string[]; cancel?: () => void }
-  >();
-  /** Confirmations being sent right now, so `flush` and shutdown can wait for them. */
-  const sending = new Set<Promise<void>>();
-  function sendBatch(ownerKey: string) {
-    const batch = batches.get(ownerKey);
-    if (!batch) return Promise.resolve();
-    batches.delete(ownerKey);
-    batch.cancel?.();
-    const body =
-      batch.titles.length === 1
-        ? INGEST_REPLIES.saved(batch.titles[0])
-        : BOT_REPLIES.savedMany(batch.titles);
-    const sent: Promise<void> = text(batch.sender, clip(body, META_LIMITS.text))()
-      .catch((cause: unknown) => log('WhatsApp reply failed', cause))
-      .finally(() => sending.delete(sent));
-    sending.add(sent);
-    return sent;
-  }
-  async function onSaved(sender: WhatsAppSender, title: string) {
-    const batch = batches.get(sender.ownerKey) ?? { sender, titles: [] };
-    batches.set(sender.ownerKey, batch);
-    batch.titles.push(title);
-    batch.cancel?.();
-    if (batch.titles.length >= batchMax) return sendBatch(sender.ownerKey);
-    batch.cancel = schedule(() => void sendBatch(sender.ownerKey), batchMs);
-  }
+  const batches = createSaveBatches<WhatsAppSender>({
+    send: (sender, titles) =>
+      text(
+        sender,
+        clip(
+          titles.length === 1 ? INGEST_REPLIES.saved(titles[0]) : BOT_REPLIES.savedMany(titles),
+          META_LIMITS.text,
+        ),
+      )(),
+    batchMs: options.batchMs ?? 3000,
+    batchMax: options.batchMax ?? 10,
+    schedule: options.schedule ?? realSchedule,
+    log,
+    failedMessage: 'WhatsApp reply failed',
+  });
+  const onSaved = (sender: WhatsAppSender, title: string) =>
+    batches.add(sender.ownerKey, sender, title);
   /** Sends every waiting confirmation now and waits for those already being sent. */
-  async function flush() {
-    for (const ownerKey of [...batches.keys()]) void sendBatch(ownerKey);
-    while (sending.size) await Promise.all([...sending]);
-  }
+  const flush = () => batches.flush();
   /** Saving needs consent and no STOP; the worker checks again under the owner's lock. */
   async function canStore(sender: WhatsAppSender) {
     const state = await bot.senderState(sender.userId);
@@ -331,14 +279,8 @@ export function createWhatsAppConversation(options: ConversationOptions) {
 
   /** Erases the sender's vault and everything that signs in to it (W9). */
   async function eraseEverything(sender: WhatsAppSender) {
-    const batch = batches.get(sender.ownerKey);
-    batch?.cancel?.();
-    batches.delete(sender.ownerKey);
-    await store.withOwnerLock(sender.ownerKey, async () => {
-      await resetOwnerVault(store, objects, sender.ownerKey);
-      await store.deleteOwnerSessions(sender.ownerKey);
-      await bot.forgetSender(sender.userId, sender.ownerKey);
-    });
+    batches.drop(sender.ownerKey);
+    await eraseOwner({ store, objects, bot, userId: sender.userId, ownerKey: sender.ownerKey });
   }
 
   const gate: GateHook = async ({ sender, wamid, message }) => {
@@ -443,132 +385,43 @@ export function createWhatsAppConversation(options: ConversationOptions) {
     }
   };
 
-  /** The sender's live items. */
-  async function liveItems(ownerKey: string) {
-    const { changes } = await store.changesAfter(ownerKey, 0);
-    const items: StoredItem[] = [];
-    for (const globalId of new Set(changes.map((change) => change.item.globalId))) {
-      const item = await store.getItem(ownerKey, globalId);
-      if (item && !item.deleted) items.push(item);
-    }
-    return items;
-  }
-
   /** Search results for a sender: by meaning when the engine is there, plus keyword matches. */
-  async function search(ownerKey: string, query: string) {
-    const items = await liveItems(ownerKey);
-    const byId = new Map(items.map((item) => [item.globalId, item]));
-    const rows: ResultRow[] = [];
-    let keywordOnly = !options.engine;
-    let indexed = new Set<string>();
-    if (options.engine) {
-      try {
-        const searchable = await ownerSearchItems(
-          store,
-          objects,
-          ownerKey,
-          options.supportedIndexVersions,
-        );
-        indexed = new Set(searchable.map((item) => item.globalId));
-        const hits = searchable.length ? await options.engine.search(query, searchable) : [];
-        for (const hit of hits) {
-          const item = byId.get(hit.globalId);
-          if (!item) continue;
-          const parts = [where(hit.location), hit.excerpt && clip(hit.excerpt, 60)].filter(Boolean);
-          rows.push({
-            globalId: hit.globalId,
-            location: hit.location,
-            title: item.title,
-            description: parts.length ? parts.join(' · ') : (KIND_LABEL[item.kind] ?? item.kind),
-          });
-        }
-      } catch (cause) {
-        log('WhatsApp search fell back to keywords', cause);
-        keywordOnly = true;
-        indexed = new Set();
-      }
-    }
-    // Items not searchable by meaning yet (or at all, without the engine) match by title.
-    const matches = items
-      .filter((item) => !indexed.has(item.globalId))
-      .map((item) => ({ item, score: keywordScore(query, item.title) }))
-      .filter((match) => match.score > 0)
-      .sort((a, b) => b.score - a.score || b.item.createdAt - a.item.createdAt);
-    for (const { item } of matches) {
-      if (rows.length >= MAX_RESULTS) break;
-      if (rows.some((row) => row.globalId === item.globalId)) continue;
-      rows.push({
-        globalId: item.globalId,
-        location: { kind: 'whole' },
-        title: item.title,
-        description: `${KIND_LABEL[item.kind] ?? item.kind} · ${
-          keywordOnly ? 'title match' : 'still indexing'
-        }`,
-      });
-    }
-    return { rows: rows.slice(0, MAX_RESULTS), keywordOnly };
-  }
+  const search = (ownerKey: string, query: string) =>
+    searchOwner(
+      {
+        store,
+        objects,
+        engine: options.engine,
+        supportedIndexVersions: options.supportedIndexVersions,
+        log,
+        fallbackMessage: 'WhatsApp search fell back to keywords',
+      },
+      ownerKey,
+      query,
+    );
 
   const onText: TextHook = async (sender, query, message) => {
     const { rows, keywordOnly } = await search(sender.ownerKey, clip(query, 500));
     const to = addressOf(sender);
     await answer(message.id, sender, async () => {
       if (!to) return;
-      if (!rows.length) return graph.sendText(to, BOT_REPLIES.noResults(query, keywordOnly));
-      await graph.sendInteractive(to, resultsList(query, rows, keywordOnly));
+      if (!rows.length) return channel.sendText(to, BOT_REPLIES.noResults(query, keywordOnly));
+      await channel.sendResults(to, query, rows, keywordOnly);
     });
   };
 
   /** A picked result: the original back in the chat, then a link to open the app. */
   async function sendBack(sender: WhatsAppSender, wamid: string, id: string) {
-    const to = addressOf(sender);
-    const picked = parseRowId(id);
-    const item = picked && (await store.getItem(sender.ownerKey, picked.globalId));
-    const bytes =
-      item && !item.deleted && item.objectKey?.startsWith(`${sender.ownerKey}/`)
-        ? await objects.get(item.objectKey)
-        : undefined;
-    await answer(wamid, sender, async () => {
-      if (!to) return;
-      if (!item || !bytes) return graph.sendText(to, BOT_REPLIES.gone);
-      const sendable = SENDABLE.has(item.kind);
-      const place = picked && where(picked.location);
-      const caption = clip(place ? `${item.title} (${place})` : item.title, META_LIMITS.caption);
-      if (!sendable) {
-        await graph.sendText(to, BOT_REPLIES.appOnly);
-      } else if (item.kind === 'note') {
-        const note = new TextDecoder().decode(bytes);
-        const room = META_LIMITS.text - BOT_REPLIES.noteTooLong.length - 2;
-        await graph.sendText(
-          to,
-          codePoints(note).length <= META_LIMITS.text
-            ? note
-            : `${codePoints(note).slice(0, room).join('')}\n\n${BOT_REPLIES.noteTooLong}`,
-        );
-      } else {
-        const asImage =
-          item.kind === 'image' &&
-          SEND_AS_IMAGE.has(item.mimeType) &&
-          bytes.length <= MAX_IMAGE_SEND_BYTES;
-        const mediaId = await graph.uploadMedia(bytes, item.mimeType, fileName(item));
-        await graph.sendMedia(
-          to,
-          asImage
-            ? { type: 'image', mediaId, caption }
-            : { type: 'document', mediaId, caption, filename: fileName(item) },
-        );
-      }
-      await graph.sendInteractive(to, {
-        type: 'cta_url',
-        body: { text: BOT_REPLIES.openCta },
-        action: {
-          name: 'cta_url',
-          parameters: {
-            display_text: clip('Open in app', META_LIMITS.ctaLabel),
-            url: await createOpenLink(bot, sender, options.origin, now()),
-          },
-        },
-      });
+    await sendPicked({
+      store,
+      objects,
+      channel,
+      replies: BOT_REPLIES,
+      ownerKey: sender.ownerKey,
+      picked: parseRowId(id),
+      to: addressOf(sender),
+      answer: (send) => answer(wamid, sender, send),
+      link: () => createOpenLink(bot, sender, options.origin, now()),
     });
   }
 
