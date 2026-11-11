@@ -4,6 +4,8 @@
 import { createHash } from 'node:crypto';
 import { LIMITS } from '../../../src/shared';
 import { validateCloudItem, MAX_TITLE_CODE_POINTS } from '../../contract';
+import { NOTE_MIME, chatGlobalId, firstWords, noteFromText, storeChatItem } from '../chat/items';
+import { PermanentJobError, createJobRunner, defaultRetryDelay, startJobLoop } from '../chat/jobs';
 import { RateLimiter } from '../limits';
 import type { ObjectStore, PilotStore, StoredItem } from '../store';
 import { GraphError, MediaTooLargeError, type GraphClient, type WhatsAppAddress } from './graph';
@@ -33,7 +35,6 @@ export const REPLIES = {
     `Your Campus Recall library is full, so "${title}" was saved but can't be searched yet.`,
 };
 
-const NOTE_MIME = 'text/plain;charset=utf-8';
 const IMAGE_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp']);
 /** Media WhatsApp could not deliver because it is over its own 100 MB limit. */
 const TOO_LARGE_FOR_WHATSAPP = 131052;
@@ -47,15 +48,6 @@ export type MessagePlan =
   | { action: 'save'; kind: 'note'; text: string; title: string; sourceUrl?: string };
 
 const codePoints = (text: string) => Array.from(text);
-/** Whitespace collapsed, cut to whole words within `max` code points. */
-function firstWords(text: string, max: number) {
-  const flat = text.replace(/\s+/g, ' ').trim();
-  const points = codePoints(flat);
-  if (points.length <= max) return flat;
-  const cut = points.slice(0, max - 1).join('');
-  const space = cut.lastIndexOf(' ');
-  return `${(space > max / 2 ? cut.slice(0, space) : cut).trimEnd()}…`;
-}
 const titleFrom = (...candidates: (string | undefined)[]) => {
   for (const candidate of candidates) {
     const title = candidate && firstWords(candidate, MAX_TITLE_CODE_POINTS);
@@ -70,11 +62,6 @@ export const createdAtOf = (message: WaMessage, fallbackMs = Date.now()) => {
   return Number.isSafeInteger(seconds) && seconds > 0 ? seconds * 1000 : fallbackMs;
 };
 const day = (message: WaMessage) => new Date(createdAtOf(message)).toISOString().slice(0, 10);
-const singleUrl = (text: string) => {
-  if (!/^https?:\/\/\S+$/i.test(text) || !URL.canParse(text)) return undefined;
-  const { protocol } = new URL(text);
-  return protocol === 'https:' || protocol === 'http:' ? text : undefined;
-};
 
 /** Decides how a message is handled, from its content alone. */
 export function planMessage(message: WaMessage): MessagePlan {
@@ -82,17 +69,9 @@ export function planMessage(message: WaMessage): MessagePlan {
     case 'text': {
       const body = (message.text?.body ?? '').trim();
       const forwarded = !!(message.context?.forwarded || message.context?.frequently_forwarded);
-      const prefixed = /^(?:note|save)\s+/i.exec(body);
-      const text = prefixed ? body.slice(prefixed[0].length).trim() : body;
-      const sourceUrl = singleUrl(text);
-      if (!text || !(forwarded || prefixed || sourceUrl)) return { action: 'text', text: body };
-      return {
-        action: 'save',
-        kind: 'note',
-        text,
-        title: titleFrom(firstWords(text, 60)),
-        ...(sourceUrl ? { sourceUrl } : {}),
-      };
+      const note = noteFromText(body, forwarded);
+      if (!note) return { action: 'text', text: body };
+      return { action: 'save', kind: 'note', ...note, title: titleFrom(firstWords(note.text, 60)) };
     }
     case 'image':
     case 'document': {
@@ -143,11 +122,7 @@ export function planMessage(message: WaMessage): MessagePlan {
  * again can never create a second item.
  */
 export function globalIdFor(wamid: string) {
-  const bytes = createHash('sha256').update(`campus-recall:whatsapp:${wamid}`).digest();
-  bytes[6] = (bytes[6] & 0x0f) | 0x40;
-  bytes[8] = (bytes[8] & 0x3f) | 0x80;
-  const hex = bytes.subarray(0, 16).toString('hex');
-  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+  return chatGlobalId('whatsapp', wamid);
 }
 
 /** WhatsApp's `sha256` names `hex` (64 hex digits) or is its base64 form, as webhooks send it. */
@@ -222,27 +197,14 @@ class Refusal extends Error {
   }
 }
 
-/**
- * A job that would fail the same way every time, so it fails at once instead of being retried.
- * For an index job, `reply` replaces the usual message to the student.
- */
-export class PermanentJobError extends Error {
-  constructor(
-    message: string,
-    readonly reply?: string,
-  ) {
-    super(message);
-    this.name = 'PermanentJobError';
-  }
-}
+export { PermanentJobError };
 
 export function createWhatsAppIngest(options: WhatsAppWorkerOptions) {
   const { bot, store, objects, graph } = options;
   const now = options.nowSeconds ?? (() => Math.floor(Date.now() / 1000));
   const leaseSeconds = options.leaseSeconds ?? 300;
   const maxAttempts = options.maxAttempts ?? 6;
-  const retryDelay =
-    options.retryDelaySeconds ?? ((n: number) => Math.min(3600, 30 * 2 ** (n - 1)));
+  const retryDelay = options.retryDelaySeconds ?? defaultRetryDelay;
   const log = options.log ?? ((message, detail) => console.error(message, detail));
   const senders = new RateLimiter(
     options.senderBurst ?? 30,
@@ -367,26 +329,20 @@ export function createWhatsAppIngest(options: WhatsAppWorkerOptions) {
     }
 
     // Like upload completion: quota, object and item under the owner's lock, all or nothing.
-    const outcome = await store.withOwnerLock(ownerKey, async () => {
-      // A DELETE ALL handled by another worker while this one downloaded ends this job and
-      // clears consent; storing now would bring something back into the erased vault.
-      const current = await bot.getJob(job.id);
-      if (current?.state !== 'running' || current.attempts !== job.attempts)
-        return { cancelled: true };
-      if (options.canStore && !(await options.canStore(sender))) return { cancelled: true };
-      const { epoch } = await store.vault(ownerKey);
-      const existing = await store.getItem(ownerKey, globalId);
-      if (existing) return { existing };
-      if ((await store.committedBytes(ownerKey)) + content.bytes.length > options.quotaBytes)
-        return { full: true };
-      const objectKey = `${ownerKey}/${epoch}/${globalId}/original`;
-      await objects.put(objectKey, content.bytes);
-      const item: StoredItem = { ...description, revision: 1, deleted: false, objectKey };
-      await store.publish(ownerKey, item, epoch);
-      // The seam for server indexing: every stored item gets an index job.
-      await bot.enqueue('index', wamid, ownerKey, now());
-      await bot.finishJob(job);
-      return { item };
+    // A DELETE ALL handled by another worker while this one downloaded ends this job and clears
+    // consent; storing now would bring something back into the erased vault.
+    const canStore = options.canStore;
+    const outcome = await storeChatItem({
+      bot,
+      store,
+      objects,
+      job,
+      ownerKey,
+      description,
+      bytes: content.bytes,
+      quotaBytes: options.quotaBytes,
+      now: now(),
+      ...(canStore ? { canStore: () => canStore(sender) } : {}),
     });
     if ('cancelled' in outcome) {
       // Not stored and not answered; the content goes too, as for any message not kept.
@@ -398,42 +354,36 @@ export function createWhatsAppIngest(options: WhatsAppWorkerOptions) {
       await bot.finishJob(job);
       return answer(wamid, sender, REPLIES.full);
     }
-    return saved(outcome.item ?? outcome.existing!);
+    return saved('item' in outcome ? outcome.item : outcome.existing);
   }
 
-  /** Runs one due job; false when there was none. */
-  async function runOnce() {
-    const job = await bot.claimJob(kinds, now(), leaseSeconds);
-    if (!job) return false;
-    try {
+  const { runOnce, drain } = createJobRunner({
+    bot,
+    kinds,
+    now,
+    leaseSeconds,
+    maxAttempts,
+    retryDelay,
+    log,
+    label: 'WhatsApp',
+    async run(job) {
       if (job.kind === 'ingest') {
         const wait = senders.take(job.ownerKey);
-        if (wait) {
-          await bot.deferJob(job, now() + wait);
-          return true;
-        }
+        if (wait) return bot.deferJob(job, now() + wait);
         await ingest(job);
       } else {
         await options.onIndexJob!(job);
         await bot.finishJob(job);
       }
-    } catch (cause) {
-      const error = cause instanceof Error ? cause.message : String(cause);
-      log(`WhatsApp ${job.kind} job failed (attempt ${job.attempts})`, error);
-      const permanent = cause instanceof PermanentJobError;
-      if (job.attempts < maxAttempts && !permanent)
-        await bot.retryJob(job, error, now() + retryDelay(job.attempts));
-      else {
-        await bot.failJob(job, error);
-        if (job.kind === 'ingest') {
-          const inbound = await bot.getInbound(job.wamid);
-          const sender = inbound && (await bot.getSender(inbound.senderId));
-          if (inbound && sender) await answer(job.wamid, sender, REPLIES.failed);
-        } else await indexFailed(job, permanent ? cause.reply : undefined);
-      }
-    }
-    return true;
-  }
+    },
+    async gaveUp(job, cause) {
+      if (job.kind === 'ingest') {
+        const inbound = await bot.getInbound(job.wamid);
+        const sender = inbound && (await bot.getSender(inbound.senderId));
+        if (inbound && sender) await answer(job.wamid, sender, REPLIES.failed);
+      } else await indexFailed(job, cause instanceof PermanentJobError ? cause.reply : undefined);
+    },
+  });
 
   /**
    * Tells the student once that a saved item could not be made searchable. The message already
@@ -452,52 +402,16 @@ export function createWhatsAppIngest(options: WhatsAppWorkerOptions) {
     );
   }
 
-  /** Runs due jobs until none is left; for tests and one-off runs. */
-  async function drain() {
-    let count = 0;
-    while (await runOnce()) count++;
-    return count;
-  }
-
   return { runOnce, drain, reply };
 }
 
 /** Runs the worker in this process until stopped; `wake` starts it on new messages at once. */
 export function startWhatsAppWorker(options: WhatsAppWorkerOptions & { idleMs?: number }) {
   const worker = createWhatsAppIngest(options);
-  const idleMs = options.idleMs ?? 5000;
-  const log = options.log ?? ((message, detail) => console.error(message, detail));
-  let stopped = false;
-  let woken = false;
-  let wakeUp: (() => void) | undefined;
-  const loop = (async () => {
-    while (!stopped) {
-      woken = false;
-      const worked = await worker.runOnce().catch((cause: unknown) => {
-        log('WhatsApp worker error', cause);
-        return false;
-      });
-      if (worked || woken || stopped) continue;
-      await new Promise<void>((resolve) => {
-        const timer = setTimeout(resolve, idleMs);
-        wakeUp = () => {
-          clearTimeout(timer);
-          resolve();
-        };
-      });
-      wakeUp = undefined;
-    }
-  })();
-  return {
-    ...worker,
-    wake() {
-      woken = true;
-      wakeUp?.();
-    },
-    async stop() {
-      stopped = true;
-      wakeUp?.();
-      await loop;
-    },
-  };
+  const loop = startJobLoop(worker.runOnce, {
+    idleMs: options.idleMs ?? 5000,
+    log: options.log ?? ((message, detail) => console.error(message, detail)),
+    label: 'WhatsApp',
+  });
+  return { ...worker, ...loop };
 }
