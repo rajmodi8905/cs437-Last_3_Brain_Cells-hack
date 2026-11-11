@@ -28,15 +28,34 @@ export async function createOpenLink(
   origin: string,
   now: number,
 ) {
+  return storeOpenLink(
+    bot,
+    { ownerKey: sender.ownerKey, label: maskedLabel(sender) },
+    `${origin.replace(/\/$/, '')}${OPEN_PATH_PREFIX}`,
+    now,
+  );
+}
+
+/**
+ * Stores a new one-time link for a vault, labelled with the account name the app will show, and
+ * returns its URL: `base` (the channel's open path on the pilot origin) and the token. Shared with
+ * the Telegram channel, whose links live in its own store and path.
+ */
+export async function storeOpenLink(
+  bot: BotStore,
+  vault: { ownerKey: string; label: string },
+  base: string,
+  now: number,
+) {
   const token = randomBytes(32).toString('base64url');
   await bot.createLink({
     tokenHash: hashLinkToken(token),
-    ownerKey: sender.ownerKey,
-    label: maskedLabel(sender),
+    ownerKey: vault.ownerKey,
+    label: vault.label,
     createdAt: now,
     expiresAt: now + LINK_SECONDS,
   });
-  return `${origin.replace(/\/$/, '')}${OPEN_PATH_PREFIX}${token}`;
+  return `${base}${token}`;
 }
 
 const STYLE = `body{margin:0;font:16px/1.5 system-ui,sans-serif;background:#f6f7f9;color:#1b1d21}
@@ -74,19 +93,21 @@ const page = (title: string, body: string) =>
   );
 
 /** Asks before opening the session; the form posts to this same path. */
-export const confirmPage = (label: string) =>
+export const confirmPage = (label: string, channel = 'WhatsApp') =>
   page(
     'Open Campus Recall',
-    `<h1>Open your WhatsApp library</h1>` +
+    `<h1>Open your ${escapeHtml(channel)} library</h1>` +
       `<p>Sign in to Campus Recall as <strong>${escapeHtml(label)}</strong> on this browser.</p>` +
       `<p>Your device's own library is not uploaded unless you choose to include it.</p>` +
       `<form method="post"><button type="submit">Continue</button></form>`,
   );
 
-/** Expired, used or unknown links all look the same. */
-export const linkErrorPage = () =>
+/** Expired, used or unknown links all look the same; `again` says how to get a new one. */
+export const linkErrorPage = (
+  again = 'Send OPEN to the Campus Recall WhatsApp number for a new one.',
+) =>
   page(
     'Link not valid',
     `<h1>This link doesn't work any more</h1>` +
-      `<p>Links work once, for 10 minutes. Send OPEN to the Campus Recall WhatsApp number for a new one.</p>`,
+      `<p>Links work once, for 10 minutes. ${escapeHtml(again)}</p>`,
   );
