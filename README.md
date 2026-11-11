@@ -52,9 +52,9 @@ You can keep an item offline, remove a download, pause sync on one device, delet
 
 ## Telegram bot
 
-The Telegram bot saves into your AnyRecall cloud library from a chat, and searches it there. It is opt-in and separate from the app's local-only default. `@<bot username>` below stands for the bot's username; the team gives the pilot bot's username at the demo. Read [the bot's privacy page](docs/pilot/telegram-privacy.md) first.
+The Telegram bot saves into your AnyRecall cloud library from a chat, and searches it there. It is opt-in and separate from the app's local-only default. The pilot's bot is [@ANYRECALLBOT](https://t.me/ANYRECALLBOT). Read [the bot's privacy page](docs/pilot/telegram-privacy.md) first.
 
-**1. Log in.** Open `@<bot username>` in Telegram and tap **Start** (or send `/start` or `/login`). Read the notice and tap **Log in with IITGN**. Sign in with the same IITGN Google account you use in the app, then press **Continue** to link the chat to it. The chat says "Linked to …". Nothing is stored or searched before that, and the login link works once, for 10 minutes.
+**1. Log in.** Open [@ANYRECALLBOT](https://t.me/ANYRECALLBOT) in Telegram and tap **Start** (or send `/start` or `/login`). Read the notice and tap **Log in with IITGN**. Sign in with the same IITGN Google account you use in the app, then press **Continue** to link the chat to it. The chat says "Linked to …". Nothing is stored or searched before that, and the login link works once, for 10 minutes.
 
 **2. Save.** Send or forward any of these. Several sent together get one "Saved … items" confirmation.
 
