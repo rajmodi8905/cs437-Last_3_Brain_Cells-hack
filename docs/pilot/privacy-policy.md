@@ -1,6 +1,6 @@
 # Privacy Policy
 
-Pilot version 2.0 · Updated 6 November 2026
+Pilot version 2.1 · Updated 11 November 2026
 
 Campus Recall is a student project by Raj Modi, Chaitanya and Nakshatra. This policy covers the separate Auto-sync pilot. It does not change the earlier local-only submission. Public launch follows hosted verification. Cloud access and cloud export end on 6 December 2026 at 17:47 IST (12:17 UTC); export your cloud library through Settings before then. This conservative 30-day window starts with Azure VM creation on 6 November 2026, not a claim that public launch has already happened. Do not rely on this experimental service as your only copy of important material.
 
@@ -15,6 +15,14 @@ Auto-sync requires a verified IITGN Google Workspace account (@iitgn.ac.in). Goo
 Signing in alone does not upload a library. Including this device's library uploads its originals and metadata, including titles, capture times and source URLs, to your account's private vault on Microsoft Azure. Compatible embeddings, extracted text and source locations such as PDF pages or media times also sync, so other signed-in devices can search locally without first downloading originals.
 
 Processing, query embedding and ranking run on your devices. Search queries are not sent to the pilot server. There is no cloud inference. Cloud access is authenticated and uses HTTPS. Azure encrypts stored data at rest, but this is not end-to-end encryption: authorized project operators and the cloud provider can technically access stored content. Someone with access to your browser profile may also access its local library and retained account data.
+
+## Optional WhatsApp bot
+
+The pilot also has a WhatsApp bot for the demo. It is opt-in: it stores nothing until you message it and reply AGREE to its notice, and you must be 18 or older to use it. Everything in this section applies only to students who use the bot; for everyone else the rest of this policy is unchanged.
+
+The bot saves the photos, PDFs and notes you send or forward to it into a private library for your WhatsApp account on the pilot's Azure storage, with your WhatsApp user ID, the phone number WhatsApp gives us, your consent time and each message's ID. Unlike the app, the bot works on the server: our server extracts text and builds the search index for what you send, and sees the searches you type to the bot. WhatsApp (Meta) decrypts messages to the bot to pass them to us and keeps them for up to 30 days, under Meta's own terms. A one-time link (OPEN) opens that library in the app; the app does not upload the library already on your device unless you include it.
+
+STOP pauses the bot. DELETE ALL followed by CONFIRM DELETE erases your bot library, consent, phone number and app links, keeping only message IDs so a repeated delivery is not saved again; backups and recovery copies expire as described below. The bot ends with the pilot on 6 December 2026 at 17:47 IST (12:17 UTC). Details: docs/pilot/whatsapp-privacy.md in the repository, which the bot's PRIVACY command links to.
 
 ## Requests and technical records
 

@@ -112,6 +112,16 @@ Open the installed icon before setup, then choose **Download offline search** in
 
 Saved originals and completed model downloads normally survive reopening the same installed app. Interrupted processing may restart; complete setup files are reused, while an incomplete file downloads again. Processing and sync make progress while the app is open. Browser storage is best-effort: keep important originals backed up and confirm uploads show as synced.
 
+## Save from WhatsApp (demo)
+
+For the pilot demo, a few allow-listed phones can also save to Campus Recall from WhatsApp, through Meta's test number. It is opt-in and separate from the app's local-only default:
+
+- Message the bot and reply **AGREE** to its notice. Nothing is stored before that.
+- Forward photos, PDFs and notes to save them; start a message with `note ` to save it as a note. Type anything else to search what you sent, and pick a result to get the original back.
+- Send **OPEN** for a one-time link that opens your WhatsApp library in the app. **HELP**, **PRIVACY**, **STOP** / **START** and **DELETE ALL** do what they say.
+
+Unlike the app, the bot indexes and searches on the pilot server, and WhatsApp (Meta) decrypts messages to the bot and keeps them for up to 30 days. Read [the bot's privacy page](docs/pilot/whatsapp-privacy.md) first. How it works: [whatsapp.md](docs/pilot/whatsapp.md); Meta setup and a local trial: [whatsapp-setup.md](docs/pilot/whatsapp-setup.md); deployment: the WhatsApp section of [deployment.md](docs/pilot/deployment.md).
+
 ## Supported content
 
 | Input                       | Limit                       | Searchable content                                   |
