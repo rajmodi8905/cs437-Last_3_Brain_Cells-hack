@@ -3,7 +3,8 @@
 # it with the other files and fills the models folder. Without this file the channel is off and
 # nothing below applies. It works alone or together with compose.whatsapp.yaml; both run one
 # engine host. Plain settings come from .env; the bot token and webhook secret are files, never
-# environment values.
+# environment values. Linking a Telegram user to an IITGN account uses the app's Google sign-in
+# from compose.yaml; this file adds nothing for it.
 services:
   app:
     environment:
