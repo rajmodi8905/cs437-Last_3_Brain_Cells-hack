@@ -98,8 +98,16 @@ Meta checks the callback URL when you save it, so the server must already be run
 1. **WhatsApp → Configuration → Webhook → Edit**.
 2. **Callback URL**: `https://<tunnel host>/api/v1/whatsapp/webhook` for a local trial, or for the pilot `https://campusrecall.indiasouthcentral.cloudapp.azure.com/api/v1/whatsapp/webhook`.
 3. **Verify token**: the contents of the verify token file. Choose **Verify and save**. A wrong token gets 403 and Meta refuses to save.
-4. Under **Webhook fields**, **Subscribe** to `messages`. Nothing else is needed.
-5. Optionally send a test payload from the same panel; the server answers 200 to it.
+4. Under **Webhook fields**, **Subscribe** to `messages`.
+5. Subscribe the app itself to the WhatsApp Business Account. The quickstart test number is often subscribed only to Meta's own "WA DevX Webhook Events 1P App", and then real messages never reach the callback URL even though the webhook is saved. Check, and subscribe if the app is missing, with the system-user token (no values on the command line history if you read them from the files):
+
+   ```bash
+   curl -s "https://graph.facebook.com/v25.0/<WABA_ID>/subscribed_apps" -H "Authorization: Bearer $(cat ~/.config/campus-recall/whatsapp/access_token)"
+   curl -s -X POST "https://graph.facebook.com/v25.0/<WABA_ID>/subscribed_apps" -H "Authorization: Bearer $(cat ~/.config/campus-recall/whatsapp/access_token)"
+   ```
+
+   The list must then include the app's own name and ID.
+6. Optionally send a test payload from the same panel; the server answers 200 to it.
 
 Only one callback URL is active per app: moving from the laptop to the VM means saving the VM's URL here (and the VM's verify token, if it differs).
 
