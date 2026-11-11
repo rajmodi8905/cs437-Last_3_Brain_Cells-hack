@@ -21,11 +21,38 @@ export interface PilotConfig {
   signInPerMinute: number;
   /** The opt-in WhatsApp channel (docs/pilot/whatsapp.md); absent, the channel is off. */
   whatsapp?: WhatsAppConfig;
+  /** The opt-in Telegram channel (docs/pilot/telegram.md); absent, the channel is off. */
+  telegram?: TelegramConfig;
   /**
-   * A short trial of the WhatsApp channel on a developer's computer behind an HTTPS tunnel
-   * (docs/pilot/whatsapp-setup.md). Present only when it is on.
+   * A short trial of a chat channel on a developer's computer (docs/pilot/whatsapp-setup.md,
+   * docs/pilot/telegram-setup.md). Present only when it is on.
    */
   localTrial?: true;
+}
+
+export interface EngineHostConfig {
+  /** The engine host build (`npm run build:engine-host`). */
+  distDir: string;
+  /** Pinned model files named by SHA-256 (`npm run models:download`). */
+  modelsDir: string;
+  /** A writable directory for Chromium's profile; a temporary one when absent. */
+  stateDir?: string;
+}
+
+export interface TelegramConfig {
+  /** The bot token, read from its file; never logged, never in a command line. */
+  botToken: string;
+  /** `polling` (long polling, no public address needed) or `webhook`. */
+  mode: 'polling' | 'webhook';
+  /** The webhook's secret token, read from its file; webhook mode only. */
+  webhookSecret?: string;
+  /** Only these users may use the bot (a demo); absent, everyone may. */
+  allowedUsers?: { ids: string[]; usernames: string[] };
+  privacyUrl: string;
+  contactEmail: string;
+  noticeVersion: string;
+  /** The same engine host as the WhatsApp channel; one is started for both. */
+  engineHost: EngineHostConfig;
 }
 
 export interface WhatsAppConfig {
@@ -38,14 +65,7 @@ export interface WhatsAppConfig {
   privacyUrl: string;
   contactEmail: string;
   noticeVersion: string;
-  engineHost: {
-    /** The engine host build (`npm run build:engine-host`). */
-    distDir: string;
-    /** Pinned model files named by SHA-256 (`npm run models:download`). */
-    modelsDir: string;
-    /** A writable directory for Chromium's profile; a temporary one when absent. */
-    stateDir?: string;
-  };
+  engineHost: EngineHostConfig;
 }
 
 export type StorageConfig =
@@ -134,9 +154,24 @@ const WHATSAPP_REQUIRED = [
 const WHATSAPP_OPTIONAL = [
   'PILOT_WHATSAPP_GRAPH_VERSION',
   'PILOT_WHATSAPP_NOTICE_VERSION',
+] as const;
+/** The engine host's settings, for either chat channel. */
+const ENGINE_HOST_OPTIONAL = [
   'PILOT_ENGINE_HOST_DIST',
   'PILOT_ENGINE_HOST_MODELS',
   'PILOT_ENGINE_HOST_STATE_DIR',
+] as const;
+/** Settings the Telegram channel cannot run without; all of them or none. */
+const TELEGRAM_REQUIRED = [
+  'PILOT_TELEGRAM_BOT_TOKEN_FILE',
+  'PILOT_TELEGRAM_PRIVACY_URL',
+  'PILOT_TELEGRAM_CONTACT_EMAIL',
+] as const;
+const TELEGRAM_OPTIONAL = [
+  'PILOT_TELEGRAM_MODE',
+  'PILOT_TELEGRAM_WEBHOOK_SECRET_FILE',
+  'PILOT_TELEGRAM_ALLOWED_USERS',
+  'PILOT_TELEGRAM_NOTICE_VERSION',
 ] as const;
 
 /** One secret value from its file. Errors name the setting, never the path's contents. */
@@ -150,6 +185,15 @@ function readSecretFile(name: string, path: string) {
   if (!value) throw new Error(`${name} names an empty file.`);
   if (/\s/.test(value)) throw new Error(`${name} must hold one value on one line.`);
   return value;
+}
+
+function loadEngineHost(env: Record<string, string | undefined>): EngineHostConfig {
+  const stateDir = env.PILOT_ENGINE_HOST_STATE_DIR || undefined;
+  return {
+    distDir: env.PILOT_ENGINE_HOST_DIST || '.cache/engine-host-dist',
+    modelsDir: env.PILOT_ENGINE_HOST_MODELS || '.models',
+    ...(stateDir ? { stateDir } : {}),
+  };
 }
 
 function loadWhatsApp(env: Record<string, string | undefined>): WhatsAppConfig | undefined {
@@ -177,7 +221,6 @@ function loadWhatsApp(env: Record<string, string | undefined>): WhatsAppConfig |
   const noticeVersion = env.PILOT_WHATSAPP_NOTICE_VERSION || '1';
   if (!/^[\w.-]{1,40}$/.test(noticeVersion))
     throw new Error('PILOT_WHATSAPP_NOTICE_VERSION must be a short plain label.');
-  const stateDir = env.PILOT_ENGINE_HOST_STATE_DIR || undefined;
   return {
     verifyToken: readSecretFile(
       'PILOT_WHATSAPP_VERIFY_TOKEN_FILE',
@@ -196,11 +239,87 @@ function loadWhatsApp(env: Record<string, string | undefined>): WhatsAppConfig |
     privacyUrl,
     contactEmail,
     noticeVersion,
-    engineHost: {
-      distDir: env.PILOT_ENGINE_HOST_DIST || '.cache/engine-host-dist',
-      modelsDir: env.PILOT_ENGINE_HOST_MODELS || '.models',
-      ...(stateDir ? { stateDir } : {}),
-    },
+    engineHost: loadEngineHost(env),
+  };
+}
+
+/** Comma-separated numeric user IDs and @usernames. */
+function parseAllowedUsers(value: string) {
+  const ids: string[] = [];
+  const usernames: string[] = [];
+  for (const raw of value.split(',')) {
+    const entry = raw.trim();
+    if (!entry) continue;
+    if (/^[1-9]\d{0,19}$/.test(entry)) ids.push(entry);
+    else if (/^@?[A-Za-z][A-Za-z0-9_]{3,31}$/.test(entry))
+      usernames.push(entry.replace(/^@/, '').toLowerCase());
+    else
+      throw new Error(
+        'PILOT_TELEGRAM_ALLOWED_USERS must list numeric Telegram user IDs or @usernames, separated by commas.',
+      );
+  }
+  if (!ids.length && !usernames.length)
+    throw new Error('PILOT_TELEGRAM_ALLOWED_USERS names nobody; leave it unset to allow everyone.');
+  return { ids, usernames };
+}
+
+function loadTelegram(env: Record<string, string | undefined>): TelegramConfig | undefined {
+  const set = (name: string) => !!env[name];
+  if (!TELEGRAM_REQUIRED.some(set)) {
+    const stray = TELEGRAM_OPTIONAL.find(set);
+    if (stray) throw new Error(`${stray} only applies with the Telegram channel settings.`);
+    return undefined;
+  }
+  const missing = TELEGRAM_REQUIRED.filter((name) => !set(name));
+  if (missing.length)
+    throw new Error(`Set every Telegram setting or none; missing: ${missing.join(', ')}.`);
+  const mode = env.PILOT_TELEGRAM_MODE || 'polling';
+  if (mode !== 'polling' && mode !== 'webhook')
+    throw new Error('PILOT_TELEGRAM_MODE must be polling or webhook.');
+  if (mode === 'polling' && set('PILOT_TELEGRAM_WEBHOOK_SECRET_FILE'))
+    throw new Error(
+      'PILOT_TELEGRAM_WEBHOOK_SECRET_FILE only applies with PILOT_TELEGRAM_MODE=webhook.',
+    );
+  if (mode === 'webhook' && !set('PILOT_TELEGRAM_WEBHOOK_SECRET_FILE'))
+    throw new Error('PILOT_TELEGRAM_MODE=webhook needs PILOT_TELEGRAM_WEBHOOK_SECRET_FILE.');
+  const privacyUrl = env.PILOT_TELEGRAM_PRIVACY_URL!;
+  if (!URL.canParse(privacyUrl) || new URL(privacyUrl).protocol !== 'https:')
+    throw new Error('PILOT_TELEGRAM_PRIVACY_URL must be an HTTPS address.');
+  const contactEmail = env.PILOT_TELEGRAM_CONTACT_EMAIL!;
+  if (contactEmail.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(contactEmail))
+    throw new Error('PILOT_TELEGRAM_CONTACT_EMAIL must be an email address.');
+  const noticeVersion = env.PILOT_TELEGRAM_NOTICE_VERSION || '1';
+  if (!/^[\w.-]{1,40}$/.test(noticeVersion))
+    throw new Error('PILOT_TELEGRAM_NOTICE_VERSION must be a short plain label.');
+  const botToken = readSecretFile(
+    'PILOT_TELEGRAM_BOT_TOKEN_FILE',
+    env.PILOT_TELEGRAM_BOT_TOKEN_FILE!,
+  );
+  // BotFather's format: the bot's numeric ID, a colon and a secret part.
+  if (!/^\d{3,20}:[A-Za-z0-9_-]{30,80}$/.test(botToken))
+    throw new Error('PILOT_TELEGRAM_BOT_TOKEN_FILE must hold a bot token from BotFather.');
+  let webhookSecret: string | undefined;
+  if (mode === 'webhook') {
+    webhookSecret = readSecretFile(
+      'PILOT_TELEGRAM_WEBHOOK_SECRET_FILE',
+      env.PILOT_TELEGRAM_WEBHOOK_SECRET_FILE!,
+    );
+    // Telegram accepts 1 to 256 of these characters as a secret token.
+    if (!/^[A-Za-z0-9_-]{16,256}$/.test(webhookSecret))
+      throw new Error(
+        'PILOT_TELEGRAM_WEBHOOK_SECRET_FILE must hold 16 to 256 letters, digits, _ or -.',
+      );
+  }
+  const allowed = env.PILOT_TELEGRAM_ALLOWED_USERS;
+  return {
+    botToken,
+    mode,
+    ...(webhookSecret ? { webhookSecret } : {}),
+    ...(allowed ? { allowedUsers: parseAllowedUsers(allowed) } : {}),
+    privacyUrl,
+    contactEmail,
+    noticeVersion,
+    engineHost: loadEngineHost(env),
   };
 }
 
@@ -219,6 +338,12 @@ export function loadConfig(env: Record<string, string | undefined>): PilotConfig
     throw new Error('A development signing key is only allowed on a local origin.');
   const host = env.PILOT_HOST ?? '127.0.0.1';
   const whatsapp = loadWhatsApp(env);
+  const telegram = loadTelegram(env);
+  if (!whatsapp && !telegram) {
+    const stray = ENGINE_HOST_OPTIONAL.find((name) => !!env[name]);
+    if (stray)
+      throw new Error(`${stray} only applies with the WhatsApp or Telegram channel settings.`);
+  }
   // A WhatsApp trial on a developer's computer: Meta and phones reach it through an HTTPS
   // tunnel, so the origin is public, but the server listens on loopback only and its data is
   // local and short-lived. Development sign-in stays off (anyone with the tunnel's address could
@@ -228,8 +353,8 @@ export function loadConfig(env: Record<string, string | undefined>): PilotConfig
     !['0', '1'].includes(env.PILOT_WHATSAPP_LOCAL_TRIAL)
   )
     throw new Error('PILOT_WHATSAPP_LOCAL_TRIAL must be 0 or 1.');
-  const localTrial = env.PILOT_WHATSAPP_LOCAL_TRIAL === '1';
-  if (localTrial) {
+  const whatsappTrial = env.PILOT_WHATSAPP_LOCAL_TRIAL === '1';
+  if (whatsappTrial) {
     if (!whatsapp)
       throw new Error('PILOT_WHATSAPP_LOCAL_TRIAL needs the WhatsApp channel settings.');
     if (local || url.protocol !== 'https:')
@@ -239,6 +364,31 @@ export function loadConfig(env: Record<string, string | undefined>): PilotConfig
     if (!LOOPBACK_LISTEN.has(host))
       throw new Error('PILOT_WHATSAPP_LOCAL_TRIAL needs PILOT_HOST to be a loopback address.');
   }
+  // A Telegram trial on a developer's computer: long polling needs no public address, so the
+  // origin may be local (app links then only explain that they need a tunnel) or a tunnel's HTTPS
+  // address. As for WhatsApp, the server listens on loopback only, its data is local and
+  // development sign-in stays off.
+  if (
+    env.PILOT_TELEGRAM_LOCAL_TRIAL !== undefined &&
+    !['0', '1'].includes(env.PILOT_TELEGRAM_LOCAL_TRIAL)
+  )
+    throw new Error('PILOT_TELEGRAM_LOCAL_TRIAL must be 0 or 1.');
+  const telegramTrial = env.PILOT_TELEGRAM_LOCAL_TRIAL === '1';
+  if (telegramTrial) {
+    if (!telegram)
+      throw new Error('PILOT_TELEGRAM_LOCAL_TRIAL needs the Telegram channel settings.');
+    if (!local && url.protocol !== 'https:')
+      throw new Error(
+        "PILOT_TELEGRAM_LOCAL_TRIAL needs a local origin or the tunnel's HTTPS origin.",
+      );
+    if (!LOOPBACK_LISTEN.has(host))
+      throw new Error('PILOT_TELEGRAM_LOCAL_TRIAL needs PILOT_HOST to be a loopback address.');
+    if (devKeyFile) throw new Error('PILOT_TELEGRAM_LOCAL_TRIAL runs without development sign-in.');
+  }
+  // Telegram only delivers webhooks to HTTPS addresses.
+  if (telegram?.mode === 'webhook' && url.protocol !== 'https:')
+    throw new Error('PILOT_TELEGRAM_MODE=webhook needs an HTTPS PILOT_ORIGIN.');
+  const localTrial = whatsappTrial || telegramTrial;
   const googleId = env.PILOT_GOOGLE_CLIENT_ID || undefined;
   const clientSecret = env.PILOT_GOOGLE_CLIENT_SECRET || undefined;
   if (!googleId !== !clientSecret)
@@ -274,6 +424,7 @@ export function loadConfig(env: Record<string, string | undefined>): PilotConfig
     trustProxy: env.PILOT_TRUST_PROXY === '1',
     signInPerMinute,
     ...(whatsapp ? { whatsapp } : {}),
+    ...(telegram ? { telegram } : {}),
     ...(localTrial ? { localTrial: true as const } : {}),
   };
 }
