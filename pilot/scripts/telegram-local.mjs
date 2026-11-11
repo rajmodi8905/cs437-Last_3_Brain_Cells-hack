@@ -7,7 +7,10 @@
 // (or CAMPUS_RECALL_TELEGRAM_DIR): the file bot_token, and optionally settings.env with plain
 // PILOT_* settings. This script never reads bot_token; it passes its path, and the server reads
 // it. Nothing secret goes on a command line or in the output. Long polling needs no public
-// address; --origin (an HTTPS tunnel to this port) is only needed for /open links on a phone.
+// address; --origin (an HTTPS tunnel to this port) is needed for /login and /open links on a
+// phone. Google's OAuth client only accepts the pilot domain's callback, so linking a Telegram
+// user here uses development sign-in with a throwaway local key (the server allows that only on
+// this loopback-bound trial with memory storage); real IITGN login is tried on the pilot.
 import { spawn, execFileSync } from 'node:child_process';
 import { existsSync, readFileSync, statSync } from 'node:fs';
 import { homedir } from 'node:os';
@@ -79,17 +82,22 @@ for (const [path, command] of [
     console.warn(`Missing ${path} (run ${command}); search is by keyword only until then.`);
 }
 execFileSync(process.execPath, ['pilot/scripts/build-server.mjs'], { stdio: 'inherit' });
+// The throwaway development signing key, made once in the ignored .cache/.
+execFileSync(process.execPath, ['pilot/scripts/dev-key.mjs'], { stdio: 'inherit' });
 
 const env = { ...process.env };
-// Development sign-in and webhook settings do not belong to a polling trial.
+// Google sign-in, durable storage and webhook settings do not belong to a polling trial.
 for (const name of [
-  'PILOT_DEV_KEY_FILE',
   'PILOT_TELEGRAM_WEBHOOK_SECRET_FILE',
   'PILOT_GOOGLE_CLIENT_ID',
   'PILOT_GOOGLE_CLIENT_SECRET',
+  'PILOT_DATABASE_URL',
+  'PILOT_BLOB_ACCOUNT_URL',
+  'PILOT_BLOB_CONNECTION_STRING',
 ])
   delete env[name];
 Object.assign(env, settings, {
+  PILOT_DEV_KEY_FILE: '.cache/pilot-dev-key/dev-private.pem',
   PILOT_ORIGIN: origin,
   PILOT_HOST: '127.0.0.1',
   PILOT_PORT: values.port,
@@ -105,10 +113,10 @@ Object.assign(env, settings, {
 console.log(`Local Telegram trial on http://127.0.0.1:${values.port} (long polling).`);
 console.log(
   values.origin
-    ? `App links open through ${origin}; keep the tunnel running.`
-    : 'No --origin: /open explains that app links need an HTTPS tunnel.',
+    ? `Login and app links open through ${origin}; keep the tunnel running. Linking uses development sign-in: anyone with this address can sign in as any IITGN email while the trial runs.`
+    : 'No --origin: /login and /open explain that links need an HTTPS tunnel.',
 );
-console.log('In Telegram, open your bot and tap Start. Stop with Ctrl+C.');
+console.log('In Telegram, open your bot, tap Start, then Log in with IITGN. Stop with Ctrl+C.');
 const server = spawn(process.execPath, ['.cache/pilot-server/main.mjs'], {
   env,
   stdio: 'inherit',

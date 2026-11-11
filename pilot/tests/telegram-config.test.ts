@@ -168,15 +168,63 @@ describe('Telegram local trial', () => {
     ).toMatchObject({ storage: { kind: 'memory' }, localTrial: true });
   });
 
+  it('links Telegram users with development sign-in, also behind a tunnel, on memory storage', () => {
+    const DEV = { PILOT_DEV_KEY_FILE: '/tmp/dev-private.pem' };
+    expect(loadConfig({ ...TRIAL, ...DEV })).toMatchObject({
+      clientId: 'campus-recall-pilot-dev',
+      devKeyFile: '/tmp/dev-private.pem',
+      storage: { kind: 'memory' },
+      localTrial: true,
+    });
+    expect(
+      loadConfig({
+        ...TRIAL,
+        ...DEV,
+        PILOT_ORIGIN: 'https://quiet-river-1234.trycloudflare.com',
+      }),
+    ).toMatchObject({ devKeyFile: '/tmp/dev-private.pem', storage: { kind: 'memory' } });
+  });
+
   it.each([
     [
       'without the Telegram settings',
       { PILOT_TELEGRAM_LOCAL_TRIAL: '1' } as Record<string, string>,
     ],
     ['when listening on every interface', { ...TRIAL, PILOT_HOST: '0.0.0.0' }],
-    ['with development sign-in', { ...TRIAL, PILOT_DEV_KEY_FILE: '/tmp/dev-private.pem' }],
+    [
+      'with development sign-in on every interface',
+      { ...TRIAL, PILOT_HOST: '0.0.0.0', PILOT_DEV_KEY_FILE: '/tmp/dev-private.pem' },
+    ],
+    [
+      'with development sign-in behind a tunnel on durable storage',
+      {
+        ...TRIAL,
+        ...DURABLE,
+        PILOT_ORIGIN: 'https://quiet-river-1234.trycloudflare.com',
+        PILOT_DEV_KEY_FILE: '/tmp/dev-private.pem',
+      },
+    ],
+    [
+      'with development sign-in and Google sign-in together',
+      { ...TRIAL, ...G, PILOT_DEV_KEY_FILE: '/tmp/dev-private.pem' },
+    ],
     ['with a value other than 0 or 1', { ...TRIAL, PILOT_TELEGRAM_LOCAL_TRIAL: 'yes' }],
   ])('is refused %s', (_name, env) => {
     expect(() => loadConfig(env)).toThrow();
+  });
+
+  it('never allows development sign-in on a public origin without the trial', () => {
+    expect(() =>
+      loadConfig({ ...PUBLIC, ...TG, PILOT_DEV_KEY_FILE: '/tmp/dev-private.pem' }),
+    ).toThrow(/only allowed on a local origin/);
+    expect(() =>
+      loadConfig({
+        ...TG,
+        ...DURABLE,
+        PILOT_ORIGIN: 'https://quiet-river-1234.trycloudflare.com',
+        PILOT_TELEGRAM_LOCAL_TRIAL: '0',
+        PILOT_DEV_KEY_FILE: '/tmp/dev-private.pem',
+      }),
+    ).toThrow(/only allowed on a local origin/);
   });
 });

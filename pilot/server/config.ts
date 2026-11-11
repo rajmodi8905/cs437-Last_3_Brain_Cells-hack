@@ -334,7 +334,8 @@ export function loadConfig(env: Record<string, string | undefined>): PilotConfig
   if (url.protocol !== 'https:' && !local)
     throw new Error('PILOT_ORIGIN must use HTTPS unless it is local.');
   const devKeyFile = env.PILOT_DEV_KEY_FILE || undefined;
-  if (devKeyFile && !local)
+  // A Telegram local trial behind a tunnel may use one too; checked with the trial below.
+  if (devKeyFile && !local && env.PILOT_TELEGRAM_LOCAL_TRIAL !== '1')
     throw new Error('A development signing key is only allowed on a local origin.');
   const host = env.PILOT_HOST ?? '127.0.0.1';
   const whatsapp = loadWhatsApp(env);
@@ -363,11 +364,14 @@ export function loadConfig(env: Record<string, string | undefined>): PilotConfig
       );
     if (!LOOPBACK_LISTEN.has(host))
       throw new Error('PILOT_WHATSAPP_LOCAL_TRIAL needs PILOT_HOST to be a loopback address.');
+    if (devKeyFile) throw new Error('PILOT_WHATSAPP_LOCAL_TRIAL runs without development sign-in.');
   }
   // A Telegram trial on a developer's computer: long polling needs no public address, so the
-  // origin may be local (app links then only explain that they need a tunnel) or a tunnel's HTTPS
-  // address. As for WhatsApp, the server listens on loopback only, its data is local and
-  // development sign-in stays off.
+  // origin may be local (links then only explain that they need a tunnel) or a tunnel's HTTPS
+  // address. As for WhatsApp, the server listens on loopback only and its data is local. Google's
+  // OAuth client accepts only the pilot domain's callback, so linking a Telegram user to an
+  // account uses development sign-in here; behind a tunnel that is allowed only with memory
+  // storage, so a trial never holds anything that lasts. Real IITGN login is tried on the pilot.
   if (
     env.PILOT_TELEGRAM_LOCAL_TRIAL !== undefined &&
     !['0', '1'].includes(env.PILOT_TELEGRAM_LOCAL_TRIAL)
@@ -383,7 +387,12 @@ export function loadConfig(env: Record<string, string | undefined>): PilotConfig
       );
     if (!LOOPBACK_LISTEN.has(host))
       throw new Error('PILOT_TELEGRAM_LOCAL_TRIAL needs PILOT_HOST to be a loopback address.');
-    if (devKeyFile) throw new Error('PILOT_TELEGRAM_LOCAL_TRIAL runs without development sign-in.');
+    const durable =
+      env.PILOT_DATABASE_URL || env.PILOT_BLOB_ACCOUNT_URL || env.PILOT_BLOB_CONNECTION_STRING;
+    if (devKeyFile && !local && durable)
+      throw new Error(
+        'PILOT_TELEGRAM_LOCAL_TRIAL with development sign-in behind a tunnel runs on memory storage only.',
+      );
   }
   // Telegram only delivers webhooks to HTTPS addresses.
   if (telegram?.mode === 'webhook' && url.protocol !== 'https:')

@@ -192,9 +192,13 @@ server.listen(config.port, config.host, () => {
         ? `Telegram channel on (webhook): ${config.origin}${TELEGRAM_WEBHOOK_PATH}.`
         : 'Telegram channel on (long polling).',
     );
-  if (config.localTrial)
+  if (config.localTrial && !(telegram && devKey))
     console.log(
       `Local ${channels} trial: the app has no sign-in of its own here; open it from a ${channels} link.`,
+    );
+  if (config.localTrial && telegram && devKey)
+    console.log(
+      `Local Telegram trial: /login links use development sign-in, so anyone who has ${config.origin} can sign in as any IITGN email. Real IITGN login is tried on the pilot.`,
     );
 });
 
