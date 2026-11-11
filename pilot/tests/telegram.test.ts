@@ -897,7 +897,7 @@ describe.each(backends)('Telegram bot: %s', (name, available, open) => {
       await t.send(tap, tap);
       const id = (tap.callback_query as { id: string }).id;
       expect(t.tg.state.answered.filter((a) => a.id === id)).toHaveLength(1);
-      // The note and its "Open in app" link, once.
+      // The note and its "Open in browser" link, once.
       expect(t.tg.to(USER_A.id).length - before).toBe(2);
     });
 
@@ -1445,7 +1445,7 @@ describe.each(backends)('Telegram bot: %s', (name, available, open) => {
       expect(await t.state.savedItems(OWNER_X)).not.toContain(appItem);
     });
 
-    it('sends a photo, a PDF and a note back, each with an Open in app button', async () => {
+    it('sends a photo, a PDF and a note back, each with an Open in browser button', async () => {
       const t = await setup();
       await t.link();
       const photo = jpegBytes(6000, 9);
@@ -1507,7 +1507,7 @@ describe.each(backends)('Telegram bot: %s', (name, available, open) => {
         check();
         const cta = t.tg.to(USER_A.id).at(-1)!;
         expect(cta.text).toBe(TELEGRAM_REPLIES.openCta);
-        expect(cta.replyMarkup?.inline_keyboard[0][0].text).toBe('Open in app');
+        expect(cta.replyMarkup?.inline_keyboard[0][0].text).toBe('Open in browser');
         const token = OPEN.exec(cta.replyMarkup?.inline_keyboard[0][0].url ?? '')![1];
         expect((await t.follow(token)).status).toBe(303);
       }

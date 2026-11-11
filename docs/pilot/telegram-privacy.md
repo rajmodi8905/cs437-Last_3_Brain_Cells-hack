@@ -14,7 +14,7 @@ You must be 18 or older to use the bot.
 
 Logging in links this Telegram account to your IITGN account in Campus Recall. What you send the bot then goes into that account's cloud library: the same library the app's Auto-sync uses, so the items appear in the app on any device where you sign in and use Auto-sync. One Telegram account is linked to one IITGN account at a time; to use another, send `/logout` first. Linking always needs your IITGN account's own Google sign-in.
 
-Whoever has your Telegram account can use the bot as you, and can open your cloud library from the bot's one-time "Open in app" links. Each link works once, for 10 minutes; `/logout` makes unused links stop working. Keep your Telegram account secure, and send `/logout` if you lose access to it or no longer want this.
+Whoever has your Telegram account can use the bot as you, and can open your cloud library from the bot's one-time "Open in browser" links. Each link works once, for 10 minutes; `/logout` makes unused links stop working. Keep your Telegram account secure, and send `/logout` if you lose access to it or no longer want this.
 
 ## What is stored
 

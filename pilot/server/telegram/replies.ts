@@ -22,6 +22,9 @@ const quote = (query: string) => `“${clip(query, 60)}”`;
 /** A file or item name in a reply. */
 const named = (name: string) => `"${clip(name, 80)}"`;
 const CAN_SAVE = 'I can save photos, PDFs, text notes and links.';
+/** The home-screen app keeps its own sign-in, which a link from the chat cannot reach. */
+const HOME_SCREEN =
+  'Using Campus Recall from your home screen? Sign in there once with the same IITGN account — everything you save here shows up automatically.';
 
 const OFFICE = new Set([
   'doc',
@@ -101,7 +104,7 @@ export const TELEGRAM_REPLIES = {
       "Log in with /login, then send or forward photos, PDFs and notes to save them to your Campus Recall library. Photos keep their full quality when you send them as a file. Start a message with 'note ' to save it as a note, or send a single link. Type anything else to search your library.",
       '',
       '/login: link your IITGN account',
-      '/open: open your library in the app',
+      '/open: open your library in your browser',
       '/logout: unlink this chat',
       '/privacy: how your data is handled',
       '/stop and /resume: pause or resume the bot',
@@ -124,8 +127,9 @@ export const TELEGRAM_REPLIES = {
   deleteExpired:
     'That erase button has expired (it works for 10 minutes). Nothing was erased; send /delete again if you still want to erase what you saved here.',
   deleteNotAsked: 'Send /delete first if you want to erase what you saved here.',
-  open: 'Open your Campus Recall library in the app. The link works once, for 10 minutes.',
-  openButton: 'Open in app',
+  open: `Open your Campus Recall library in your browser (the link works once, for 10 minutes). ${HOME_SCREEN}`,
+  /** A link opens in the browser: on an iPhone it can never open the home-screen app. */
+  openButton: 'Open in browser',
   noLinks:
     "Links need the pilot's HTTPS address. In a local trial, start it again with --origin https://<tunnel host>, then send /login or /open.",
   savedMany: (titles: string[]) =>
@@ -143,9 +147,9 @@ export const TELEGRAM_REPLIES = {
     }`,
   gone: "That item isn't in your library any more.",
   expired: 'That result button has expired (they work for a day). Search again to get it.',
-  appOnly: "This one can't be sent in Telegram. Open it in the app instead.",
-  openCta: 'Open it in Campus Recall. The link works once, for 10 minutes.',
-  noteTooLong: '(Cut short here; open it in the app to read the rest.)',
+  appOnly: "This one can't be sent in Telegram. Open it in your browser instead.",
+  openCta: `Open it in your browser (the link works once, for 10 minutes). ${HOME_SCREEN}`,
+  noteTooLong: '(Cut short here; open it in your browser to read the rest.)',
   unknownCommand: (command: string) =>
     `I don't know ${clip(command, 40)}. Send /help to see the commands I understand.`,
   notOpen:

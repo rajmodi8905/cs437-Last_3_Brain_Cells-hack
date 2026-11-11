@@ -2,7 +2,7 @@
 // T6 in a real browser: a student signs in to the app (development sign-in, standing in for
 // Google), taps the Telegram bot's login link, presses Continue, and what they then send the bot
 // is listed in the app for that account once they include the device's library (P02: nothing is
-// uploaded before that). Then the bot's "Open in app" link opens the app as that same account. The
+// uploaded before that). Then the bot's "Open in browser" link opens the app as that same account. The
 // spec runs its own pilot server in process on the same built app, with the stand-in Bot API and
 // the bot's real worker and conversation; nothing calls Telegram or Google.
 import { createServer, type Server } from 'node:http';
@@ -182,13 +182,13 @@ test('a signed-in student links Telegram, and what they send the bot is listed i
   ).toBeVisible();
 });
 
-test('an Open in app link opens the app as the linked account without uploading the device library', async ({
+test('an Open in browser link opens the app as the linked account without uploading the device library', async ({
   page,
 }) => {
   const { writes, outside } = watch(page);
   await send(textUpdate('/open'));
   const button = tg.to(USER_A.id).at(-1)!.replyMarkup!.inline_keyboard[0][0];
-  expect(button.text).toBe('Open in app');
+  expect(button.text).toBe('Open in browser');
   const link = button.url!;
   expect(link).toMatch(/^http:\/\/127\.0\.0\.1:\d+\/api\/v1\/telegram\/open\/[A-Za-z0-9_-]{43}$/);
 

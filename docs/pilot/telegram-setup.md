@@ -82,8 +82,8 @@ The tunnel only carries the app and the one-time links; Telegram updates still c
 **In Telegram** (phone or desktop): search for `@<your bot>`, open it and tap **Start**. Read the notice; anything sent now gets "Log in first with /login." and is not saved. Tap **Log in with IITGN**: the browser shows the trial's sign-in page; type your IITGN email, then **Continue** on "Link Telegram @you to you@iitgn.ac.in?". The chat says "Linked to y•••u@iitgn.ac.in" and the login button disappears. Then:
 
 - forward a message, send a photo (as a file to keep its full quality) and a PDF, and send `note Mess timings 8 to 10`; one "Saved … items" confirmation follows;
-- type a search, for example `mess timings`, and tap a result: the original comes back with an **Open in app** button;
-- open the app through the tunnel (or **Open in app**), sign in with the same email if asked, and choose **Include this device's library**: the Telegram items are listed in the cloud library;
+- type a search, for example `mess timings`, and tap a result: the original comes back with an **Open in browser** button;
+- open the app through the tunnel (or **Open in browser**), sign in with the same email if asked, and choose **Include this device's library**: the Telegram items are listed in the cloud library;
 - `/help`, `/privacy`, `/stop` then `/resume`, `/logout` then `/login` again, and `/delete` then **Yes, erase my Telegram items** (items you added in the app stay).
 
 Stop with Ctrl+C: the server stops polling, sends waiting confirmations, closes Chromium and exits.

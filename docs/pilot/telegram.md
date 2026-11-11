@@ -29,7 +29,7 @@ The parts that do not depend on the chat app moved out of `pilot/server/whatsapp
 - `index-failure.ts`: `classifyIndexFailure`, which reads why an index job failed (too many pages, password, unreadable PDF, undecodable image, nothing searchable, library full, other) from that cause. Telegram words its reply from it; WhatsApp keeps its one message.
 - `items.ts`: which typed text is a note (forwarded, `note `/`save `, a single link), titles, the item's global ID from a message key (a UUID v4 from SHA-256, namespaced per channel), and `storeChatItem`, which stores under the owner's lock exactly as upload completion does and refuses when the job is no longer the current claim or consent was withdrawn meanwhile. Its optional `afterPublish` runs under the same lock right after publishing; Telegram records the item as saved through Telegram there.
 - `search.ts`: search over one owner's items, by meaning with the engine host and by title for items still being indexed (W8/T8).
-- `send-back.ts`: a picked result sent back (a file, a note's text, or "open it in the app"), then an "Open in app" link. Originals of kinds the chat cannot carry (audio, video, webpages synced from the app) are only checked to exist, not read into memory.
+- `send-back.ts`: a picked result sent back (a file, a note's text, or a pointer to open it), then a one-time link button (WhatsApp's "Open in app", Telegram's "Open in browser"). Originals of kinds the chat cannot carry (audio, video, webpages synced from the app) are only checked to exist, not read into memory.
 - `batch.ts`: one "Saved N items" confirmation per burst.
 - `erase.ts`: WhatsApp's DELETE ALL: the vault reset, the vault's sessions and the bot's records of that person. Telegram does not use it, because a Telegram user's items live in their own account, which `/delete` must not reset (`telegram/erase.ts`, below).
 - `channel.ts`: `ChatChannel<To>`, the renderer each channel implements: `sendText`, `sendResults`, `sendFile` and `sendOpenButton`, with its text and caption limits. WhatsApp's (`createWhatsAppChannel` in `whatsapp/conversation.ts`) sends an interactive list, image or document media and a CTA URL message, as before. Telegram's (`createTelegramChannel` in `telegram/bot.ts`) sends a numbered message with one button per result, `sendPhoto` or `sendDocument`, and a URL button.
@@ -113,17 +113,17 @@ Commands are the bot's menu, exactly: `/start`, `/login`, `/help`, `/open`, `/lo
 
 The notice covers what is saved (what is sent, and the searches typed), that our server stores and processes files and sees searches, that Telegram keeps bot chats on its servers and chats with bots are not end-to-end encrypted, the 18+ age limit, `/logout`, `/delete` and the privacy link, and that nothing is saved before login.
 
-| Command    | Answer once linked                                                                           |
-| ---------- | -------------------------------------------------------------------------------------------- |
-| `/start`   | "You're logged in as s•••a@iitgn.ac.in"                                                      |
-| `/login`   | "You're already logged in as …; to use another account, send /logout first, then /login"     |
-| `/help`    | What the bot does, the commands, that files keep full quality, and the contact email         |
-| `/privacy` | The privacy URL                                                                              |
-| `/stop`    | Stops saving and replying except to `/resume`; saved data is kept                            |
-| `/resume`  | Resumes after `/stop`                                                                        |
-| `/open`    | "Open your Campus Recall library in the app…" with an **Open in app** URL button (T6)        |
-| `/logout`  | Unlinks this chat and revokes its unused links; what was saved stays in the library (T9)     |
-| `/delete`  | Asks to tap **Yes, erase my Telegram items** (callback data `delete`) within 10 minutes (T9) |
+| Command    | Answer once linked                                                                             |
+| ---------- | ---------------------------------------------------------------------------------------------- |
+| `/start`   | "You're logged in as s•••a@iitgn.ac.in"                                                        |
+| `/login`   | "You're already logged in as …; to use another account, send /logout first, then /login"       |
+| `/help`    | What the bot does, the commands, that files keep full quality, and the contact email           |
+| `/privacy` | The privacy URL                                                                                |
+| `/stop`    | Stops saving and replying except to `/resume`; saved data is kept                              |
+| `/resume`  | Resumes after `/stop`                                                                          |
+| `/open`    | "Open your Campus Recall library in your browser…" with an **Open in browser** URL button (T6) |
+| `/logout`  | Unlinks this chat and revokes its unused links; what was saved stays in the library (T9)       |
+| `/delete`  | Asks to tap **Yes, erase my Telegram items** (callback data `delete`) within 10 minutes (T9)   |
 
 Every button tap is answered with `answerCallbackQuery` so the app stops showing it as loading. A button whose one-time action is done is removed from its message with `editMessageReplyMarkup`: the login buttons once the user links (all of the user's outstanding login links are used up then) or sends `/logout`, and the delete button once tapped, whatever the outcome.
 
@@ -180,13 +180,15 @@ Sizes are in megabytes of 1,000,000 bytes, as the app's limits are, rounded up t
 | Library full for the index                                           | "Mess menu.pdf" is saved, but your cloud library has reached its 200 MB limit, so it can't be made searchable. Delete some items in the app to make room.                                                |
 | Anything else, or the engine host kept failing until the job gave up | "Timetable.pdf" is saved, but it couldn't be made searchable. You can still open it in the app.                                                                                                          |
 
-**Other replies made clearer.** An unknown command is named back ("I don't know /frobnicate. Send /help to see the commands I understand."); an expired delete button says it works for 10 minutes and that nothing was erased; an expired result button says buttons work for a day; a button tapped while stopped says "I'm paused. Send /resume to use me again."; search results that matched only by title while their item is still being indexed get a line saying so; keyword-only results say search by meaning is off, so they match words in titles; and a search with no match says to try other words. "Log in first with /login.", the notice, `/help`, `/stop`, `/resume`, `/logout`, `/delete`, linking and the allowed-users reply keep their wording. The per-user rate limit only delays messages, so it has no reply.
+**Other replies made clearer.** The link button is **Open in browser** (above, [Search](#search-t8)). An unknown command is named back ("I don't know /frobnicate. Send /help to see the commands I understand."); an expired delete button says it works for 10 minutes and that nothing was erased; an expired result button says buttons work for a day; a button tapped while stopped says "I'm paused. Send /resume to use me again."; search results that matched only by title while their item is still being indexed get a line saying so; keyword-only results say search by meaning is off, so they match words in titles; and a search with no match says to try other words. "Log in first with /login.", the notice, `/help`, `/stop`, `/resume`, `/logout`, `/delete`, linking and the allowed-users reply keep their wording. The per-user rate limit only delays messages, so it has no reply.
 
 ## Search (T8)
 
 Typed text that is not a command or a save is searched with the shared search over the linked account's whole library: items saved through Telegram and items synced from the app, by meaning where they have a usable index (from the server's engine host or a device), by title otherwise. The answer is one message, "Best matches for “<query>”. Tap one to get it back." with the results numbered (title and the page and excerpt, or "still indexing" / "title match"), "Matched by keyword only right now." when search by meaning is off, and one button per result (at most five). Telegram's `callback_data` holds at most 64 bytes, so a button carries `p:` and a 12-character random token (9 random bytes in base64url); `tg_picks` keeps the token with the account, item and place for a day, and removes expired ones as new ones are made. A tap on an expired or unknown token answers "That result has expired. Search again to get it."; another account's token finds nothing in this user's account.
 
-A tapped result is sent back by the shared code: a JPEG or PNG up to 10 MB with `sendPhoto`, other photos and PDFs with `sendDocument` (multipart upload, the title as file name and the title and page as caption), a note as text (cut at Telegram's 4,096 characters with a pointer to the app), and kinds the chat cannot carry with "Open it in the app instead". Then "Open it in Campus Recall. The link works once, for 10 minutes." with an **Open in app** URL button and a fresh link.
+A tapped result is sent back by the shared code: a JPEG or PNG up to 10 MB with `sendPhoto`, other photos and PDFs with `sendDocument` (multipart upload, the title as file name and the title and page as caption), a note as text (cut at Telegram's 4,096 characters with a pointer to the browser), and kinds the chat cannot carry with "Open it in your browser instead". Then "Open it in your browser (the link works once, for 10 minutes). Using Campus Recall from your home screen? Sign in there once with the same IITGN account — everything you save here shows up automatically." with an **Open in browser** URL button and a fresh link.
+
+The button says "browser", not "app", because a link always opens in the browser: on an iPhone a web link can never open the Campus Recall web app added to the home screen, and that app keeps its own separate sign-in. So `/open` and the message after a result say the same: the link opens the library in the browser, and the home-screen app needs one sign-in of its own with the same IITGN account, after which what is saved through Telegram appears there too (it is the same cloud library; as after any sign-in, P02, the app lists it once the student chooses **Include this device's library**). `/help` lists `/open` as "open your library in your browser".
 
 ## Linking and opening the app (T6)
 

@@ -287,6 +287,25 @@ describe('Telegram messages: refusals', () => {
     }
   });
 
+  it('opens links in the browser, and says the home-screen app needs its own sign-in', () => {
+    // On an iPhone a link never opens the home-screen web app, which keeps its own sign-in.
+    const homeScreen =
+      'Using Campus Recall from your home screen? Sign in there once with the same IITGN account — everything you save here shows up automatically.';
+    expect(TELEGRAM_REPLIES.openButton).toBe('Open in browser');
+    expect(TELEGRAM_REPLIES.openCta).toBe(
+      `Open it in your browser (the link works once, for 10 minutes). ${homeScreen}`,
+    );
+    expect(TELEGRAM_REPLIES.open).toBe(
+      `Open your Campus Recall library in your browser (the link works once, for 10 minutes). ${homeScreen}`,
+    );
+    expect(TELEGRAM_REPLIES.help('team@example.test')).toContain(
+      '/open: open your library in your browser',
+    );
+    expect(TELEGRAM_REPLIES.appOnly).toBe(
+      "This one can't be sent in Telegram. Open it in your browser instead.",
+    );
+  });
+
   it('leaves the WhatsApp wording as it was', () => {
     expect(REPLIES.notSearchable('Timetable.pdf')).toBe(
       'Couldn\'t make "Timetable.pdf" searchable, but it is still saved in Campus Recall.',
