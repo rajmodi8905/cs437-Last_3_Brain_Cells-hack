@@ -112,6 +112,26 @@ Open the installed icon before setup, then choose **Download offline search** in
 
 Saved originals and completed model downloads normally survive reopening the same installed app. Interrupted processing may restart; complete setup files are reused, while an incomplete file downloads again. Processing and sync make progress while the app is open. Browser storage is best-effort: keep important originals backed up and confirm uploads show as synced.
 
+## Save from WhatsApp (demo)
+
+For the pilot demo, a few allow-listed phones can also save to Campus Recall from WhatsApp, through Meta's test number. It is opt-in and separate from the app's local-only default:
+
+- Message the bot and reply **AGREE** to its notice. Nothing is stored before that.
+- Forward photos, PDFs and notes to save them; start a message with `note ` to save it as a note. Type anything else to search what you sent, and pick a result to get the original back.
+- Send **OPEN** for a one-time link that opens your WhatsApp library in the app. **HELP**, **PRIVACY**, **STOP** / **START** and **DELETE ALL** do what they say.
+
+Unlike the app, the bot indexes and searches on the pilot server, and WhatsApp (Meta) decrypts messages to the bot and keeps them for up to 30 days. Read [the bot's privacy page](docs/pilot/whatsapp-privacy.md) first. How it works: [whatsapp.md](docs/pilot/whatsapp.md); Meta setup and a local trial: [whatsapp-setup.md](docs/pilot/whatsapp-setup.md); deployment: the WhatsApp section of [deployment.md](docs/pilot/deployment.md).
+
+## Save from Telegram (demo)
+
+For the pilot demo, students can also save to Campus Recall from the team's Telegram bot (`@<your bot>`; during the demo it may be open only to the team and reviewers). It is opt-in and separate from the app's local-only default:
+
+- Open the bot, tap **Start**, read the notice and tap **Log in with IITGN**: sign in with your IITGN Google account and press **Continue** to link the chat to it. Nothing is stored or searched before that.
+- Send or forward photos (as a file to keep full quality), PDFs and notes; start a message with `note ` to save it as a note. They go into your own Campus Recall cloud library, so they appear in the app once you use Auto-sync there. Type anything else to search your library, and tap a result to get the original back.
+- `/open` gives a one-time link that opens your library in the app. `/logout` unlinks the chat; `/delete` erases only what you saved through Telegram (the whole library is removed from the app's Settings). `/help`, `/privacy` and `/stop` / `/resume` do what they say.
+
+Unlike the app, the bot indexes and searches on the pilot server, and Telegram keeps bot chats on its servers without end-to-end encryption. Whoever has your Telegram account can open your cloud library from the bot's one-time links. Read [the bot's privacy page](docs/pilot/telegram-privacy.md) first. How it works: [telegram.md](docs/pilot/telegram.md); BotFather setup and a local trial (`npm run pilot:telegram-local`): [telegram-setup.md](docs/pilot/telegram-setup.md); deployment: the Telegram section of [deployment.md](docs/pilot/deployment.md).
+
 ## Supported content
 
 | Input                       | Limit                       | Searchable content                                   |

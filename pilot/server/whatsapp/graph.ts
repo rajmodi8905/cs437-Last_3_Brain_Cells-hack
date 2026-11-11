@@ -3,7 +3,8 @@
 // uploading media to send back, and text, media and interactive messages.
 
 /** Where a reply goes: the BSUID when known (Meta accepts it since July 2026), else the number. */
-export type WhatsAppAddress = { bsuid: string } | { waId: string };
+/** A BSUID reply may carry the phone number too, for the fallback in `sendMessage`. */
+export type WhatsAppAddress = { bsuid: string; waId?: string } | { waId: string };
 
 export interface MediaInfo {
   url: string;
@@ -39,6 +40,10 @@ export class GraphError extends Error {
   constructor(
     readonly status: number,
     message: string,
+    /** Meta's reason (code, subcode, message, details), for the log only. */
+    readonly detail?: string,
+    /** Meta's error code, when it sent one. */
+    readonly code?: number,
   ) {
     super(message);
     this.name = 'GraphError';
@@ -67,6 +72,9 @@ export interface GraphClientOptions {
   fetch?: typeof fetch;
 }
 
+/** Meta's "recipient phone number not in allowed list" (test numbers). */
+const RECIPIENT_NOT_ALLOWED = 131030;
+
 export function createGraphClient(options: GraphClientOptions): GraphClient {
   const fetchImpl = options.fetch ?? fetch;
   const api = `${(options.baseUrl ?? 'https://graph.facebook.com').replace(/\/$/, '')}/${
@@ -75,8 +83,26 @@ export function createGraphClient(options: GraphClientOptions): GraphClient {
   const phone = `${api}/${encodeURIComponent(options.phoneNumberId)}`;
   const auth = { authorization: `Bearer ${options.accessToken}` };
   const failed = async (res: Response, what: string) => {
-    await res.body?.cancel().catch(() => undefined);
-    return new GraphError(res.status, `${what} failed with HTTP ${res.status}.`);
+    // Meta's error object says why (code, message, details); it never echoes the token.
+    const body = (await res.text().catch(() => '')).slice(0, 2000);
+    let reason = '';
+    let code: number | undefined;
+    try {
+      const error = (JSON.parse(body) as { error?: Record<string, unknown> }).error ?? {};
+      const details = (error.error_data as { details?: unknown } | undefined)?.details;
+      if (typeof error.code === 'number') code = error.code;
+      reason = [error.code, error.error_subcode, error.message, details]
+        .filter((part) => part !== undefined && part !== '')
+        .join(' / ');
+    } catch {
+      // Not JSON: keep only the status.
+    }
+    return new GraphError(
+      res.status,
+      `${what} failed with HTTP ${res.status}.`,
+      reason || undefined,
+      code,
+    );
   };
 
   return {
@@ -158,17 +184,26 @@ export function createGraphClient(options: GraphClientOptions): GraphClient {
   };
 
   async function sendMessage(to: WhatsAppAddress, message: Record<string, unknown>) {
-    const res = await fetchImpl(`${phone}/messages`, {
-      method: 'POST',
-      headers: { ...auth, 'content-type': 'application/json' },
-      body: JSON.stringify({
-        messaging_product: 'whatsapp',
-        recipient_type: 'individual',
-        // Meta reads `recipient` as a BSUID and `to` as a phone number.
-        ...('bsuid' in to ? { recipient: to.bsuid } : { to: to.waId }),
-        ...message,
-      }),
-    });
+    const post = (address: Record<string, string>) =>
+      fetchImpl(`${phone}/messages`, {
+        method: 'POST',
+        headers: { ...auth, 'content-type': 'application/json' },
+        body: JSON.stringify({
+          messaging_product: 'whatsapp',
+          recipient_type: 'individual',
+          ...address,
+          ...message,
+        }),
+      });
+    // Meta reads `recipient` as a BSUID and `to` as a phone number.
+    let res = await post('bsuid' in to ? { recipient: to.bsuid } : { to: to.waId });
+    if (!res.ok && 'bsuid' in to && to.waId) {
+      const error = await failed(res, 'Sending a message');
+      // A test number's allowed list (131030) matches phone numbers only, so a BSUID is
+      // refused there even for an allowed phone: send the same message once to the number.
+      if (error.code !== RECIPIENT_NOT_ALLOWED) throw error;
+      res = await post({ to: to.waId });
+    }
     if (!res.ok) throw await failed(res, 'Sending a message');
     await res.body?.cancel().catch(() => undefined);
   }

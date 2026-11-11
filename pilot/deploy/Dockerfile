@@ -16,6 +16,10 @@ COPY docs ./docs
 COPY pilot ./pilot
 RUN npm run build && node pilot/scripts/build-server.mjs
 
+# The WhatsApp engine host page, for the runtime image only: .cache/engine-host-dist, never dist/.
+FROM build AS engine-host-build
+RUN npm run build:engine-host
+
 # Local checker targets are separate from the final production runtime below.
 FROM dependencies AS checker-test-dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends curl git openssl \
@@ -48,11 +52,22 @@ LABEL org.opencontainers.image.title="Campus Recall pilot" \
 ENV NODE_ENV=production \
     PILOT_HOST=0.0.0.0 \
     PILOT_PORT=4600 \
-    PILOT_STATIC_DIR=/app/dist
+    PILOT_STATIC_DIR=/app/dist \
+    PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
 WORKDIR /app
+# The WhatsApp engine host (docs/pilot/whatsapp.md) runs the app's engine in Playwright's headless
+# Chromium. Both are installed read-only for the app user and start only with the channel's
+# settings; model files come from a volume filled at release (pilot/deploy/fill-models.mjs).
+COPY --from=dependencies /build/node_modules/playwright-core ./node_modules/playwright-core
+COPY --from=dependencies /build/node_modules/playwright ./node_modules/playwright
+COPY --from=dependencies /build/node_modules/@playwright/test ./node_modules/@playwright/test
+RUN node node_modules/playwright-core/cli.js install --with-deps --only-shell chromium \
+    && rm -rf /var/lib/apt/lists/* /root/.cache /tmp/*
 COPY --from=build --chown=node:node /build/dist ./dist
 COPY --from=build --chown=node:node /build/.cache/pilot-server ./server
+COPY --from=engine-host-build --chown=node:node /build/.cache/engine-host-dist ./engine-host
 COPY --chown=node:node pilot/deploy/entrypoint.mjs ./entrypoint.mjs
+COPY --chown=node:node pilot/deploy/fill-models.mjs ./fill-models.mjs
 USER node
 EXPOSE 4600
 HEALTHCHECK --interval=30s --timeout=5s --start-period=60s --retries=3 \

@@ -1,6 +1,7 @@
 /// <reference types="node" />
 // BotStore on PostgreSQL, in the pilot schema (tables from migration 3 in ../postgres.ts). It
-// shares the PilotStore's connections, so its writes join an open owner-lock transaction.
+// shares the PilotStore's connections, so its writes join an open owner-lock transaction. The
+// Telegram channel uses the same code on its own tables of the same layout (migration 5).
 import type { PostgresPilotStore, Query } from '../postgres';
 import type {
   BotJob,
@@ -58,8 +59,32 @@ const toJob = (row: JobRow): BotJob => ({
   createdAt: Number(row.created_at),
 });
 
+/** The four tables one channel's bot state lives in; each channel has its own. */
+export interface BotTables {
+  senders: string;
+  inbound: string;
+  jobs: string;
+  links: string;
+}
+export const WHATSAPP_TABLES: BotTables = {
+  senders: 'wa_senders',
+  inbound: 'wa_inbound',
+  jobs: 'wa_jobs',
+  links: 'wa_links',
+};
+const TABLE = /^[a-z][a-z_]{0,40}$/;
+
 export class PostgresBotStore implements BotStore {
-  constructor(private pilot: PostgresPilotStore) {}
+  private t: BotTables;
+  constructor(
+    private pilot: PostgresPilotStore,
+    tables: BotTables = WHATSAPP_TABLES,
+  ) {
+    // Table names go into SQL text, so only plain names are accepted.
+    if (!Object.values(tables).every((name) => TABLE.test(name)))
+      throw new Error('Bot table names must be plain lowercase names.');
+    this.t = { ...tables };
+  }
 
   private run<T>(work: (db: Query) => Promise<T>) {
     return this.pilot.inTransaction(work);
@@ -68,17 +93,17 @@ export class PostgresBotStore implements BotStore {
   async recordInbound(sender: WhatsAppSender, message: InboundMessage) {
     return this.run(async (db) => {
       const { rows } = await db.query<{ owner_key: string }>(
-        `INSERT INTO wa_senders (user_id, owner_key, wa_id, first_seen, last_seen)
+        `INSERT INTO ${this.t.senders} (user_id, owner_key, wa_id, first_seen, last_seen)
          VALUES ($1, $2, $3, $4, $4)
          ON CONFLICT (user_id) DO UPDATE SET
-           wa_id = COALESCE(EXCLUDED.wa_id, wa_senders.wa_id),
-           last_seen = GREATEST(wa_senders.last_seen, EXCLUDED.last_seen)
+           wa_id = COALESCE(EXCLUDED.wa_id, ${this.t.senders}.wa_id),
+           last_seen = GREATEST(${this.t.senders}.last_seen, EXCLUDED.last_seen)
          RETURNING owner_key`,
         [sender.userId, sender.ownerKey, sender.waId ?? null, message.receivedAt],
       );
       const ownerKey = rows[0].owner_key;
       const inserted = await db.query(
-        `INSERT INTO wa_inbound (wamid, sender_id, owner_key, received_at, message)
+        `INSERT INTO ${this.t.inbound} (wamid, sender_id, owner_key, received_at, message)
          VALUES ($1, $2, $3, $4, $5) ON CONFLICT DO NOTHING`,
         [
           message.wamid,
@@ -103,7 +128,7 @@ export class PostgresBotStore implements BotStore {
         received_at: string;
         message: WaMessage;
       }>(
-        'SELECT wamid, sender_id, owner_key, received_at, message FROM wa_inbound WHERE wamid = $1',
+        `SELECT wamid, sender_id, owner_key, received_at, message FROM ${this.t.inbound} WHERE wamid = $1`,
         [wamid],
       ),
     );
@@ -122,7 +147,7 @@ export class PostgresBotStore implements BotStore {
   async getSender(userId: string): Promise<WhatsAppSender | undefined> {
     const { rows } = await this.run((db) =>
       db.query<{ user_id: string; owner_key: string; wa_id: string | null }>(
-        'SELECT user_id, owner_key, wa_id FROM wa_senders WHERE user_id = $1',
+        `SELECT user_id, owner_key, wa_id FROM ${this.t.senders} WHERE user_id = $1`,
         [userId],
       ),
     );
@@ -135,7 +160,7 @@ export class PostgresBotStore implements BotStore {
   async enqueue(kind: JobKind, wamid: string, ownerKey: string, now: number) {
     await this.run((db) =>
       db.query(
-        `INSERT INTO wa_jobs (id, kind, wamid, owner_key, state, run_after, created_at)
+        `INSERT INTO ${this.t.jobs} (id, kind, wamid, owner_key, state, run_after, created_at)
          VALUES ($1, $2, $3, $4, 'pending', $5, $5) ON CONFLICT DO NOTHING`,
         [jobId(kind, wamid), kind, wamid, ownerKey, now],
       ),
@@ -146,9 +171,9 @@ export class PostgresBotStore implements BotStore {
     // SKIP LOCKED: a job another worker is claiming right now is passed over, not waited for.
     const { rows } = await this.run((db) =>
       db.query<JobRow>(
-        `UPDATE wa_jobs SET state = 'running', attempts = attempts + 1, locked_until = $3
+        `UPDATE ${this.t.jobs} SET state = 'running', attempts = attempts + 1, locked_until = $3
           WHERE id = (
-            SELECT id FROM wa_jobs
+            SELECT id FROM ${this.t.jobs}
              WHERE kind = ANY($1::text[])
                AND ((state = 'pending' AND run_after <= $2)
                  OR (state = 'running' AND locked_until <= $2))
@@ -164,7 +189,7 @@ export class PostgresBotStore implements BotStore {
 
   async getJob(id: string) {
     const { rows } = await this.run((db) =>
-      db.query<JobRow>(`SELECT ${JOB_COLUMNS} FROM wa_jobs WHERE id = $1`, [id]),
+      db.query<JobRow>(`SELECT ${JOB_COLUMNS} FROM ${this.t.jobs} WHERE id = $1`, [id]),
     );
     return rows[0] ? toJob(rows[0]) : undefined;
   }
@@ -173,7 +198,7 @@ export class PostgresBotStore implements BotStore {
   private async update(job: BotJob, set: string, values: unknown[]) {
     await this.run((db) =>
       db.query(
-        `UPDATE wa_jobs SET ${set}, locked_until = NULL
+        `UPDATE ${this.t.jobs} SET ${set}, locked_until = NULL
           WHERE id = $1 AND state = 'running' AND attempts = $2`,
         [job.id, job.attempts, ...values],
       ),
@@ -196,7 +221,9 @@ export class PostgresBotStore implements BotStore {
 
   async claimReply(wamid: string) {
     const { rowCount } = await this.run((db) =>
-      db.query('UPDATE wa_inbound SET replied = true WHERE wamid = $1 AND NOT replied', [wamid]),
+      db.query(`UPDATE ${this.t.inbound} SET replied = true WHERE wamid = $1 AND NOT replied`, [
+        wamid,
+      ]),
     );
     return rowCount === 1;
   }
@@ -211,7 +238,7 @@ export class PostgresBotStore implements BotStore {
         delete_requested_at: string | null;
       }>(
         `SELECT notice_sent_at, consented_at, notice_version, stopped_at, delete_requested_at
-           FROM wa_senders WHERE user_id = $1`,
+           FROM ${this.t.senders} WHERE user_id = $1`,
         [userId],
       ),
     );
@@ -232,7 +259,7 @@ export class PostgresBotStore implements BotStore {
   async claimNotice(userId: string, now: number) {
     const { rowCount } = await this.run((db) =>
       db.query(
-        'UPDATE wa_senders SET notice_sent_at = $2 WHERE user_id = $1 AND notice_sent_at IS NULL',
+        `UPDATE ${this.t.senders} SET notice_sent_at = $2 WHERE user_id = $1 AND notice_sent_at IS NULL`,
         [userId, now],
       ),
     );
@@ -240,13 +267,13 @@ export class PostgresBotStore implements BotStore {
   }
   async releaseNotice(userId: string) {
     await this.run((db) =>
-      db.query('UPDATE wa_senders SET notice_sent_at = NULL WHERE user_id = $1', [userId]),
+      db.query(`UPDATE ${this.t.senders} SET notice_sent_at = NULL WHERE user_id = $1`, [userId]),
     );
   }
   async setConsent(userId: string, now: number, noticeVersion: string) {
     await this.run((db) =>
       db.query(
-        `UPDATE wa_senders SET consented_at = $2, notice_version = $3, stopped_at = NULL
+        `UPDATE ${this.t.senders} SET consented_at = $2, notice_version = $3, stopped_at = NULL
           WHERE user_id = $1`,
         [userId, now, noticeVersion],
       ),
@@ -254,12 +281,15 @@ export class PostgresBotStore implements BotStore {
   }
   async setStopped(userId: string, at: number | undefined) {
     await this.run((db) =>
-      db.query('UPDATE wa_senders SET stopped_at = $2 WHERE user_id = $1', [userId, at ?? null]),
+      db.query(`UPDATE ${this.t.senders} SET stopped_at = $2 WHERE user_id = $1`, [
+        userId,
+        at ?? null,
+      ]),
     );
   }
   async setDeleteRequest(userId: string, at: number | undefined) {
     await this.run((db) =>
-      db.query('UPDATE wa_senders SET delete_requested_at = $2 WHERE user_id = $1', [
+      db.query(`UPDATE ${this.t.senders} SET delete_requested_at = $2 WHERE user_id = $1`, [
         userId,
         at ?? null,
       ]),
@@ -268,7 +298,7 @@ export class PostgresBotStore implements BotStore {
   async forgetMessage(wamid: string) {
     await this.run((db) =>
       db.query(
-        `UPDATE wa_inbound SET message = jsonb_strip_nulls(jsonb_build_object(
+        `UPDATE ${this.t.inbound} SET message = jsonb_strip_nulls(jsonb_build_object(
            'id', message->'id', 'type', message->'type')) WHERE wamid = $1`,
         [wamid],
       ),
@@ -277,18 +307,18 @@ export class PostgresBotStore implements BotStore {
   async forgetSender(userId: string, ownerKey: string) {
     await this.run(async (db) => {
       await db.query(
-        `UPDATE wa_inbound SET message = jsonb_strip_nulls(jsonb_build_object(
+        `UPDATE ${this.t.inbound} SET message = jsonb_strip_nulls(jsonb_build_object(
            'id', message->'id', 'type', message->'type')) WHERE owner_key = $1`,
         [ownerKey],
       );
       await db.query(
-        `UPDATE wa_jobs SET state = 'done', locked_until = NULL
+        `UPDATE ${this.t.jobs} SET state = 'done', locked_until = NULL
           WHERE owner_key = $1 AND state IN ('pending', 'running')`,
         [ownerKey],
       );
-      await db.query('DELETE FROM wa_links WHERE owner_key = $1', [ownerKey]);
+      await db.query(`DELETE FROM ${this.t.links} WHERE owner_key = $1`, [ownerKey]);
       await db.query(
-        `UPDATE wa_senders SET wa_id = NULL, notice_sent_at = NULL, consented_at = NULL,
+        `UPDATE ${this.t.senders} SET wa_id = NULL, notice_sent_at = NULL, consented_at = NULL,
            notice_version = NULL, stopped_at = NULL, delete_requested_at = NULL
           WHERE user_id = $1`,
         [userId],
@@ -298,7 +328,7 @@ export class PostgresBotStore implements BotStore {
   async createLink(link: OpenLink) {
     await this.run((db) =>
       db.query(
-        `INSERT INTO wa_links (token_hash, owner_key, label, created_at, expires_at)
+        `INSERT INTO ${this.t.links} (token_hash, owner_key, label, created_at, expires_at)
          VALUES ($1, $2, $3, $4, $5)`,
         [link.tokenHash, link.ownerKey, link.label, link.createdAt, link.expiresAt],
       ),
@@ -307,7 +337,7 @@ export class PostgresBotStore implements BotStore {
   async peekLink(tokenHash: string, now: number) {
     const { rows } = await this.run((db) =>
       db.query<LinkRow>(
-        `SELECT token_hash, owner_key, label, created_at, expires_at FROM wa_links
+        `SELECT token_hash, owner_key, label, created_at, expires_at FROM ${this.t.links}
           WHERE token_hash = $1 AND expires_at > $2`,
         [tokenHash, now],
       ),
@@ -318,7 +348,7 @@ export class PostgresBotStore implements BotStore {
     // DELETE … RETURNING: of two concurrent uses, only one gets the row.
     const { rows } = await this.run((db) =>
       db.query<LinkRow>(
-        `DELETE FROM wa_links WHERE token_hash = $1
+        `DELETE FROM ${this.t.links} WHERE token_hash = $1
          RETURNING token_hash, owner_key, label, created_at, expires_at`,
         [tokenHash],
       ),

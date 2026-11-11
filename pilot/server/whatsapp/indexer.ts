@@ -24,6 +24,11 @@ export interface WhatsAppIndexerOptions {
   supportedIndexVersions?: readonly string[];
   /** Indexing passes when the title keeps changing meanwhile, before the job is retried; 3. */
   maxPasses?: number;
+  /**
+   * The item an index job is for. WhatsApp's by default; another channel passes its own, as it
+   * made the item's global ID from its own message key.
+   */
+  globalIdOf?: (job: BotJob) => string;
 }
 
 /** Codes for bundles that would be refused the same way every time. */
@@ -33,10 +38,11 @@ export function createWhatsAppIndexer(options: WhatsAppIndexerOptions) {
   const { store, objects, engine } = options;
   const versions = options.supportedIndexVersions ?? PILOT_INDEX_VERSIONS;
   const maxPasses = options.maxPasses ?? 3;
+  const globalIdOf = options.globalIdOf ?? ((job: BotJob) => globalIdFor(job.wamid));
 
   return async function onIndexJob(job: BotJob): Promise<void> {
     const { ownerKey } = job;
-    const globalId = globalIdFor(job.wamid);
+    const globalId = globalIdOf(job);
     for (let pass = 0; pass < maxPasses; pass++) {
       const item = await store.getItem(ownerKey, globalId);
       // Deleted (or its vault reset) meanwhile: there is nothing left to index.

@@ -6,7 +6,7 @@ This runbook applies to the separate `pilot/auto-sync` worktree. It does not dep
 
 One Linux Azure VM runs three Compose services: Caddy terminates HTTPS, the Node 24 server serves the PWA and `/api`, and PostgreSQL 17 keeps metadata at `/srv/campus-recall/postgres` on the mounted data disk. Caddy state lives under `/srv/campus-recall/caddy`. `PILOT_DATA_DIR` can select another prepared data-disk mount. Refuse startup if the data disk is not mounted; silently writing a fresh database to the OS disk is unsafe. Only Caddy publishes ports 80 and 443. PostgreSQL is on an internal Docker network; the API port is not published. The app joins an outbound-capable network for Google, private Azure Blob and VM managed identity access.
 
-The runtime image includes the built PWA, browser WASM/workers, bundled server and backup CLI. It contains neither source/test directories, the application dependency tree, local libraries, credentials nor model weights. `scripts/prepare-assets.mjs` regenerates browser runtime assets during the image build; the pinned model manifest retains explicit model setup downloads. `.models` is a local test cache and must not enter the image.
+The runtime image includes the built PWA, browser WASM/workers, bundled server and backup CLI, and, for the opt-in WhatsApp and Telegram channels, the engine host page (`npm run build:engine-host`, at `/app/engine-host`, never under `dist/`), the three Playwright packages and Playwright's headless Chromium with its Debian libraries. Chromium starts only with the WhatsApp or Telegram settings. The image contains neither source/test directories, the rest of the application dependency tree, local libraries, credentials nor model weights. `scripts/prepare-assets.mjs` regenerates browser runtime assets during the image build; the pinned model manifest retains explicit model setup downloads. `.models` is a local test cache and must not enter the image.
 
 Originals/index bundles live in a private Azure Blob container. Database backups go to a separate private container. Use the VM's system-assigned managed identity, with Storage Blob Data Contributor scoped to this pilot's storage account or its required containers. Leave `PILOT_MANAGED_IDENTITY_CLIENT_ID` blank for that identity. Configure Blob versioning and soft-delete retention for both blobs and containers before launch; database backups do not contain original bytes. Account operators can read content; this pilot does not provide end-to-end encryption.
 
@@ -77,6 +77,78 @@ Verify DNS, a trusted TLS certificate and the canonical stable origin before use
 Test the actual image on the actual VM: managed identity reaches Blob without storage keys; containers are private; unauthorized API reads fail; API/auth responses have `no-store`; no service worker caches API results; all WASM/workers have correct MIME and complete bytes; HTML/service-worker updates use revalidation. Confirm Google sign-in and Gmail refusal, two IITGN accounts remain isolated, exact original upload/download and ranges work, and another browser can search a synced real index locally. Recreate the app container and restart the VM to check persistence. Inspect the backup manifest/counts, restore into a separate empty schema and verify originals remain reachable. Keep restored data separate from the live app until explicitly selected.
 
 On real phone and laptop, check installation, offline shell/policies, a downloaded original, and foreground sync after reconnect. Emulated browsers do not replace physical-device evidence. Set public pilot start/end dates and export/shutdown notices only after the candidate passes its launch gates.
+
+## WhatsApp channel (opt-in)
+
+The channel ([whatsapp.md](whatsapp.md)) is off unless `/opt/campus-recall/compose.whatsapp.yaml` is installed next to `compose.yaml`. With that file, `deploy-release.sh` and the commands below use both files; without it, the app runs exactly as before and no Chromium starts. Set up the Meta app first ([whatsapp-setup.md](whatsapp-setup.md)).
+
+**Secrets.** Add three files to `/etc/campus-recall/secrets`, written the same way as the Google secret (mode `0444` inside the root-only directory, no values in shell history, arguments or logs): `whatsapp_verify_token` (the webhook verify token you choose), `whatsapp_app_secret` (App settings → Basic → App secret) and `whatsapp_access_token` (the system-user token). The server reads them from `/run/secrets/…` itself (`PILOT_WHATSAPP_*_FILE`), so they never enter the environment that Chromium inherits. Before starting Chromium the server also removes the Google secret and database URL from its own environment.
+
+**Settings.** Add to `/opt/campus-recall/.env` (see `pilot.env.example`): `PILOT_WHATSAPP_PHONE_NUMBER_ID`, `PILOT_WHATSAPP_PRIVACY_URL` (an HTTPS page with [whatsapp-privacy.md](whatsapp-privacy.md), for example its GitHub URL on `main`), `PILOT_WHATSAPP_CONTACT_EMAIL`, and optionally `PILOT_WHATSAPP_GRAPH_VERSION` (default `v27.0`) and `PILOT_WHATSAPP_NOTICE_VERSION` (default `1`, stored with each consent). The overlay sets `PILOT_ENGINE_HOST_DIST=/app/engine-host`, `PILOT_ENGINE_HOST_MODELS=/app/models` and `PILOT_ENGINE_HOST_STATE_DIR=/app/engine-state`. The server refuses to start with only some WhatsApp settings, and on a public origin the channel needs the durable storage the pilot already uses: its state is in the same PostgreSQL schema (migrations 3 and 4) and its files in the same Blob container.
+
+**Data folders.** `/srv/campus-recall/models` holds the pinned model files (about 363 MB), mounted read-only. `/srv/campus-recall/engine-host` (owner uid 1000, mode `0700`) holds Chromium's profile, which the server empties at every start and stop; it is only a model cache and, while one item is being indexed, that item.
+
+**Models.** At each release with the overlay installed, `deploy-release.sh` runs the candidate image once with network access, no secrets and only the models folder mounted: `node /app/fill-models.mjs` downloads the files listed in the image's own engine host manifest, checks every file's size and SHA-256 as `npm run models:download` does, and keeps files that already match. A failed check stops the release before anything changes. By hand:
+
+```sh
+sudo install -d -m 0755 /srv/campus-recall/models
+sudo install -d -m 0700 -o 1000 -g 1000 /srv/campus-recall/engine-host
+sudo docker run --rm --read-only --cap-drop ALL --security-opt no-new-privileges --user 0:0 \
+  --volume /srv/campus-recall/models:/app/models --entrypoint node IMAGE /app/fill-models.mjs
+```
+
+**Resources.** The overlay raises the app's memory limit from 768 MB to 3 GB, its process limit to 1,024 (Chromium's threads count), `/dev/shm` to 512 MB and the stop grace period to 30 seconds. On a Mac, Node plus Chromium peaked at 2.1–2.4 GB summed over processes; PostgreSQL (512 MB), Caddy (128 MB) and the system keep the rest of the VM's 8 GiB. Measure the VM's actual peak with `docker stats` during the demo checks and record it in [2026-11-23-whatsapp-demo.md](2026-11-23-whatsapp-demo.md). If Chromium is killed for memory, the page crash is retried as a failed index job.
+
+**First release with the channel.** Parts 1 and 2 add database migrations 3 and 4, so `deploy-release.sh` refuses the automatic release ("Database migration plan changed; manual release required."). Release that image by hand once, from `/opt/campus-recall`, after the Meta app, secrets, settings and folders are ready:
+
+```sh
+COMPOSE='docker compose --env-file /opt/campus-recall/.env -f compose.yaml -f compose.whatsapp.yaml'
+sudo $COMPOSE config --quiet
+sudo $COMPOSE exec app node /app/entrypoint.mjs /app/server/backup.mjs now
+sudo docker pull ghcr.io/rajmodi8905/campus-recall-pilot@sha256:DIGEST
+# Fill the models (above), set PILOT_IMAGE in .env to the same digest, then:
+sudo $COMPOSE up --detach --wait app
+# The Caddyfile changed for the link page (below); copy it over the old one in place, then:
+sudo $COMPOSE exec caddy caddy reload --config /etc/caddy/Caddyfile
+sudo $COMPOSE logs app | grep -E 'WhatsApp|engine host'
+```
+
+Caddy's headers are defaults now (`?Referrer-Policy`, `?Content-Security-Policy`): the one-time link page keeps its own `Referrer-Policy: same-origin` and CSP. With Caddy's `no-referrer` in its place, browsers send `Origin: null` on the page's Continue `POST` and the server refuses it, so links would never open. Check with `curl -sI https://…/api/v1/whatsapp/open/x`, which must show `Referrer-Policy: same-origin`. `deploy-release.sh` never recreates Caddy, so this copy and reload are manual.
+
+The log shows `WhatsApp channel on: Meta's webhook is https://…/api/v1/whatsapp/webhook.` and `WhatsApp engine host ready in … s.` If it shows `The WhatsApp engine host could not start`, the bot still answers: searches are by keyword only and index jobs wait until a later start indexes them. Fix the cause (usually the models folder or memory) and restart the app. Rolling back to an image from before the channel leaves the new tables and columns in place; older code applies only the migrations it knows, so it starts, but check compatibility as for any rollback. After this release, later releases with unchanged migrations go through the workflow again.
+
+**Checks.** With the server up, save the webhook in Meta (Meta calls it to verify, [whatsapp-setup.md](whatsapp-setup.md)). Then, from an allow-listed phone: AGREE, forward a photo and a PDF, search, pick a result, `OPEN` and open the link, `DELETE ALL` and `CONFIRM DELETE`. Record times and memory in the demo record.
+
+**Turning it off.** Remove `compose.whatsapp.yaml` and run `up --detach --wait app` with `compose.yaml` alone. Stored WhatsApp items stay in their vaults until `DELETE ALL` or the pilot's end; the webhook path then answers `NOT_FOUND`. Turn off the webhook in Meta too.
+
+## Telegram channel (opt-in)
+
+The channel ([telegram.md](telegram.md)) is off unless `/opt/campus-recall/compose.telegram.yaml` is installed next to `compose.yaml`. With that file, `deploy-release.sh` and the commands below use it as well (with `compose.whatsapp.yaml` too, if that is installed; the two channels share one engine host). Without it, nothing changes. Create the bot first ([telegram-setup.md](telegram-setup.md)). On the VM it runs in webhook mode, and students link it to their IITGN account with the pilot's own Google sign-in.
+
+**Secrets.** Add two files to `/etc/campus-recall/secrets`, written the same way as the Google secret (mode `0444` inside the root-only directory, no values in shell history, arguments or logs): `telegram_bot_token` (from BotFather) and `telegram_webhook_secret` (for example `openssl rand -hex 32`, written straight into the file). The server reads them from `/run/secrets/…` itself, so they never enter the environment that Chromium inherits, and the token never appears in a URL the server logs. Linking needs no further secret: it uses `google_client_secret` and `PILOT_GOOGLE_CLIENT_ID`, which the pilot already has, and the Google callback already registered (`https://YOUR_HOSTNAME/api/v1/auth/google/callback`); Google returns to the Telegram link page through the server, not through a second callback.
+
+**Settings.** Add to `/opt/campus-recall/.env` (see `pilot.env.example`): `PILOT_TELEGRAM_PRIVACY_URL` (an HTTPS page with [telegram-privacy.md](telegram-privacy.md), for example its GitHub URL on `main`), `PILOT_TELEGRAM_CONTACT_EMAIL`, optionally `PILOT_TELEGRAM_ALLOWED_USERS` (numeric user IDs or @usernames, comma separated, to keep the demo to the team and reviewers) and `PILOT_TELEGRAM_NOTICE_VERSION`. The overlay sets `PILOT_TELEGRAM_BOT_TOKEN_FILE`, webhook mode (`PILOT_TELEGRAM_MODE=webhook`, `PILOT_TELEGRAM_WEBHOOK_SECRET_FILE`) and the engine host folders, and the same memory, process and shared-memory limits as the WhatsApp overlay. Data folders, model filling and resources are as for WhatsApp (above); `deploy-release.sh` fills the models when either overlay is installed. Never set `PILOT_DEV_KEY_FILE` or `PILOT_TELEGRAM_LOCAL_TRIAL` on the VM: the server refuses a development key on a public origin.
+
+**First release with the channel, and with linking.** The channel adds database migration 5 (Telegram's tables), and linking adds migration 6 (`tg_accounts`, `tg_saved`, the purpose, user and message of `tg_links`, and `sessions.via`), so `deploy-release.sh` refuses the automatic release once for each ("Database migration plan changed; manual release required."). Release by hand as for WhatsApp, with the Telegram overlay in `COMPOSE`:
+
+```sh
+COMPOSE='docker compose --env-file /opt/campus-recall/.env -f compose.yaml -f compose.telegram.yaml'
+# Add -f compose.whatsapp.yaml as well when the WhatsApp channel stays on.
+sudo $COMPOSE config --quiet
+sudo $COMPOSE exec app node /app/entrypoint.mjs /app/server/backup.mjs now
+sudo docker pull ghcr.io/rajmodi8905/campus-recall-pilot@sha256:DIGEST
+# Fill the models (above), set PILOT_IMAGE in .env to the same digest, then:
+sudo $COMPOSE up --detach --wait app
+sudo $COMPOSE logs app | grep -E 'Telegram|engine host'
+```
+
+The log shows `Telegram channel on (webhook): https://…/api/v1/telegram/webhook.`, `Telegram bot @… is answering.`, `Telegram webhook set.` and the engine host's ready line. `Telegram setWebhook failed` means Telegram could not be told; check the token and that the pilot's HTTPS address is reachable, then restart the app. The webhook takes no session or CSRF; a request without the right `X-Telegram-Bot-Api-Secret-Token` gets 401 or 403. Caddy needs no change: the Telegram link pages set their own headers, which Caddy's defaults do not override. Backups include the Telegram tables. Rolling back to an image from before linking leaves migration 6's tables and column in place; older code ignores them, but a restore needs the code's own database version.
+
+**Checks.** From an allowed account on a phone: Start (nothing is saved before login: a forwarded message gets "Log in first with /login."), **Log in with IITGN**, Google's account chooser with an IITGN account, back on "Link Telegram … to …?", **Continue**, then "Linked to …" in the chat and the login button gone. A personal Google account must be refused ("not eligible" in Settings). Then forward a message, send a photo as a file and a PDF, search, tap a result, `/open` and open the link (Settings shows the IITGN email; the items appear after "Include this device's library"), `/logout` and `/login` again, and `/delete` and **Yes, erase my Telegram items** (an item added in the app stays). Record times and memory as for WhatsApp.
+
+**Polling instead.** Long polling also works on the VM (`PILOT_TELEGRAM_MODE=polling`, no webhook secret), for example while the domain is unavailable; only one process may poll a bot, so stop any laptop trial with the same token. Starting a polling process removes the webhook. Linking still uses the pilot's Google sign-in.
+
+**Turning it off.** Remove `compose.telegram.yaml` and run `up --detach --wait app` without it. Items saved through Telegram stay in the students' own cloud libraries (they are ordinary items there), and links stop working. Telegram keeps calling the webhook, which then answers `NOT_FOUND`; remove it by restarting a polling trial once, or by revoking the token in BotFather when the bot is retired.
 
 ## Backup, rollback and close
 

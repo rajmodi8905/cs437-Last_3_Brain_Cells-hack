@@ -1,8 +1,40 @@
 # WhatsApp channel
 
-Status: third slice, November 2026. Students message the bot's WhatsApp number (Meta WhatsApp Cloud API). After they agree to a short notice, the pilot server stores each supported file or note as an ordinary cloud item in a vault for that sender, so it appears in that vault's change feed like any upload, and indexes it with the app's own engine so the app's cloud search finds it. Typed text is a search answered in the chat, a picked result sends the original back, and a one-time link opens the vault in the app. The statements are W1 to W9 in [SPEC.md](SPEC.md); the design and its sources are in `research/2026-11-10-technical-whatsapp-bot.md`.
+Status: fourth slice, November 2026. Students message the bot's WhatsApp number (Meta WhatsApp Cloud API). After they agree to a short notice, the pilot server stores each supported file or note as an ordinary cloud item in a vault for that sender, so it appears in that vault's change feed like any upload, and indexes it with the app's own engine so the app's cloud search finds it. Typed text is a search answered in the chat, a picked result sends the original back, and a one-time link opens the vault in the app. The statements are W1 to W9 in [SPEC.md](SPEC.md); the design and its sources are in `research/2026-11-10-technical-whatsapp-bot.md`.
 
-The code is in `pilot/server/whatsapp/`. Nothing is enabled until the next slice (#58) wires settings into `config.ts` and `main.ts`.
+The code is in `pilot/server/whatsapp/`, with the parts it shares with the Telegram channel (job runner, saving under the owner's lock, search, sending a result back, batching, erasing and the `ChatChannel` renderer interface) in `pilot/server/chat/` ([telegram.md](telegram.md), "The shared core"). The channel is on only when its settings are given (below); without them the server behaves as before, no Chromium starts and the WhatsApp paths answer `NOT_FOUND`. Meta setup and a local trial are in [whatsapp-setup.md](whatsapp-setup.md), deployment in [deployment.md](deployment.md) and the privacy page the bot links to in [whatsapp-privacy.md](whatsapp-privacy.md).
+
+## Settings and startup
+
+`loadConfig` (`pilot/server/config.ts`) reads the channel's settings; tests are in `pilot/tests/whatsapp-config.test.ts`.
+
+| Setting                            | Meaning                                                                        |
+| ---------------------------------- | ------------------------------------------------------------------------------ |
+| `PILOT_WHATSAPP_VERIFY_TOKEN_FILE` | File with the webhook verify token                                             |
+| `PILOT_WHATSAPP_APP_SECRET_FILE`   | File with the Meta app secret                                                  |
+| `PILOT_WHATSAPP_ACCESS_TOKEN_FILE` | File with the system-user access token                                         |
+| `PILOT_WHATSAPP_PHONE_NUMBER_ID`   | Meta's numeric ID of the business number                                       |
+| `PILOT_WHATSAPP_PRIVACY_URL`       | HTTPS page that `PRIVACY` and the notice link to                               |
+| `PILOT_WHATSAPP_CONTACT_EMAIL`     | Address that `HELP` gives                                                      |
+| `PILOT_WHATSAPP_GRAPH_VERSION`     | Optional, `v27.0` by default                                                   |
+| `PILOT_WHATSAPP_NOTICE_VERSION`    | Optional, `1` by default; stored with each consent                             |
+| `PILOT_ENGINE_HOST_DIST`           | Optional, `.cache/engine-host-dist` by default                                 |
+| `PILOT_ENGINE_HOST_MODELS`         | Optional, `.models` by default                                                 |
+| `PILOT_ENGINE_HOST_STATE_DIR`      | Optional writable folder for Chromium's profile; a temporary one otherwise     |
+| `PILOT_WHATSAPP_LOCAL_TRIAL`       | `1` for a trial on a laptop behind an HTTPS tunnel ([whatsapp-setup.md](whatsapp-setup.md)) |
+
+The first six come together or not at all, and the optional ones are refused without them. The three secrets are read from their files by the server itself, so they never enter its environment; errors name the setting, never a value. App links use `PILOT_ORIGIN`. A public origin needs durable storage, as for the rest of the pilot; the one exception is `PILOT_WHATSAPP_LOCAL_TRIAL=1`, which accepts the tunnel's HTTPS origin with memory storage or a local storage connection string only while `PILOT_HOST` is a loopback address, and never with development sign-in.
+
+`main.ts` then:
+
+1. Uses `PostgresBotStore` with durable storage, else `MemoryBotStore`, and mounts the webhook and open-link routes with `wake` as `onRecorded`.
+2. Starts listening, then removes the Google secret and database URL from its environment (Chromium inherits it), empties `<state dir>/chromium-profile` and starts `PlaywrightEngineHost` with `await start()`.
+3. Starts `startWhatsAppBot` with `createGraphClient`, the engine host and `createWhatsAppIndexer`. Messages recorded while the engine host starts wait in the queue.
+4. On `SIGTERM` or `SIGINT`, stops the worker (sending waiting confirmations), closes the engine host, empties the profile and exits; after 20 seconds it exits regardless.
+
+If the engine host cannot start (for example missing models or build), the server logs it and runs the bot without it: searches are by keyword on titles only, as in the keyword fallback below, and index jobs stay queued until a later start with a working engine host indexes them. Nothing crashes, and saving still works.
+
+The server bundle keeps Playwright external (`pilot/scripts/build-server.mjs`); the runtime image carries the Playwright packages, its headless Chromium and the engine host build.
 
 ## Webhook
 
@@ -62,7 +94,7 @@ Nothing else is saved, and the bot says why in one short line: voice notes and o
 
 ## Conversation
 
-`createWhatsAppConversation(options)` (`whatsapp/conversation.ts`) returns the worker hooks `gate`, `onText` and `onSaved` (as `hooks`), plus `flush()` and `search()`. `startWhatsAppBot(options)` runs the worker with them; its `stop()` also sends waiting confirmations. The options are the stores, the Graph client, an optional `engine` (`EngineHost`), and `origin`, `privacyUrl`, `contactEmail` and `noticeVersion`; settings for them come with #58. Without the hooks the worker behaves as before, so W2 to W5 and W7 hold either way.
+`createWhatsAppConversation(options)` (`whatsapp/conversation.ts`) returns the worker hooks `gate`, `onText` and `onSaved` (as `hooks`), plus `flush()` and `search()`. `startWhatsAppBot(options)` runs the worker with them; its `stop()` also sends waiting confirmations. The options are the stores, the Graph client, an optional `engine` (`EngineHost`), and `origin`, `privacyUrl`, `contactEmail` and `noticeVersion`, set from the settings above. Without the hooks the worker behaves as before, so W2 to W5 and W7 hold either way.
 
 `gate` sees every message before the worker handles it and decides, in this order:
 
@@ -147,7 +179,7 @@ In the app, `signin=whatsapp` is removed from the address. The app then asks the
 
 ## Graph API client
 
-`whatsapp/graph.ts` defines `GraphClient` and a `fetch`-based implementation: `getMediaUrl(mediaId)`, `download(url, maxBytes)` with the bearer token, `sendText(to, text)`, `uploadMedia(bytes, mimeType, filename)` returning a media ID, `sendMedia(to, { type: 'image' | 'document', mediaId, caption?, filename? })`, and `sendInteractive(to, interactive)` for list and CTA URL messages. The base URL and API version are options; the default version is `v27.0`. Replies go to the BSUID (`recipient`, which Meta accepts since July 2026) when there is one, else to the phone number (`to`). Tests run the real client against a local stand-in for the Graph API (`pilot/tests/whatsapp-helpers.ts`).
+`whatsapp/graph.ts` defines `GraphClient` and a `fetch`-based implementation: `getMediaUrl(mediaId)`, `download(url, maxBytes)` with the bearer token, `sendText(to, text)`, `uploadMedia(bytes, mimeType, filename)` returning a media ID, `sendMedia(to, { type: 'image' | 'document', mediaId, caption?, filename? })`, and `sendInteractive(to, interactive)` for list and CTA URL messages. The base URL and API version are options; the default version is `v27.0` (a call with the team's token on 11 November 2026 worked on both `v25.0` and `v27.0`; see [whatsapp-setup.md](whatsapp-setup.md)). Replies go to the BSUID (`recipient`, which Meta accepts since July 2026) when there is one, else to the phone number (`to`). Tests run the real client against a local stand-in for the Graph API (`pilot/tests/whatsapp-helpers.ts`).
 
 ## Server indexing (engine host)
 
@@ -199,7 +231,7 @@ Failures follow the job queue: an engine host failure or timeout is retried afte
 | Search two bundles (warm page)                                     | 0.3 s     |
 | Search right after a browser restart (includes setup)              | 1.8 s     |
 
-Peak resident memory, summed over Chromium's processes (which counts shared pages more than once, so it overstates): about 0.9 GB after setup, 1.7–2.1 GB while indexing, and 1.9–2.2 GB at the highest over three runs, once both the text and picture models were loaded. The Node test process stayed at about 0.25 GB, so Chromium plus Node peaked at 2.1–2.4 GB. The vectors equal the app's own for the same files exactly (the same count and locations, largest difference 0, cosine 1.0), and indexing the PDF again on a restarted browser gave identical numbers. Production numbers on the 2-vCPU Linux VM still need measuring.
+Peak resident memory, summed over Chromium's processes (which counts shared pages more than once, so it overstates): about 0.9 GB after setup, 1.7–2.1 GB while indexing, and 1.9–2.2 GB at the highest over three runs, once both the text and picture models were loaded. The Node test process stayed at about 0.25 GB, so Chromium plus Node peaked at 2.1–2.4 GB. The vectors equal the app's own for the same files exactly (the same count and locations, largest difference 0, cosine 1.0), and indexing the PDF again on a restarted browser gave identical numbers. Production numbers on the 2-vCPU Linux VM still need measuring ([2026-11-23-whatsapp-demo.md](2026-11-23-whatsapp-demo.md)). In the runtime image (Linux ARM64 in Docker Desktop, read-only root, all capabilities dropped), the engine host was ready 3.3 s after start and the container used about 330 MB idle.
 
 ## Seams
 
@@ -210,11 +242,11 @@ Peak resident memory, summed over Chromium's processes (which counts shared page
 - Running the bot: `startWhatsAppBot({ ...workerOptions, engine?, origin, privacyUrl, contactEmail, noticeVersion })`, with `wake` as the webhook's `onRecorded`; the open-link routes are mounted whenever `createPilotHandler` has the `whatsapp` option.
 - Replies: `reply(sender, text)` sends one plain text message.
 
-Tests: `pilot/tests/whatsapp-conversation.test.ts` (W1, commands, W9, batching, W8 with `FakeEngineHost`, W6 links; memory stores, and PostgreSQL and Azurite with `npm run test:pilot:storage`), `pilot/tests/whatsapp-entry.test.ts` (the app's `signin=whatsapp` handling), `pilot/e2e/whatsapp-link.spec.ts` (opening the app from a link in Chromium) and `pilot/model-e2e/whatsapp-search.spec.ts` (W8 with the real models: the bot's and the app's top result agree). The two Playwright specs run their own in-process pilot server with the channel, because the shared test servers do not run it until #58.
+Tests: `pilot/tests/whatsapp-conversation.test.ts` (W1, commands, W9, batching, W8 with `FakeEngineHost`, W6 links; memory stores, and PostgreSQL and Azurite with `npm run test:pilot:storage`), `pilot/tests/whatsapp-entry.test.ts` (the app's `signin=whatsapp` handling), `pilot/e2e/whatsapp-link.spec.ts` (opening the app from a link in Chromium) and `pilot/model-e2e/whatsapp-search.spec.ts` (W8 with the real models: the bot's and the app's top result agree). The two Playwright specs run their own in-process pilot server with the channel; the shared test servers keep it off.
 
 ## Not done yet
 
-- Settings in `config.ts` and `main.ts` (including starting the engine host and the bot), the engine host in the deploy image, and the privacy policy text (#58).
+- Measurements on the VM and the phone demo record ([2026-11-23-whatsapp-demo.md](2026-11-23-whatsapp-demo.md)).
 - Clean-up of old `wa_inbound` rows, finished jobs and expired `wa_links` rows (expired links cannot be used, but stay until then).
 - A new notice version does not ask senders who agreed to an older one to agree again; the version is only stored.
 - Waiting confirmations live in the worker's memory: a crash or restart can lose one (never send it twice).

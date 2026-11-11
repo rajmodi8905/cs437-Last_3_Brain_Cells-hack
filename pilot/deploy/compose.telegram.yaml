@@ -1,0 +1,39 @@
+# The opt-in Telegram channel (docs/pilot/telegram-setup.md). Copied next to compose.yaml as
+# /opt/campus-recall/compose.telegram.yaml, it turns the channel on: deploy-release.sh then uses
+# it with the other files and fills the models folder. Without this file the channel is off and
+# nothing below applies. It works alone or together with compose.whatsapp.yaml; both run one
+# engine host. Plain settings come from .env; the bot token and webhook secret are files, never
+# environment values. Linking a Telegram user to an IITGN account uses the app's Google sign-in
+# from compose.yaml; this file adds nothing for it.
+services:
+  app:
+    environment:
+      PILOT_TELEGRAM_BOT_TOKEN_FILE: /run/secrets/telegram_bot_token
+      # Webhook mode on the VM: Telegram posts updates to the pilot's HTTPS address.
+      PILOT_TELEGRAM_MODE: webhook
+      PILOT_TELEGRAM_WEBHOOK_SECRET_FILE: /run/secrets/telegram_webhook_secret
+      PILOT_TELEGRAM_PRIVACY_URL: ${PILOT_TELEGRAM_PRIVACY_URL:?Set the Telegram privacy page URL}
+      PILOT_TELEGRAM_CONTACT_EMAIL: ${PILOT_TELEGRAM_CONTACT_EMAIL:?Set the contact email}
+      PILOT_TELEGRAM_ALLOWED_USERS: ${PILOT_TELEGRAM_ALLOWED_USERS:-}
+      PILOT_TELEGRAM_NOTICE_VERSION: ${PILOT_TELEGRAM_NOTICE_VERSION:-}
+      PILOT_ENGINE_HOST_DIST: /app/engine-host
+      PILOT_ENGINE_HOST_MODELS: /app/models
+      PILOT_ENGINE_HOST_STATE_DIR: /app/engine-state
+    secrets: [telegram_bot_token, telegram_webhook_secret]
+    volumes:
+      # Pinned model files, filled and hash-checked at release; read-only for the app.
+      - ${PILOT_DATA_DIR:-/srv/campus-recall}/models:/app/models:ro
+      # Chromium's profile (the model cache), emptied at every start and stop. Owned by uid 1000.
+      - ${PILOT_DATA_DIR:-/srv/campus-recall}/engine-host:/app/engine-state
+    # Node plus headless Chromium, as for the WhatsApp channel (docs/pilot/whatsapp.md).
+    mem_limit: 3g
+    pids_limit: 1024
+    shm_size: 512m
+    # Time to send waiting confirmations and close Chromium on stop.
+    stop_grace_period: 30s
+
+secrets:
+  telegram_bot_token:
+    file: ${PILOT_SECRETS_DIR:-/etc/campus-recall/secrets}/telegram_bot_token
+  telegram_webhook_secret:
+    file: ${PILOT_SECRETS_DIR:-/etc/campus-recall/secrets}/telegram_webhook_secret

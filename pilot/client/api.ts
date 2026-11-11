@@ -24,6 +24,11 @@ export interface SessionInfo {
   vault: { epoch: number };
   /** Set for a WhatsApp vault opened from a bot link. */
   kind?: 'whatsapp';
+  /**
+   * `telegram` for an account session opened from a Telegram bot's app link. The account is the
+   * student's own (as after Google sign-in); this only lets that link count as choosing Auto-sync.
+   */
+  via?: 'telegram';
 }
 
 export interface ApiClient {
