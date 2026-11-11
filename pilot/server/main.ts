@@ -90,6 +90,9 @@ let botRunner: ReturnType<typeof startWhatsAppBot> | undefined;
 // The opt-in Telegram channel (docs/pilot/telegram.md), only with its settings: its own tables
 // (or memory), the same engine host, and long polling or Telegram's webhook.
 const { telegram } = config;
+/** Names the running channels in log lines, as before Telegram when WhatsApp runs alone. */
+const channels =
+  whatsapp && telegram ? 'WhatsApp and Telegram' : whatsapp ? 'WhatsApp' : 'Telegram';
 const tgBot = telegram
   ? store instanceof PostgresPilotStore
     ? new PostgresBotStore(store, TELEGRAM_TABLES)
@@ -177,7 +180,9 @@ server.listen(config.port, config.host, () => {
         : 'Telegram channel on (long polling).',
     );
   if (config.localTrial)
-    console.log('Local trial: the app has no sign-in of its own here; open it from a bot link.');
+    console.log(
+      `Local ${channels} trial: the app has no sign-in of its own here; open it from a ${channels} link.`,
+    );
 });
 
 // Clean up expired sessions, sign-in attempts and abandoned uploads now and every 10 minutes.
@@ -233,7 +238,9 @@ if (engineHostConfig && (bot || tgBot)) {
   const shutDown = async (signal: string) => {
     if (stopping) return;
     stopping = true;
-    console.log(`${signal}: stopping the chat bots and the engine host.`);
+    console.log(
+      `${signal}: stopping the ${channels} bot${whatsapp && telegram ? 's' : ''} and the engine host.`,
+    );
     setTimeout(() => process.exit(1), 20_000).unref();
     server.close();
     await polling?.stop().catch(() => undefined);
@@ -254,10 +261,12 @@ if (engineHostConfig && (bot || tgBot)) {
   const started = Date.now();
   try {
     await host.start();
-    console.log(`Engine host ready in ${((Date.now() - started) / 1000).toFixed(1)} s.`);
+    console.log(
+      `${channels} engine host ready in ${((Date.now() - started) / 1000).toFixed(1)} s.`,
+    );
   } catch (cause) {
     console.error(
-      'The engine host could not start. The bots run with keyword search only; index jobs wait for a restart.',
+      `The ${channels} engine host could not start. The bot${whatsapp && telegram ? 's run' : ' runs'} with keyword search only; index jobs wait for a restart.`,
       cause,
     );
     await host.close().catch(() => undefined);
