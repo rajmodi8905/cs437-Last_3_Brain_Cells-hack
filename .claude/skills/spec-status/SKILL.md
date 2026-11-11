@@ -1,6 +1,6 @@
 ---
 name: spec-status
-description: Report which SPEC.md statements (S1-S15) are green, red, or untested in Campus Recall. Use when someone asks "where are we", "what is left", "is the spec green", or before opening a pull request.
+description: Report which SPEC.md statements (S1-S15) are green, red, or untested in AnyRecall. Use when someone asks "where are we", "what is left", "is the spec green", or before opening a pull request.
 ---
 
 # Spec status
