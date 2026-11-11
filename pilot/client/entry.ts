@@ -24,8 +24,8 @@ export interface Entry {
   signIn?: SignInResult;
   /**
    * Set when a WhatsApp or Telegram link just opened a session (`signin=whatsapp`,
-   * `signin=telegram`). The session is the server's cookie; this only says the user chose to use
-   * Auto-sync, as returning from Google.
+   * `signin=telegram`; a Telegram link opens the linked IITGN account). The session is the
+   * server's cookie; this only says the user chose to use Auto-sync, as returning from Google.
    */
   signedIn?: BotChannel;
   /** The address to show, without entry or credential parameters. */

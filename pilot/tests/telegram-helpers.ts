@@ -1,7 +1,9 @@
 /// <reference types="node" />
 // Telegram test fixtures: a stand-in for the Bot API on a local port (updates by long polling,
-// files, messages, button answers and webhook settings) and updates shaped like Telegram's
-// documented examples. Nothing here calls the real Telegram API.
+// files, messages, button answers, button removals and webhook settings), updates shaped like
+// Telegram's documented examples, and Google-shaped ID tokens signed with a test key, which stand
+// in for Google (as the development signer does). Nothing here calls Telegram or Google.
+import { createHash, createSign, generateKeyPairSync } from 'node:crypto';
 import { createServer, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
 
@@ -32,6 +34,8 @@ export async function startFakeTelegram(token = BOT_TOKEN) {
   const state = {
     sent: [] as SentMessage[],
     answered: [] as { id: string; text?: string }[],
+    /** Messages whose inline buttons were removed. */
+    removed: [] as { chatId: number; messageId: number }[],
     /** Updates waiting for getUpdates; those below the requested offset are confirmed and go. */
     updates: [] as Record<string, unknown>[],
     offsets: [] as (number | undefined)[],
@@ -142,6 +146,12 @@ export async function startFakeTelegram(token = BOT_TOKEN) {
           ...(found.size !== undefined ? { file_size: found.size } : {}),
           file_path: found.path,
         });
+      }
+      case 'editMessageReplyMarkup': {
+        const markup = body.reply_markup as { inline_keyboard?: unknown[] } | undefined;
+        if (markup?.inline_keyboard?.length) return fail(res, 400, 'Bad Request: buttons left');
+        state.removed.push({ chatId: Number(body.chat_id), messageId: Number(body.message_id) });
+        return ok(res, true);
       }
       case 'answerCallbackQuery':
         state.answered.push({
@@ -323,3 +333,37 @@ export const jpegBytes = (length = 5000, seed = 1) => {
 };
 export const pdfBytes = (text = 'Guests need a pass. ') =>
   new TextEncoder().encode('%PDF-1.4\n' + text.repeat(200));
+
+/** The test identity provider's key; its public half is what the pilot server trusts. */
+export const ID_KEY = generateKeyPairSync('rsa', { modulusLength: 2048 });
+export const ID_KEY_ID = 'telegram-test-key';
+export const CLIENT_ID = 'pilot-telegram-tests.apps.googleusercontent.com';
+
+/** A Google-shaped ID token for `email`, signed with the test key. */
+export function signIdToken(
+  email: string,
+  over: Record<string, unknown> = {},
+  nowSeconds = Math.floor(Date.now() / 1000),
+) {
+  const part = (value: unknown) => Buffer.from(JSON.stringify(value)).toString('base64url');
+  const header = part({ alg: 'RS256', kid: ID_KEY_ID, typ: 'JWT' });
+  const payload = part({
+    iss: 'https://accounts.google.com',
+    aud: CLIENT_ID,
+    sub: subjectOf(email),
+    iat: nowSeconds - 10,
+    exp: nowSeconds + 3000,
+    email,
+    email_verified: true,
+    // Like Google, only Workspace accounts carry a hosted domain: here, the email's own.
+    hd: email.slice(email.lastIndexOf('@') + 1).toLowerCase(),
+    ...over,
+  });
+  const signer = createSign('RSA-SHA256');
+  signer.update(`${header}.${payload}`);
+  return `${header}.${payload}.${signer.sign(ID_KEY.privateKey).toString('base64url')}`;
+}
+/** The subject the test identity provider gives an email, and so the vault `google:<sub>`. */
+export const subjectOf = (email: string) =>
+  `dev-${createHash('sha256').update(email.toLowerCase()).digest('hex').slice(0, 24)}`;
+export const ownerOf = (email: string) => `google:${subjectOf(email)}`;

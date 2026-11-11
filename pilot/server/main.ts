@@ -21,7 +21,12 @@ import { PostgresBotStore } from './whatsapp/postgres';
 import { MemoryBotStore } from './whatsapp/store';
 import { WEBHOOK_PATH } from './whatsapp/webhook';
 import { createTelegramApi } from './telegram/api';
-import { createTelegramIndexer, refuseTelegramUser, startTelegramBot } from './telegram/bot';
+import {
+  announceTelegramLink,
+  createTelegramIndexer,
+  refuseTelegramUser,
+  startTelegramBot,
+} from './telegram/bot';
 import { createTelegramIntake } from './telegram/intake';
 import { describeFailure, startTelegramPolling } from './telegram/poller';
 import { PostgresTelegramStore } from './telegram/postgres';
@@ -145,10 +150,18 @@ const api = createPilotHandler({
         },
       }
     : {}),
-  ...(telegram && tgBot && telegramIntake
+  ...(telegram && tgBot && tgState && telegramApi && telegramIntake
     ? {
         telegram: {
           bot: tgBot,
+          state: tgState,
+          noticeVersion: telegram.noticeVersion,
+          privacyUrl: telegram.privacyUrl,
+          // Sent straight away, even before the bot's worker starts.
+          onLinked: (linked: Parameters<typeof announceTelegramLink>[1]) =>
+            announceTelegramLink(telegramApi, linked, (message, detail) =>
+              console.error(message, detail instanceof Error ? describeFailure(detail) : detail),
+            ),
           ...(telegram.mode === 'webhook' && telegram.webhookSecret
             ? {
                 webhook: {
@@ -320,11 +333,10 @@ if (engineHostConfig && (bot || tgBot)) {
           }
         : {}),
       origin: config.origin,
-      // Telegram buttons and phones cannot open a loopback address.
+      // Telegram buttons and phones cannot open a loopback address, for login or app links.
       appLinks: origin.protocol === 'https:',
       privacyUrl: telegram.privacyUrl,
       contactEmail: telegram.contactEmail,
-      noticeVersion: telegram.noticeVersion,
       log: (message, detail) =>
         console.error(message, detail instanceof Error ? describeFailure(detail) : detail),
     });

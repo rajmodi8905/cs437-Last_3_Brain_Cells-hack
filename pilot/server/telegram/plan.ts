@@ -34,13 +34,6 @@ export function commandOf(message: TgMessage) {
   return match ? { name: match[1].toLowerCase(), payload: (match[2] ?? '').trim() } : undefined;
 }
 
-/** Typed consent: the whole message is AGREE, ignoring case and a final full stop. */
-export const isTypedAgree = (message: TgMessage | undefined) =>
-  !!message &&
-  typeof message.text === 'string' &&
-  !isForwarded(message) &&
-  /^agree[.!]*$/i.test(message.text.trim());
-
 const titleFrom = (...candidates: (string | undefined)[]) => {
   for (const candidate of candidates) {
     const title = candidate && firstWords(candidate, MAX_TITLE_CODE_POINTS);

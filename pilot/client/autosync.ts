@@ -151,10 +151,11 @@ export class AutoSyncController {
 
   /**
    * After a WhatsApp or Telegram link (`signin=whatsapp`, `signin=telegram`), Auto-sync counts as
-   * chosen only if the server really has a session of that same channel for this browser: the
-   * parameter alone, which any link can carry, changes nothing. With such a session the server
-   * replaced any earlier one, so an unfinished sign-out has nothing left to end. Including this
-   * device's library stays a separate choice (P02).
+   * chosen only if the server really has a session from that same channel's link for this
+   * browser (a WhatsApp vault, or an account session opened from a Telegram link): the parameter
+   * alone, which any link can carry, changes nothing. With such a session the server replaced any
+   * earlier one, so an unfinished sign-out has nothing left to end. Including this device's
+   * library stays a separate choice (P02).
    */
   private async confirmBotSignIn(channel: BotChannel) {
     let session: SessionInfo | undefined;
@@ -163,7 +164,11 @@ export class AutoSyncController {
     } catch {
       return;
     }
-    if (session?.kind !== channel) return;
+    const fromLink =
+      channel === 'whatsapp'
+        ? session?.kind === 'whatsapp'
+        : session?.via === 'telegram' && session.kind === undefined;
+    if (!fromLink) return;
     await this.services.preferences.set(SIGN_OUT_PENDING_KEY, false);
     await this.services.preferences.set(ACTIVATED_KEY, true);
   }
@@ -286,7 +291,7 @@ export class AutoSyncController {
     this.set({ status: 'signed-in', email: session.email, error: undefined });
     await this.refresh(snapshot);
     if (snapshot.included) this.startLoop();
-    else if (session.kind === 'whatsapp' || session.kind === 'telegram') {
+    else if (session.kind === 'whatsapp') {
       // The read-only pass runs now and then on the usual schedule, so items sent to the bot
       // meanwhile appear without a reload.
       this.startLoop();
@@ -354,8 +359,8 @@ export class AutoSyncController {
       try {
         const session = this.session;
         const result = await this.withSyncLock(() =>
-          // A bot vault lists its items before (and without) including this device.
-          (session?.kind === 'whatsapp' || session?.kind === 'telegram') && !this.view.included
+          // A WhatsApp vault lists its items before (and without) including this device.
+          session?.kind === 'whatsapp' && !this.view.included
             ? this.engine!.browse(session.vault.epoch)
             : this.engine!.runOnce(),
         );

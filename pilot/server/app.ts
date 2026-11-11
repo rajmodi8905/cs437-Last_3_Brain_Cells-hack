@@ -39,7 +39,20 @@ import {
   type WhatsAppWebhookOptions,
 } from './whatsapp/webhook';
 import type { BotStore } from './whatsapp/store';
-import { TELEGRAM_LINK_AGAIN, TELEGRAM_OPEN_PREFIX } from './telegram/links';
+import {
+  TELEGRAM_LINK_PREFIX,
+  TELEGRAM_LINK_RETURN,
+  TELEGRAM_OPEN_PREFIX,
+  TELEGRAM_PAGE_HEADERS,
+  devSignInPage,
+  linkConfirmPage,
+  linkedElsewherePage,
+  linkedPage,
+  openConfirmPage,
+  signInUnavailablePage,
+  telegramLinkErrorPage,
+} from './telegram/links';
+import { telegramUserLock, type TelegramStateStore } from './telegram/store';
 import {
   TELEGRAM_WEBHOOK_PATH,
   createTelegramWebhook,
@@ -94,11 +107,27 @@ export interface PilotServerOptions {
    */
   whatsapp?: WhatsAppWebhookOptions;
   /**
-   * Enables `/api/v1/telegram/open/{token}`, the one-time links that open a Telegram vault in the
-   * app (links live in `bot`). With `webhook` (webhook mode) it also enables Telegram's webhook at
-   * `/api/v1/telegram/webhook`, authenticated by the secret token Telegram sends.
+   * Enables the Telegram bot's one-time links: `/api/v1/telegram/link/{token}`, which links a
+   * Telegram user to the IITGN account signed in on the page, and `/api/v1/telegram/open/{token}`,
+   * which opens that linked account in the app. With `webhook` (webhook mode) it also enables
+   * Telegram's webhook at `/api/v1/telegram/webhook`, authenticated by the secret token Telegram
+   * sends.
    */
-  telegram?: { bot: BotStore; webhook?: TelegramWebhookOptions };
+  telegram?: TelegramLinkOptions;
+}
+
+export interface TelegramLinkOptions {
+  /** The bot's own records; linking stores the consent time and notice version there. */
+  bot: BotStore;
+  /** Linked accounts and the one-time links. */
+  state: TelegramStateStore;
+  /** Stored with the consent given by linking. */
+  noticeVersion: string;
+  /** Shown on the link page. */
+  privacyUrl?: string;
+  /** Called (without waiting) after a link, so the bot can say so in the chat. */
+  onLinked?: (linked: { userId: string; email: string; messageIds: number[] }) => unknown;
+  webhook?: TelegramWebhookOptions;
 }
 
 const DAY = 24 * 3600;
@@ -145,6 +174,8 @@ const RETRYABLE = new Set<PilotErrorCode>(['INTERNAL_ERROR', 'RATE_LIMITED']);
 const UUID_V4 = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 const COOKIE = 'recall_session';
 const LOGIN_COOKIE = 'recall_login';
+/** Where a Google sign-in started from a Telegram login link returns to (see `returnCookie`). */
+const RETURN_COOKIE = 'recall_return';
 const LOGIN_SECONDS = 600;
 const GOOGLE_AUTHORIZE = 'https://accounts.google.com/o/oauth2/v2/auth';
 const GOOGLE_TOKEN = 'https://oauth2.googleapis.com/token';
@@ -366,15 +397,17 @@ export function createPilotHandler(options: PilotServerOptions): RequestListener
     // Opaque per-account ID so devices can keep each account's state apart.
     account: createHash('sha256').update(session.ownerKey).digest('hex').slice(0, 32),
     vault: await store.vault(session.ownerKey),
-    // A WhatsApp or Telegram vault (opened from a bot link) says so; other sessions are unchanged.
+    // A WhatsApp vault (opened from a bot link) says so; other sessions are unchanged.
     ...(session.ownerKey.startsWith('wa:') ? { kind: 'whatsapp' } : {}),
-    ...(session.ownerKey.startsWith('tg:') ? { kind: 'telegram' } : {}),
+    // An account session opened from a Telegram app link, so the app can treat that link as
+    // choosing Auto-sync; it is otherwise like the account's own sign-in.
+    ...(session.via ? { via: session.via } : {}),
   });
 
   const sessionCookie = (opened: OpenedSession) =>
     `${COOKIE}=${opened.cookie}; Path=/api; Max-Age=${sessionSeconds}; HttpOnly; Secure; SameSite=Lax`;
   /** Stores a new session; only its hash is kept, the cookie value goes to the browser. */
-  async function openSession(identity: { ownerKey: string; email: string }) {
+  async function openSession(identity: { ownerKey: string; email: string; via?: 'telegram' }) {
     const cookie = randomBytes(32).toString('base64url');
     const session: Session = {
       id: storedId(cookie),
@@ -382,6 +415,7 @@ export function createPilotHandler(options: PilotServerOptions): RequestListener
       ownerKey: identity.ownerKey,
       email: identity.email,
       expiresAt: now() + sessionSeconds,
+      ...(identity.via ? { via: identity.via } : {}),
     };
     await store.createSession(session);
     return { session, cookie };
@@ -398,6 +432,34 @@ export function createPilotHandler(options: PilotServerOptions): RequestListener
     ...(nonce !== undefined ? { nonce } : {}),
   });
   const callbackUrl = `${options.origin}/api/v1/auth/google/callback`;
+  /**
+   * The return cookie names a login link's token and is bound to one sign-in attempt by a hash
+   * with that attempt's own (secret, HttpOnly) cookie, so it is used only by the attempt that set
+   * it. The server never stores the token itself.
+   */
+  const returnBinding = (loginCookie: string, token: string) =>
+    createHash('sha256').update(`telegram-return:${loginCookie}:${token}`).digest('base64url');
+  const clearReturn = `${RETURN_COOKIE}=; Path=/api/v1/auth; Max-Age=0; HttpOnly; Secure; SameSite=Lax`;
+  /** The login link page to return to after Google, when this attempt started from one. */
+  function returnPath(req: IncomingMessage) {
+    const value = cookieValue(req, RETURN_COOKIE);
+    const login = cookieValue(req, LOGIN_COOKIE);
+    const [token, binding] = (value ?? '').split('.');
+    if (!options.telegram || !login || !token || !binding || !isLinkToken(token)) return undefined;
+    return sameText(binding, returnBinding(login, token))
+      ? `${TELEGRAM_LINK_PREFIX}${token}`
+      : undefined;
+  }
+  /** A session from the account's own sign-in (Google or development), not from a bot link. */
+  async function accountSession(req: IncomingMessage) {
+    const session = await sessionFromCookie(req);
+    return session &&
+      session.expiresAt > now() &&
+      session.ownerKey.startsWith('google:') &&
+      !session.via
+      ? session
+      : undefined;
+  }
 
   /** Finishes a Google sign-in; returns the outcome shown to the user. */
   async function finishGoogle(
@@ -472,6 +534,168 @@ export function createPilotHandler(options: PilotServerOptions): RequestListener
     return result;
   }
 
+  /** A small urlencoded form from one of the link pages. */
+  async function readForm(req: IncomingMessage) {
+    const bytes = await readBody(req, 4096);
+    return new URLSearchParams(Buffer.from(bytes).toString('utf8'));
+  }
+  /** Ends the session this browser had before a new one replaced it. */
+  async function replacePrevious(req: IncomingMessage, opened: OpenedSession) {
+    const previous = await sessionFromCookie(req);
+    if (previous && previous.id !== opened.session.id) await store.deleteSession(previous.id);
+  }
+  const page = (res: ServerResponse, status: number, body: Uint8Array) =>
+    send(res, status, body, TELEGRAM_PAGE_HEADERS);
+
+  /**
+   * `/telegram/link/{token}`: links the Telegram user a login link was made for to the IITGN
+   * account signed in on this browser. Without such a session, GET starts Google sign-in, which
+   * comes back here (or, on a local trial with a development key, shows development sign-in).
+   * GET never uses the link up; the Continue form's same-origin POST links.
+   */
+  async function telegramLogin(
+    telegram: TelegramLinkOptions,
+    req: IncomingMessage,
+    res: ServerResponse,
+    token: string,
+    method: string,
+  ) {
+    const { state } = telegram;
+    const hash = isLinkToken(token) ? hashLinkToken(token) : undefined;
+    const peek = () => (hash ? state.peekLink(hash, 'login', now()) : Promise.resolve(undefined));
+    const gone = () => page(res, 404, telegramLinkErrorPage('login'));
+    const here = `${options.origin}${TELEGRAM_LINK_PREFIX}${token}`;
+
+    if (method === 'GET' || method === 'HEAD') {
+      const link = await peek();
+      if (!link) return gone();
+      const session = await accountSession(req);
+      if (session) {
+        const account = await state.getAccount(link.userId);
+        if (account && account.ownerKey !== session.ownerKey)
+          return page(res, 200, linkedElsewherePage());
+        return page(res, 200, linkConfirmPage(link.label, session.email, telegram.privacyUrl));
+      }
+      if (options.google)
+        return send(res, 303, undefined, {
+          location: `${options.origin}/api/v1/auth/google/start?return=${encodeURIComponent(`${TELEGRAM_LINK_PREFIX}${token}`)}`,
+          'referrer-policy': 'no-referrer',
+        });
+      if (options.devSigner) return page(res, 200, devSignInPage(link.label));
+      return page(res, 200, signInUnavailablePage());
+    }
+    if (method !== 'POST') throw new ApiError('NOT_FOUND', 'No such endpoint.');
+    // A refused origin leaves the link usable.
+    if (req.headers.origin !== options.origin)
+      return page(res, 403, telegramLinkErrorPage('login'));
+    const form = await readForm(req);
+    const found = await peek();
+    if (!found) return gone();
+
+    if (form.get('intent') === 'signin') {
+      // Development sign-in on a local trial: the same identity checks as any sign-in.
+      if (!options.devSigner || options.google)
+        throw new ApiError('NOT_FOUND', 'No such endpoint.');
+      const email = (form.get('email') ?? '').trim();
+      if (!email || email.length > 254)
+        return page(res, 400, devSignInPage(found.label, 'Enter your IITGN email.'));
+      const verified = await verifyIdToken(
+        options.devSigner(email),
+        options.keys,
+        identityPolicy(),
+      );
+      if (!verified.ok)
+        return page(
+          res,
+          403,
+          devSignInPage(found.label, 'Only verified IITGN accounts can link Telegram.'),
+        );
+      const opened = await openSession(verified.value);
+      await replacePrevious(req, opened);
+      return send(res, 303, undefined, {
+        location: here,
+        'referrer-policy': 'no-referrer',
+        'set-cookie': sessionCookie(opened),
+      });
+    }
+
+    const session = await accountSession(req);
+    // Signed out meanwhile: the page starts sign-in again.
+    if (!session)
+      return send(res, 303, undefined, { location: here, 'referrer-policy': 'no-referrer' });
+    const result = await store.withOwnerLock(telegramUserLock(found.userId), async () => {
+      const account = await state.getAccount(found.userId);
+      // Linking to another account needs /logout first; the link stays usable for that.
+      if (account && account.ownerKey !== session.ownerKey) return 'elsewhere' as const;
+      const link = await state.takeLink(hash!, 'login', now());
+      if (!link || link.userId !== found.userId) return undefined;
+      await state.linkAccount({
+        userId: link.userId,
+        ownerKey: session.ownerKey,
+        email: session.email,
+        linkedAt: now(),
+      });
+      await telegram.bot.setConsent(link.userId, now(), telegram.noticeVersion);
+      // Other login links of this user are used up too.
+      const others = await state.revokeLinks(link.userId, 'login');
+      const messageIds = [link, ...others]
+        .map((each) => each.messageId)
+        .filter((id): id is number => id !== undefined);
+      return { link, messageIds };
+    });
+    if (result === 'elsewhere') return page(res, 409, linkedElsewherePage());
+    if (!result) return gone();
+    const linked = {
+      userId: result.link.userId,
+      email: session.email,
+      messageIds: result.messageIds,
+    };
+    void Promise.resolve()
+      .then(() => telegram.onLinked?.(linked))
+      .catch((cause: unknown) => console.error('Telegram link notice failed', cause));
+    return page(res, 200, linkedPage(result.link.label, session.email));
+  }
+
+  /**
+   * `/telegram/open/{token}`: opens the Telegram user's linked account in the app, after a
+   * confirmation page and a same-origin POST, as long as the user is still linked to it. The
+   * session is the account's own (as after its sign-in), marked `via: 'telegram'`.
+   */
+  async function telegramOpen(
+    telegram: TelegramLinkOptions,
+    req: IncomingMessage,
+    res: ServerResponse,
+    token: string,
+    method: string,
+  ) {
+    const { state } = telegram;
+    const hash = isLinkToken(token) ? hashLinkToken(token) : undefined;
+    const gone = () => page(res, 404, telegramLinkErrorPage('open'));
+    if (method === 'GET' || method === 'HEAD') {
+      // Looking does not use the link up, so a link preview cannot spend it.
+      const link = hash && (await state.peekLink(hash, 'open', now()));
+      return link ? page(res, 200, openConfirmPage(link.label)) : gone();
+    }
+    if (method !== 'POST') throw new ApiError('NOT_FOUND', 'No such endpoint.');
+    if (req.headers.origin !== options.origin) return page(res, 403, telegramLinkErrorPage('open'));
+    const found = hash && (await state.peekLink(hash, 'open', now()));
+    if (!found) return gone();
+    const opened = await store.withOwnerLock(telegramUserLock(found.userId), async () => {
+      const link = await state.takeLink(hash!, 'open', now());
+      const account = link && (await state.getAccount(link.userId));
+      // Unlinked (or linked elsewhere) since the link was made: it opens nothing.
+      if (!link || !account || account.ownerKey !== link.ownerKey) return undefined;
+      return openSession({ ownerKey: account.ownerKey, email: account.email, via: 'telegram' });
+    });
+    if (!opened) return gone();
+    await replacePrevious(req, opened);
+    return send(res, 303, undefined, {
+      location: `${options.origin}/?signin=telegram#/settings`,
+      'referrer-policy': 'no-referrer',
+      'set-cookie': sessionCookie(opened),
+    });
+  }
+
   async function route(req: IncomingMessage, res: ServerResponse) {
     const url = new URL(req.url ?? '/', 'http://pilot.local');
     const path = url.pathname.replace(/^\/api\/v1/, '');
@@ -483,7 +707,8 @@ export function createPilotHandler(options: PilotServerOptions): RequestListener
       (method === 'POST' && (path === '/session' || path === '/dev/token')) ||
       path.startsWith('/auth/') ||
       path.startsWith('/whatsapp/open/') ||
-      path.startsWith('/telegram/open/')
+      path.startsWith('/telegram/open/') ||
+      path.startsWith('/telegram/link/')
     )
       limitSignIn(req);
 
@@ -502,6 +727,11 @@ export function createPilotHandler(options: PilotServerOptions): RequestListener
     }
 
     if (path === '/auth/google/start' && method === 'GET' && options.google) {
+      // Only a Telegram login link's own page may be returned to; anything else is refused.
+      const back = url.searchParams.get('return');
+      const backToken = back === null ? undefined : TELEGRAM_LINK_RETURN.exec(back)?.[1];
+      if (back !== null && (!backToken || !options.telegram))
+        throw new ApiError('INVALID_INPUT', 'Sign-in cannot return there.');
       const verifier = random();
       const loginCookie = random();
       const attempt = {
@@ -526,42 +756,49 @@ export function createPilotHandler(options: PilotServerOptions): RequestListener
         prompt: 'select_account',
       }))
         to.searchParams.set(name, value);
+      const loginSet = `${LOGIN_COOKIE}=${loginCookie}; Path=/api/v1/auth; Max-Age=${LOGIN_SECONDS}; HttpOnly; Secure; SameSite=Lax`;
       return send(res, 302, undefined, {
         location: to.href,
         'referrer-policy': 'no-referrer',
-        'set-cookie': `${LOGIN_COOKIE}=${loginCookie}; Path=/api/v1/auth; Max-Age=${LOGIN_SECONDS}; HttpOnly; Secure; SameSite=Lax`,
+        'set-cookie': backToken
+          ? [
+              loginSet,
+              `${RETURN_COOKIE}=${backToken}.${returnBinding(loginCookie, backToken)}; Path=/api/v1/auth; Max-Age=${LOGIN_SECONDS}; HttpOnly; Secure; SameSite=Lax`,
+            ]
+          : loginSet,
       });
     }
 
     if (path === '/auth/google/callback' && method === 'GET' && options.google) {
+      const back = returnPath(req);
+      const hadReturn = cookieValue(req, RETURN_COOKIE) !== undefined;
       const outcome = await finishGoogle(options.google, req, url);
       const clearLogin = `${LOGIN_COOKIE}=; Path=/api/v1/auth; Max-Age=0; HttpOnly; Secure; SameSite=Lax`;
+      const clear = hadReturn ? [clearLogin, clearReturn] : [clearLogin];
       if ('session' in outcome)
         return send(res, 303, undefined, {
-          location: `${options.origin}/#/settings`,
+          // Back to the Telegram login link this sign-in started from, else to Settings.
+          location: `${options.origin}${back ?? '/#/settings'}`,
           'referrer-policy': 'no-referrer',
-          'set-cookie': [sessionCookie(outcome.session), clearLogin],
+          'set-cookie': [sessionCookie(outcome.session), ...clear],
         });
       return send(res, 303, undefined, {
         location: `${options.origin}/?signin=${outcome.result}#/settings`,
         'referrer-policy': 'no-referrer',
-        'set-cookie': clearLogin,
+        'set-cookie': clear.length === 1 ? clearLogin : clear,
       });
     }
 
-    // One-time bot links: WhatsApp's, and Telegram's from its own link store, each opening only
-    // its own channel's vaults.
+    if ((match = /^\/telegram\/link\/([^/]+)$/.exec(path)) && options.telegram)
+      return telegramLogin(options.telegram, req, res, match[1], method);
+    if ((match = /^\/telegram\/open\/([^/]+)$/.exec(path)) && options.telegram)
+      return telegramOpen(options.telegram, req, res, match[1], method);
+
+    // One-time WhatsApp links, each opening only that sender's vault.
     const linkChannel =
       (match = /^\/whatsapp\/open\/([^/]+)$/.exec(path)) && options.whatsapp
         ? { bot: options.whatsapp.bot, signin: 'whatsapp', name: 'WhatsApp', again: undefined }
-        : (match = /^\/telegram\/open\/([^/]+)$/.exec(path)) && options.telegram
-          ? {
-              bot: options.telegram.bot,
-              signin: 'telegram',
-              name: 'Telegram',
-              again: TELEGRAM_LINK_AGAIN,
-            }
-          : undefined;
+        : undefined;
     if (match && linkChannel) {
       const { bot } = linkChannel;
       const errorPage = () => linkErrorPage(linkChannel.again);
@@ -901,7 +1138,11 @@ export function createPilotHandler(options: PilotServerOptions): RequestListener
     // Opening a bot link takes that vault's lock itself; holding the browser's current
     // session's lock as well could wait on itself when both are the same vault.
     if (options.whatsapp && (req.url ?? '').startsWith(OPEN_PATH_PREFIX)) return route(req, res);
-    if (options.telegram && (req.url ?? '').startsWith(TELEGRAM_OPEN_PREFIX))
+    if (
+      options.telegram &&
+      ((req.url ?? '').startsWith(TELEGRAM_OPEN_PREFIX) ||
+        (req.url ?? '').startsWith(TELEGRAM_LINK_PREFIX))
+    )
       return route(req, res);
     const session = await sessionFromCookie(req);
     if (!session || session.expiresAt <= now()) return route(req, res);

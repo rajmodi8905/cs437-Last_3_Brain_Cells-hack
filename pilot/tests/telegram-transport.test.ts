@@ -22,7 +22,6 @@ import { MemoryBotStore } from '../server/whatsapp/store';
 import {
   BOT_TOKEN,
   USER_A,
-  callbackUpdate,
   forwardedUpdate,
   messageUpdate,
   startFakeTelegram,
@@ -260,10 +259,11 @@ describe('Telegram Bot API client', () => {
     const tg = await fake();
     const api = createTelegramApi({ token: BOT_TOKEN, baseUrl: tg.base, minIntervalMs: 0 });
     const bot = new MemoryBotStore();
+    const state = new MemoryTelegramStore();
     const logs: string[] = [];
     const telegram = createTelegramBot({
       bot,
-      state: new MemoryTelegramStore(),
+      state,
       store: new MemoryPilotStore(),
       objects: new MemoryObjectStore(),
       api,
@@ -271,16 +271,22 @@ describe('Telegram Bot API client', () => {
       origin: 'https://recall.example.test',
       privacyUrl: 'https://recall.example.test/privacy',
       contactEmail: 'team@example.test',
-      noticeVersion: '1',
       log: (message, detail) =>
         logs.push(`${message} ${detail instanceof Error ? everything(detail) : String(detail)}`),
       retryDelaySeconds: () => 0,
     });
     const intake = createTelegramIntake({ bot });
+    // Linked to an account directly, so the bot downloads (and fails to).
+    await state.linkAccount({
+      userId: String(USER_A.id),
+      ownerKey: 'google:subject-a',
+      email: 'student.a@iitgn.ac.in',
+      linkedAt: 1,
+    });
     tg.state.failSends = 5;
     await intake(textUpdate('/start'));
     await telegram.drain();
-    await intake(callbackUpdate('agree'));
+    await intake(textUpdate('/open'));
     await telegram.drain();
     await intake(
       messageUpdate({ document: { file_id: 'gone', mime_type: 'application/pdf', file_size: 10 } }),

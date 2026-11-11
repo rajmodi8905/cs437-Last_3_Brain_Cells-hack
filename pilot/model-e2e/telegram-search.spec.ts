@@ -1,9 +1,10 @@
 /// <reference types="node" />
-// T8 with the real engine and pinned models: a student sends the fixture PDF and photo to the
-// Telegram bot, the server indexes them with the engine host, and for the queries of
-// engine-host.spec.ts the bot's top result is the same item and location that the app's own
-// search returns for the same Telegram vault, opened in the app from the bot's link. The pilot
-// server runs in process with the stand-in Bot API; nothing calls Telegram.
+// T8 with the real engine and pinned models: a student links the Telegram bot to their account
+// (development sign-in standing in for Google), sends the fixture PDF and photo, the server indexes
+// them with the engine host into that account, and for the queries of engine-host.spec.ts the
+// bot's top result is the same item and location that the app's own search returns for the same
+// account, opened in the app from the bot's link. The pilot server runs in process with the
+// stand-in Bot API; nothing calls Telegram or Google.
 import { createHash } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import { createServer, type Server } from 'node:http';
@@ -14,7 +15,11 @@ import { createPilotHandler } from '../server/app';
 import { MemoryObjectStore, MemoryPilotStore } from '../server/memory';
 import { createStaticHandler } from '../server/static';
 import { createTelegramApi } from '../server/telegram/api';
-import { createTelegramBot, createTelegramIndexer } from '../server/telegram/bot';
+import {
+  announceTelegramLink,
+  createTelegramBot,
+  createTelegramIndexer,
+} from '../server/telegram/bot';
 import { createTelegramIntake } from '../server/telegram/intake';
 import { MemoryTelegramStore, telegramGlobalId } from '../server/telegram/store';
 import { staticKeySource } from '../server/tokens';
@@ -22,9 +27,13 @@ import { PlaywrightEngineHost } from '../server/whatsapp/engine-host';
 import { MemoryBotStore } from '../server/whatsapp/store';
 import {
   BOT_TOKEN,
+  CLIENT_ID,
+  ID_KEY,
+  ID_KEY_ID,
   USER_A,
-  callbackUpdate,
   documentUpdate,
+  ownerOf,
+  signIdToken,
   startFakeTelegram,
   textUpdate,
 } from '../tests/telegram-helpers';
@@ -38,7 +47,8 @@ const IMAGE = 'tests/fixtures/sample-01.jpg';
 const IMAGE_TITLE = 'Notice board photo';
 const IMAGE_QUERY = 'Find the badminton team registration announcement';
 const QUOTA = 200_000_000;
-const OWNER = `tg:${USER_A.id}`;
+const EMAIL = 'student.a@iitgn.ac.in';
+const OWNER = ownerOf(EMAIL);
 
 /** Sets the app's models up like a student would, answered from the local checksum mirror. */
 async function prepareApp(context: BrowserContext, page: Page, site: string) {
@@ -96,19 +106,27 @@ test("T8: the Telegram bot's top result is the item and location the app's own s
     const objects = new MemoryObjectStore();
     const bot = new MemoryBotStore();
     const state = new MemoryTelegramStore();
+    const api = createTelegramApi({ token: BOT_TOKEN, baseUrl: tg.base, minIntervalMs: 0 });
+    const notices: Promise<unknown>[] = [];
     server.on(
       'request',
       createStaticHandler(
         resolve('dist'),
         createPilotHandler({
-          clientId: 'pilot-model-telegram',
+          clientId: CLIENT_ID,
           allowedEmailDomain: 'iitgn.ac.in',
           origin: site,
-          keys: staticKeySource({}),
+          keys: staticKeySource({ [ID_KEY_ID]: ID_KEY.publicKey }),
           store,
           objects,
           quotaBytes: QUOTA,
-          telegram: { bot },
+          devSigner: (email) => signIdToken(email),
+          telegram: {
+            bot,
+            state,
+            noticeVersion: 'model-e2e',
+            onLinked: (linked) => notices.push(announceTelegramLink(api, linked)),
+          },
         }),
       ),
     );
@@ -117,14 +135,13 @@ test("T8: the Telegram bot's top result is the item and location the app's own s
       state,
       store,
       objects,
-      api: createTelegramApi({ token: BOT_TOKEN, baseUrl: tg.base, minIntervalMs: 0 }),
+      api,
       quotaBytes: QUOTA,
       engine,
       onIndexJob: createTelegramIndexer({ store, objects, engine, quotaBytes: QUOTA }),
       origin: site,
       privacyUrl: `${site}/#/privacy`,
       contactEmail: 'recall-team@example.test',
-      noticeVersion: 'model-e2e',
     });
     const intake = createTelegramIntake({ bot });
     const send = async (...updates: Record<string, unknown>[]) => {
@@ -137,8 +154,27 @@ test("T8: the Telegram bot's top result is the item and location the app's own s
       return `m:${message.chat.id}:${message.message_id}`;
     };
 
+    // Link the chat to the account: the bot's login link, the account's own sign-in, Continue.
     await send(textUpdate('/start'));
-    await send(callbackUpdate('agree'));
+    const login = tg.to(USER_A.id).at(-1)!.replyMarkup!.inline_keyboard[0][0].url!;
+    const signedIn = await fetch(`${site}/api/v1/session`, {
+      method: 'POST',
+      headers: { origin: site, 'content-type': 'application/json' },
+      body: JSON.stringify({ idToken: signIdToken(EMAIL) }),
+    });
+    expect(signedIn.status).toBe(200);
+    const cookie = /recall_session=([^;]+)/.exec(signedIn.headers.get('set-cookie') ?? '')![1];
+    const linked = await fetch(login, {
+      method: 'POST',
+      headers: {
+        origin: site,
+        cookie: `recall_session=${cookie}`,
+        'content-type': 'application/x-www-form-urlencoded',
+      },
+      body: '',
+    });
+    expect(linked.status).toBe(200);
+    await Promise.all(notices);
     tg.addFile('t8-pdf', pdf);
     tg.addFile('t8-image', image);
     // The PDF as a file and the photo as a file, which keeps the original bytes.
@@ -181,7 +217,8 @@ test("T8: the Telegram bot's top result is the item and location the app's own s
     expect(botPdf[0]).toEqual({ globalId: pdfId, location: { kind: 'page', page: 2 } });
     expect(botImage[0]).toEqual({ globalId: imageId, location: { kind: 'whole' } });
 
-    // The app: open the bot's link, then search the synced Telegram vault locally.
+    // The app: open the bot's link (the same account, as after its sign-in), include this
+    // device (it has nothing of its own), then search the synced account locally.
     await send(textUpdate('/open'));
     const link = tg.to(USER_A.id).at(-1)!.replyMarkup!.inline_keyboard[0][0].url!;
     expect(link).toMatch(/\/api\/v1\/telegram\/open\/[A-Za-z0-9_-]{43}$/);
@@ -192,6 +229,8 @@ test("T8: the Telegram bot's top result is the item and location the app's own s
     await page.getByRole('button', { name: 'Continue' }).click();
     await expect.poll(() => page.url()).toBe(`${site}/#/settings`);
     const sync = page.getByRole('region', { name: 'Auto-sync' });
+    await expect(sync).toContainText(`Signed in as ${EMAIL}`);
+    await sync.getByRole('button', { name: "Include this device's library" }).click();
     const listed = sync.getByRole('list', { name: 'In your cloud library' });
     await expect(listed).toContainText(PDF_TITLE);
     await expect(listed).toContainText(IMAGE_TITLE);

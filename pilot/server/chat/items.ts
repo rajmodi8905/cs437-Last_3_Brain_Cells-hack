@@ -71,6 +71,8 @@ export async function storeChatItem(input: {
   quotaBytes: number;
   now: number;
   canStore?: () => Promise<boolean>;
+  /** Runs under the same lock right after the item is published, as part of storing it. */
+  afterPublish?: (item: StoredItem) => Promise<void>;
 }): Promise<StoreOutcome> {
   const { bot, store, objects, job, ownerKey, description, bytes } = input;
   const { globalId } = description;
@@ -88,6 +90,7 @@ export async function storeChatItem(input: {
     await objects.put(objectKey, bytes);
     const item: StoredItem = { ...description, revision: 1, deleted: false, objectKey };
     await store.publish(ownerKey, item, epoch);
+    await input.afterPublish?.(item);
     // The seam for server indexing: every stored item gets an index job.
     await bot.enqueue('index', job.wamid, ownerKey, input.now);
     await bot.finishJob(job);

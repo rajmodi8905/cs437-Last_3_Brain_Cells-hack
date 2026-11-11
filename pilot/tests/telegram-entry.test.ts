@@ -1,6 +1,8 @@
-// T6 in the app: returning from a Telegram link (`?signin=telegram`) counts as an explicit
-// Auto-sync activation only with a Telegram session, exactly as `signin=whatsapp` needs a WhatsApp
-// one. The browser flow end to end is in pilot/e2e/telegram-link.spec.ts.
+// T6 in the app: returning from a Telegram app link (`?signin=telegram`) counts as an explicit
+// Auto-sync activation only when the server confirms an account session opened from a Telegram
+// link (`via: "telegram"`), exactly as `signin=whatsapp` needs a WhatsApp one. That session is
+// the linked IITGN account's own, so the app then behaves as after Google sign-in (P02); the
+// browser flow end to end is in pilot/e2e/telegram-link.spec.ts.
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { CampusRecallServices } from '../../src/app/services';
 import { AutoSyncController } from '../client/autosync';
@@ -32,12 +34,13 @@ function loadAt(href: string) {
   });
   return replaced;
 }
-const session = (kind?: string) => ({
+const session = (from?: 'whatsapp' | 'telegram') => ({
   csrf: 'c',
-  email: kind === 'telegram' ? 'Telegram @student_a' : 'WhatsApp ••••3210',
+  email: from === 'whatsapp' ? 'WhatsApp ••••3210' : 'student.a@iitgn.ac.in',
   account: 'a'.repeat(32),
   vault: { epoch: 1 },
-  ...(kind ? { kind } : {}),
+  ...(from === 'whatsapp' ? { kind: 'whatsapp' } : {}),
+  ...(from === 'telegram' ? { via: 'telegram' } : {}),
 });
 
 describe('T6 Telegram link entry', () => {
@@ -53,7 +56,7 @@ describe('T6 Telegram link entry', () => {
     });
   });
 
-  it('activates Auto-sync once the server confirms a Telegram session', async () => {
+  it('activates Auto-sync once the server confirms a session opened from a Telegram link', async () => {
     const replaced = loadAt('https://recall.example/?signin=telegram#/settings');
     values.set('pilot-sign-out-pending', true);
     let calls = 0;
@@ -72,18 +75,18 @@ describe('T6 Telegram link entry', () => {
   });
 
   it.each([
-    ['a WhatsApp session', 'whatsapp'],
-    ['a Google session', undefined],
-  ])('does not activate signin=telegram with %s', async (_name, kind) => {
+    ['a WhatsApp session', 'whatsapp' as const],
+    ['a session from the account’s own Google sign-in', undefined],
+  ])('does not activate signin=telegram with %s', async (_name, from) => {
     loadAt('https://recall.example/?signin=telegram#/settings');
-    vi.spyOn(globalThis, 'fetch').mockImplementation(async () => Response.json(session(kind)));
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async () => Response.json(session(from)));
     const controller = new AutoSyncController(services());
     await controller.start();
     expect(values.get('pilot-auto-sync-activated')).toBeUndefined();
     controller.dispose();
   });
 
-  it('does not activate signin=whatsapp with a Telegram session', async () => {
+  it('does not activate signin=whatsapp with a session from a Telegram link', async () => {
     loadAt('https://recall.example/?signin=whatsapp#/settings');
     vi.spyOn(globalThis, 'fetch').mockImplementation(async () =>
       Response.json(session('telegram')),

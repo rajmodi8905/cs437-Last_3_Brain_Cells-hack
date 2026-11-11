@@ -1,16 +1,16 @@
 /// <reference types="node" />
-// The Telegram bot (docs/pilot/telegram.md): consent before anything is stored (T1), commands and
-// buttons, saving files and notes into the sender's vault (T2), at most one item and one reply per
-// message (T3), search replies with result buttons that send the original back (T8), one-time app
-// links (T6) and /delete (T9). The queue, saving, search, sending back, batching and erasing are
-// the shared chat core (../chat/), as for WhatsApp; this file holds what differs: Telegram's
-// messages, commands, buttons and downloads.
+// The Telegram bot (docs/pilot/telegram.md): nothing is stored or searched until the Telegram user
+// links their IITGN Google account (T1, T6); then files and notes are saved into that account's
+// own cloud library (T2, T5), at most one item and one reply per message (T3), searches are
+// answered with result buttons that send the original back (T8), one-time links open the account
+// in the app (T6), and /logout and /delete unlink and erase only what was saved here (T9). The
+// queue, saving, search, sending back and batching are the shared chat core (../chat/), as for
+// WhatsApp; this file holds what differs: Telegram's messages, commands, buttons and downloads.
 import { createHash, randomBytes } from 'node:crypto';
 import { LIMITS } from '../../../src/shared';
 import { validateCloudItem } from '../../contract';
 import { createSaveBatches, realSchedule } from '../chat/batch';
 import { clip, type ChatChannel } from '../chat/channel';
-import { eraseOwner } from '../chat/erase';
 import { NOTE_MIME, storeChatItem } from '../chat/items';
 import { PermanentJobError, createJobRunner, defaultRetryDelay, startJobLoop } from '../chat/jobs';
 import { searchOwner } from '../chat/search';
@@ -28,19 +28,17 @@ import {
   type TelegramApi,
   type TgCallbackQuery,
   type TgMessage,
+  type TgUser,
 } from './api';
-import { createTelegramLink } from './links';
-import {
-  createdAtOf,
-  isTypedAgree,
-  planTelegramMessage,
-  commandOf,
-  type TelegramPlan,
-} from './plan';
+import { eraseTelegramItems, unlinkTelegramUser } from './erase';
+import { createLoginLink, createOpenLink, maskEmail, telegramName } from './links';
+import { createdAtOf, planTelegramMessage, commandOf, type TelegramPlan } from './plan';
 import { describeFailure } from './poller';
 import {
   telegramGlobalId,
+  type TelegramAccount,
   type TelegramInbound,
+  type TelegramLink,
   type TelegramSender,
   type TelegramStateStore,
 } from './store';
@@ -58,59 +56,65 @@ const quote = (query: string) => `“${clip(query, 60)}”`;
 export const TELEGRAM_REPLIES = {
   notice: (privacyUrl: string) =>
     [
-      'Hi! This is Campus Recall. Send or forward photos, PDFs and notes here to keep them in your own library, then search them here or in the app.',
+      'Hi! This is Campus Recall. Log in with your IITGN Google account, then send or forward photos, PDFs and notes here to keep them in your Campus Recall library, and type anything to search it.',
       '',
-      '• We save the photos, PDFs and notes you send here, and the searches you type.',
+      '• What you send here is saved to your Campus Recall cloud library, with the searches you type.',
       '• Our server stores and processes your files to make them searchable, and sees your searches.',
       '• Telegram keeps bot chats on its own servers. Chats with bots are not end-to-end encrypted.',
       '• You must be 18 or older to use this.',
-      '• Send /delete at any time to erase everything.',
+      '• /logout unlinks this chat, and /delete erases what you saved here.',
       '',
       `Privacy: ${privacyUrl}`,
       '',
-      'Tap Agree (or reply AGREE) to start.',
+      'Nothing is saved until you log in. The login link works once, for 10 minutes.',
     ].join('\n'),
-  agreeButton: 'Agree',
-  agreed:
-    "You're all set. Anything you sent before this wasn't saved, so please send it again. Send /help to see what I can do.",
-  alreadyAgreed: "You're already set up. Send /help to see what I can do.",
+  loginButton: 'Log in with IITGN',
+  loginFirst: 'Log in first with /login.',
+  linked: (email: string) =>
+    `Linked to ${maskEmail(email)}. Forward or send files to save them; type anything to search.`,
+  alreadyLinked: (email: string) =>
+    `You're logged in as ${maskEmail(email)}. Send /help to see what I can do.`,
+  loginWhileLinked: (email: string) =>
+    `You're already logged in as ${maskEmail(email)}. To use another account, send /logout first, then /login.`,
+  loggedOut: (email: string) =>
+    `Logged out: this chat is no longer linked to ${maskEmail(email)}, and its unused links no longer work. What you saved stays in your Campus Recall library. Send /login to link again.`,
   help: (contactEmail: string) =>
     [
-      "Send or forward photos, PDFs and notes to save them. Photos keep their full quality when you send them as a file. Start a message with 'note ' to save it as a note, or send a single link. Type anything else to search what you saved.",
+      "Log in with /login, then send or forward photos, PDFs and notes to save them to your Campus Recall library. Photos keep their full quality when you send them as a file. Start a message with 'note ' to save it as a note, or send a single link. Type anything else to search your library.",
       '',
+      '/login: link your IITGN account',
       '/open: open your library in the app',
+      '/logout: unlink this chat',
       '/privacy: how your data is handled',
       '/stop and /resume: pause or resume the bot',
-      '/delete: erase everything',
+      '/delete: erase what you saved here',
       '',
       `Questions: ${contactEmail}`,
     ].join('\n'),
   privacy: (privacyUrl: string) => `How Campus Recall handles your data: ${privacyUrl}`,
   stopped:
-    "Stopped. I won't save anything or reply until you send /resume. What you saved is kept; send /resume and then /delete to erase it.",
+    "Stopped. I won't save anything or reply until you send /resume. What you saved is kept.",
   started: "Welcome back. I'm saving and replying again.",
   alreadyOn: "I'm already on. Send /help to see what I can do.",
-  tapAgree: 'Tap Agree on the notice first.',
   resumeFirst: 'Send /resume first.',
   deleteAsk:
-    'This erases everything you saved here, also from the app, and signs out app links. Tap the button within 10 minutes to go ahead.',
-  deleteButton: 'Yes, erase everything',
-  deleted:
-    'Done. Everything you saved here is erased and the app is signed out. Send any message to start again.',
+    "This erases the items you saved here through Telegram from your Campus Recall library, on every device, and logs this chat out. Items you added in the app stay; to remove everything, use Remove cloud library in the app's Settings. Tap the button within 10 minutes to go ahead.",
+  deleteButton: 'Yes, erase my Telegram items',
+  deleted: (count: number) =>
+    `Done. ${count === 1 ? '1 item' : `${count} items`} you saved through Telegram ${count === 1 ? 'is' : 'are'} erased from your Campus Recall library, and this chat is logged out. Everything else in your library stays; to remove it all, use Remove cloud library in the app's Settings.`,
   deleteExpired:
-    'That request has expired. Send /delete again if you still want to erase everything.',
-  deleteNotAsked: 'Send /delete first if you want to erase everything.',
-  nothingStored: 'Nothing is saved for you yet.',
-  open: 'Open your Telegram library in Campus Recall. The link works once, for 10 minutes.',
+    'That request has expired. Send /delete again if you still want to erase what you saved here.',
+  deleteNotAsked: 'Send /delete first if you want to erase what you saved here.',
+  open: 'Open your Campus Recall library in the app. The link works once, for 10 minutes.',
   openButton: 'Open in app',
   noLinks:
-    "App links need the pilot's HTTPS address. In a local trial, start it again with --origin https://<tunnel host>, then send /open.",
+    "Links need the pilot's HTTPS address. In a local trial, start it again with --origin https://<tunnel host>, then send /login or /open.",
   savedMany: (titles: string[]) =>
     `Saved ${titles.length} items to Campus Recall: ${titles.map((t) => clip(t, 40)).join(', ')}`,
   results: (query: string) => `Best matches for ${quote(query)}. Tap one to get it back.`,
   keywordOnly: 'Matched by keyword only right now.',
   noResults: (query: string, keywordOnly: boolean) =>
-    `Nothing matched ${quote(query)} (only things you sent here are searched).${
+    `Nothing matched ${quote(query)} in your Campus Recall library.${
       keywordOnly ? ' Search by meaning is off right now, so only titles were matched.' : ''
     }`,
   gone: "That item isn't in your library any more.",
@@ -123,8 +127,7 @@ export const TELEGRAM_REPLIES = {
     "Campus Recall on Telegram isn't open to everyone yet, so nothing you send here is saved. Thanks for your interest!",
 };
 
-/** Button data: consent, the delete confirmation, and a search result (`p:<token>`). */
-const AGREE = 'agree';
+/** Button data: the delete confirmation and a search result (`p:<token>`). */
 const DELETE = 'delete';
 const PICK = /^p:([A-Za-z0-9_-]{12})$/;
 
@@ -142,6 +145,7 @@ export function fitTelegram(text: string, max: number) {
 /** A Telegram reply address: the private chat (the user's ID) and the vault it belongs to. */
 export interface TelegramAddress {
   chatId: number;
+  /** The linked account's vault (`google:<sub>`). */
   ownerKey: string;
 }
 
@@ -162,7 +166,9 @@ export function createTelegramChannel(input: {
   return {
     textLimit: TELEGRAM_LIMITS.text,
     captionLimit: TELEGRAM_LIMITS.caption,
-    sendText: (to, text) => api.sendMessage(to.chatId, fitTelegram(text, TELEGRAM_LIMITS.text)),
+    async sendText(to, text) {
+      await api.sendMessage(to.chatId, fitTelegram(text, TELEGRAM_LIMITS.text));
+    },
     async sendResults(to, query, rows, keywordOnly) {
       const at = now();
       const picks = rows.map((row) => ({
@@ -196,16 +202,56 @@ export function createTelegramChannel(input: {
       if (asPhoto) await api.sendPhoto(to.chatId, file, text);
       else await api.sendDocument(to.chatId, file, text);
     },
-    sendOpenButton: (to, url) =>
-      api.sendMessage(to.chatId, TELEGRAM_REPLIES.openCta, {
+    async sendOpenButton(to, url) {
+      await api.sendMessage(to.chatId, TELEGRAM_REPLIES.openCta, {
         inline_keyboard: [[{ text: TELEGRAM_REPLIES.openButton, url }]],
-      }),
+      });
+    },
   };
+}
+
+/** Removes the buttons of messages whose one-time action is done; failures are only logged. */
+async function removeButtons(
+  api: TelegramApi,
+  chatId: number,
+  messageIds: (number | undefined)[],
+  log: (message: string, detail?: unknown) => void,
+) {
+  for (const id of new Set(messageIds))
+    if (id !== undefined)
+      await api
+        .removeButtons(chatId, id)
+        .catch((cause: unknown) => log('Telegram button removal failed', describeFailure(cause)));
+}
+
+/** A Telegram user just linked an account on the link page (`/api/v1/telegram/link/…`). */
+export interface TelegramLinked {
+  userId: string;
+  email: string;
+  /** Messages whose login buttons are now used up. */
+  messageIds: number[];
+}
+
+/**
+ * Tells the user in the chat that the link worked, and removes the login buttons it used up.
+ * Called by the server after the link page, outside the bot's queue.
+ */
+export async function announceTelegramLink(
+  api: TelegramApi,
+  linked: TelegramLinked,
+  log: (message: string, detail?: unknown) => void = (message, detail) =>
+    console.error(message, detail),
+) {
+  const chatId = Number(linked.userId);
+  await removeButtons(api, chatId, linked.messageIds, log);
+  await api
+    .sendMessage(chatId, TELEGRAM_REPLIES.linked(linked.email))
+    .catch((cause: unknown) => log('Telegram reply failed', describeFailure(cause)));
 }
 
 export interface TelegramBotOptions {
   bot: BotStore;
-  /** The polling offset and result buttons. */
+  /** The polling offset, result buttons, linked accounts, links and Telegram-saved items. */
   state: TelegramStateStore;
   store: PilotStore;
   objects: ObjectStore;
@@ -216,17 +262,15 @@ export interface TelegramBotOptions {
   engine?: EngineHost;
   /** Handles index jobs (`createTelegramIndexer`); without one they stay queued. */
   onIndexJob?: (job: BotJob) => Promise<void>;
-  /** The pilot site, for app links: `https://…`, no trailing path. */
+  /** The pilot site, for login and app links: `https://…`, no trailing path. */
   origin: string;
   /**
-   * False when the origin cannot be opened from a phone (a local trial without a tunnel): /open
-   * then says so, and no "Open in app" button is sent.
+   * False when the origin cannot be opened from a phone (a local trial without a tunnel): /login
+   * and /open then say so, and no link button is sent.
    */
   appLinks?: boolean;
   privacyUrl: string;
   contactEmail: string;
-  /** Stored with each consent. */
-  noticeVersion: string;
   batchMs?: number;
   batchMax?: number;
   schedule?: (run: () => void, ms: number) => () => void;
@@ -272,17 +316,25 @@ export function createTelegramBot(options: TelegramBotOptions) {
     now,
   );
   const kinds: JobKind[] = options.onIndexJob ? ['ingest', 'index'] : ['ingest'];
-  const addressOf = (sender: TelegramSender): TelegramAddress => ({
+  const addressOf = (sender: TelegramSender, account: TelegramAccount): TelegramAddress => ({
     chatId: Number(sender.userId),
-    ownerKey: sender.ownerKey,
+    ownerKey: account.ownerKey,
   });
   const failed = (cause: unknown) => log('Telegram reply failed', describeFailure(cause));
+  const unlinkInput = (sender: TelegramSender) => ({
+    store,
+    objects,
+    bot,
+    state,
+    userId: sender.userId,
+    identityKey: sender.ownerKey,
+  });
 
   /**
    * Answers a message or tap at most once, whoever processes it: the answer is claimed before it
    * is sent, so a crash right after can lose it but nothing ever sends it twice.
    */
-  async function answer(key: string, send: () => Promise<void>) {
+  async function answer(key: string, send: () => Promise<unknown>) {
     if (!(await bot.claimReply(key))) return;
     await send().catch(failed);
   }
@@ -301,11 +353,12 @@ export function createTelegramBot(options: TelegramBotOptions) {
       : Promise.resolve();
 
   const batches = createSaveBatches<TelegramSender>({
-    send: (sender, titles) =>
-      say(
+    send: async (sender, titles) => {
+      await say(
         sender,
         titles.length === 1 ? REPLIES.saved(titles[0]) : TELEGRAM_REPLIES.savedMany(titles),
-      )(),
+      )();
+    },
     batchMs: options.batchMs ?? 3000,
     batchMax: options.batchMax ?? 10,
     schedule: options.schedule ?? realSchedule,
@@ -313,47 +366,68 @@ export function createTelegramBot(options: TelegramBotOptions) {
     failedMessage: 'Telegram reply failed',
   });
 
-  /** Saving needs consent and no /stop; checked again under the owner's lock. */
-  async function canStore(sender: TelegramSender) {
-    const current = await bot.senderState(sender.userId);
-    return current.consentedAt !== undefined && current.stoppedAt === undefined;
+  /** Saving needs the same linked account and no /stop; checked again under the account's lock. */
+  async function canStore(sender: TelegramSender, ownerKey: string) {
+    const [account, current] = await Promise.all([
+      state.getAccount(sender.userId),
+      bot.senderState(sender.userId),
+    ]);
+    return account?.ownerKey === ownerKey && current.stoppedAt === undefined;
   }
 
-  /** The consent notice with its Agree button; given back when it could not be sent. */
-  async function sendNotice(sender: TelegramSender, key: string, claimed: boolean) {
+  /** The notice with a one-time login button (or, without an HTTPS origin, why there is none). */
+  async function sendLogin(sender: TelegramSender, key: string, from: TgUser | undefined) {
     await answer(key, async () => {
-      try {
-        await say(sender, TELEGRAM_REPLIES.notice(options.privacyUrl), {
-          inline_keyboard: [[{ text: TELEGRAM_REPLIES.agreeButton, callback_data: AGREE }]],
-        })();
-      } catch (cause) {
-        if (claimed) await bot.releaseNotice(sender.userId);
-        throw cause;
-      }
+      const notice = TELEGRAM_REPLIES.notice(options.privacyUrl);
+      if (!appLinks) return say(sender, `${notice}\n\n${TELEGRAM_REPLIES.noLinks}`)();
+      // The link is made only once the reply is claimed, so a retried job leaves no spare one.
+      const { url, tokenHash } = await createLoginLink(
+        state,
+        {
+          userId: sender.userId,
+          ownerKey: sender.ownerKey,
+          name: telegramName({ username: sender.waId, firstName: from?.first_name }),
+        },
+        options.origin,
+        now(),
+      );
+      const messageId = await say(sender, notice, {
+        inline_keyboard: [[{ text: TELEGRAM_REPLIES.loginButton, url }]],
+      })();
+      if (messageId !== undefined) await state.setLinkMessage(tokenHash, messageId);
     });
   }
 
-  /** Erases the sender's vault, sessions, links and result buttons (T9). */
-  async function eraseEverything(sender: TelegramSender) {
+  /** /logout: unlinks, revokes unused links and removes their buttons. */
+  async function logout(sender: TelegramSender, key: string) {
+    const { account, links } = await unlinkTelegramUser(unlinkInput(sender));
+    await removeButtons(api, Number(sender.userId), loginMessages(links), log);
     batches.drop(sender.ownerKey);
-    await eraseOwner({
-      store,
-      objects,
-      bot,
-      userId: sender.userId,
-      ownerKey: sender.ownerKey,
-      more: () => state.forgetOwner(sender.ownerKey),
-    });
+    await answer(
+      key,
+      say(
+        sender,
+        account ? TELEGRAM_REPLIES.loggedOut(account.email) : TELEGRAM_REPLIES.loginFirst,
+      ),
+    );
   }
+  const loginMessages = (links: TelegramLink[]) =>
+    links.filter((link) => link.purpose === 'login').map((link) => link.messageId);
 
   /**
-   * Consent, /stop, commands and buttons. True means the message or tap was dealt with: nothing
-   * is saved and the worker only finishes the job.
+   * /stop, the login gate, commands and buttons. Returns the linked account when the message is
+   * still to be saved or searched; undefined when it was dealt with here.
    */
-  async function gate(sender: TelegramSender, key: string, inbound: TelegramInbound) {
+  async function gate(
+    sender: TelegramSender,
+    key: string,
+    inbound: TelegramInbound,
+  ): Promise<TelegramAccount | undefined> {
     const current = await bot.senderState(sender.userId);
+    const account = await state.getAccount(sender.userId);
     const callback = inbound.callback_query;
     const message = inbound.message;
+    const from = message?.from ?? callback?.from;
     const command = message ? commandOf(message) : undefined;
     const data = callback?.data;
     const reply = (text: string, keyboard?: InlineKeyboard) =>
@@ -363,131 +437,140 @@ export function createTelegramBot(options: TelegramBotOptions) {
       // Stopped: nothing is saved or answered except /resume (or /start).
       if (command?.name === 'resume' || command?.name === 'start') {
         await bot.setStopped(sender.userId, undefined);
-        // A /stop sent before agreeing: starting again still needs consent.
-        if (current.consentedAt === undefined) {
-          const claimed = await bot.claimNotice(sender.userId, now());
-          await sendNotice(sender, key, claimed);
-        } else await reply(TELEGRAM_REPLIES.started);
+        if (account) await reply(TELEGRAM_REPLIES.started);
+        else {
+          await bot.forgetMessage(key);
+          await sendLogin(sender, key, from);
+        }
       } else {
         await bot.forgetMessage(key);
         await acknowledge(callback, TELEGRAM_REPLIES.resumeFirst);
       }
-      return true;
+      return undefined;
     }
 
-    if (current.consentedAt === undefined) {
-      // Before Agree nothing is kept: not the item, and not the message's content.
+    if (!account) {
+      // Before login nothing is kept: not the item, and not the message's content.
       await bot.forgetMessage(key);
-      const agree = data === AGREE || isTypedAgree(message);
-      if (agree && current.noticeSentAt !== undefined) {
-        await bot.setConsent(sender.userId, now(), options.noticeVersion);
-        await acknowledge(callback);
-        await reply(TELEGRAM_REPLIES.agreed);
-        return true;
-      }
-      if (callback && !agree) {
-        await acknowledge(callback, TELEGRAM_REPLIES.tapAgree);
-        return true;
+      if (callback) {
+        if (data === DELETE)
+          await removeButtons(api, Number(sender.userId), [callback.message?.message_id], log);
+        await acknowledge(callback, TELEGRAM_REPLIES.loginFirst);
+        return undefined;
       }
       switch (command?.name) {
+        case 'start':
+        case 'login':
+          await sendLogin(sender, key, from);
+          return undefined;
         case 'help':
           await reply(TELEGRAM_REPLIES.help(options.contactEmail));
-          return true;
+          return undefined;
         case 'privacy':
           await reply(TELEGRAM_REPLIES.privacy(options.privacyUrl));
-          return true;
-        case 'delete':
-          await reply(TELEGRAM_REPLIES.nothingStored);
-          return true;
+          return undefined;
         case 'stop':
           await bot.setStopped(sender.userId, now());
           await reply(TELEGRAM_REPLIES.stopped);
-          return true;
-        case 'start':
-        case 'resume': {
-          // Asked for: the notice again, even when it was sent before.
-          const claimed = await bot.claimNotice(sender.userId, now());
-          await sendNotice(sender, key, claimed);
-          return true;
+          return undefined;
+        case 'logout': {
+          // Not linked, but unused login links stop working, and their buttons go.
+          const links = await state.revokeLinks(sender.userId);
+          await removeButtons(api, Number(sender.userId), loginMessages(links), log);
+          break;
         }
       }
-      // The notice goes out once; later messages before Agree get no answer.
-      if (await bot.claimNotice(sender.userId, now())) await sendNotice(sender, key, true);
-      await acknowledge(callback);
-      return true;
+      await reply(TELEGRAM_REPLIES.loginFirst);
+      return undefined;
     }
 
     if (callback) {
-      if (data === AGREE) {
-        await acknowledge(callback, TELEGRAM_REPLIES.alreadyAgreed);
-        return true;
-      }
       await acknowledge(callback);
       if (data === DELETE) {
-        await confirmDelete(sender, key, current.deleteRequestedAt);
-        return true;
+        await confirmDelete(sender, key, current.deleteRequestedAt, callback);
+        return undefined;
       }
       const token = data && PICK.exec(data)?.[1];
-      if (token) await pick(sender, key, token);
-      return true;
+      if (token) await pick(sender, account, key, token);
+      return undefined;
     }
 
-    if (isTypedAgree(message)) {
-      await reply(TELEGRAM_REPLIES.alreadyAgreed);
-      return true;
-    }
-    if (!command) return false;
+    if (!command) return account;
     switch (command.name) {
       case 'start':
+        await reply(TELEGRAM_REPLIES.alreadyLinked(account.email));
+        return undefined;
+      case 'login':
+        await reply(TELEGRAM_REPLIES.loginWhileLinked(account.email));
+        return undefined;
       case 'resume':
         await reply(TELEGRAM_REPLIES.alreadyOn);
-        return true;
+        return undefined;
       case 'help':
         await reply(TELEGRAM_REPLIES.help(options.contactEmail));
-        return true;
+        return undefined;
       case 'privacy':
         await reply(TELEGRAM_REPLIES.privacy(options.privacyUrl));
-        return true;
+        return undefined;
       case 'stop':
         await bot.setStopped(sender.userId, now());
         await reply(TELEGRAM_REPLIES.stopped);
-        return true;
+        return undefined;
+      case 'logout':
+        await logout(sender, key);
+        return undefined;
       case 'open':
         // The link is made only once the reply is claimed, so a retried job leaves no spare one.
         await answer(key, async () => {
           if (!appLinks) return say(sender, TELEGRAM_REPLIES.noLinks)();
-          const url = await createTelegramLink(bot, sender, options.origin, now());
+          const url = await createOpenLink(state, account, options.origin, now());
           await say(sender, TELEGRAM_REPLIES.open, {
             inline_keyboard: [[{ text: TELEGRAM_REPLIES.openButton, url }]],
           })();
         });
-        return true;
+        return undefined;
       case 'delete':
         await bot.setDeleteRequest(sender.userId, now());
         await reply(TELEGRAM_REPLIES.deleteAsk, {
           inline_keyboard: [[{ text: TELEGRAM_REPLIES.deleteButton, callback_data: DELETE }]],
         });
-        return true;
+        return undefined;
       default:
         await reply(TELEGRAM_REPLIES.unknownCommand);
-        return true;
+        return undefined;
     }
   }
 
-  /** The delete button: erases everything when /delete came within 10 minutes (T9). */
-  async function confirmDelete(sender: TelegramSender, key: string, asked: number | undefined) {
-    const reply = (text: string) => answer(key, say(sender, text));
-    if (asked === undefined) return reply(TELEGRAM_REPLIES.deleteNotAsked);
+  /**
+   * The delete button: within 10 minutes of /delete it erases what was saved here and unlinks
+   * (T9). The button is removed whatever happens, so it never looks tappable again.
+   */
+  async function confirmDelete(
+    sender: TelegramSender,
+    key: string,
+    asked: number | undefined,
+    callback: TgCallbackQuery,
+  ) {
+    const chatId = Number(sender.userId);
+    await removeButtons(api, chatId, [callback.message?.message_id], log);
+    if (asked === undefined) return answer(key, say(sender, TELEGRAM_REPLIES.deleteNotAsked));
     if (now() - asked > DELETE_CONFIRM_SECONDS) {
       await bot.setDeleteRequest(sender.userId, undefined);
-      return reply(TELEGRAM_REPLIES.deleteExpired);
+      return answer(key, say(sender, TELEGRAM_REPLIES.deleteExpired));
     }
-    await eraseEverything(sender);
-    await reply(TELEGRAM_REPLIES.deleted);
+    batches.drop(sender.ownerKey);
+    const { links, erased } = await eraseTelegramItems(unlinkInput(sender));
+    await removeButtons(api, chatId, loginMessages(links), log);
+    await answer(key, say(sender, TELEGRAM_REPLIES.deleted(erased)));
   }
 
   /** A result button: the original back in the chat, then a link to open the app. */
-  async function pick(sender: TelegramSender, key: string, token: string) {
+  async function pick(
+    sender: TelegramSender,
+    account: TelegramAccount,
+    key: string,
+    token: string,
+  ) {
     const found = await state.getPick(token, now());
     if (!found) return answer(key, say(sender, TELEGRAM_REPLIES.expired));
     await sendBack({
@@ -495,16 +578,16 @@ export function createTelegramBot(options: TelegramBotOptions) {
       objects,
       channel,
       replies: TELEGRAM_REPLIES,
-      ownerKey: sender.ownerKey,
-      // Only this owner's buttons count; another owner's token finds nothing here.
+      ownerKey: account.ownerKey,
+      // Only buttons for this account count; another account's token finds nothing here.
       picked:
-        found.ownerKey === sender.ownerKey
+        found.ownerKey === account.ownerKey
           ? { globalId: found.globalId, location: found.location }
           : undefined,
-      to: addressOf(sender),
+      to: addressOf(sender, account),
       answer: (send) => answer(key, send),
       link: async () =>
-        appLinks ? createTelegramLink(bot, sender, options.origin, now()) : undefined,
+        appLinks ? createOpenLink(state, account, options.origin, now()) : undefined,
     });
   }
 
@@ -523,11 +606,16 @@ export function createTelegramBot(options: TelegramBotOptions) {
       query,
     );
 
-  async function onText(sender: TelegramSender, key: string, query: string) {
-    const { rows, keywordOnly } = await search(sender.ownerKey, clip(query, 500));
+  async function onText(
+    sender: TelegramSender,
+    account: TelegramAccount,
+    key: string,
+    query: string,
+  ) {
+    const { rows, keywordOnly } = await search(account.ownerKey, clip(query, 500));
     await answer(key, async () => {
       if (!rows.length) return say(sender, TELEGRAM_REPLIES.noResults(query, keywordOnly))();
-      await channel.sendResults(addressOf(sender), query, rows, keywordOnly);
+      await channel.sendResults(addressOf(sender, account), query, rows, keywordOnly);
     });
   }
 
@@ -578,7 +666,8 @@ export function createTelegramBot(options: TelegramBotOptions) {
     if (!inbound || !sender) return bot.finishJob(job);
     const key = inbound.wamid;
     const record = inbound.message as TelegramInbound;
-    if (await gate(sender, key, record)) return bot.finishJob(job);
+    const account = await gate(sender, key, record);
+    if (!account) return bot.finishJob(job);
     const message: TgMessage | undefined = record.message;
     if (!message) return bot.finishJob(job);
     const plan = planTelegramMessage(message);
@@ -588,19 +677,25 @@ export function createTelegramBot(options: TelegramBotOptions) {
       return answer(key, say(sender, plan.reply));
     }
     if (plan.action === 'text') {
-      await onText(sender, key, plan.text);
+      await onText(sender, account, key, plan.text);
       return bot.finishJob(job);
     }
 
+    const ownerKey = account.ownerKey;
     const globalId = telegramGlobalId(key);
+    const track = () =>
+      state.recordSaved({ ownerKey, globalId, userId: sender.userId, savedAt: now() });
     const saved = async (item: StoredItem) => {
       await bot.finishJob(job);
       // A deleted item stays deleted; a retry only completes what was started.
       if (item.deleted) return;
       if (await bot.claimReply(key)) await batches.add(sender.ownerKey, sender, item.title);
     };
-    const earlier = await store.getItem(inbound.ownerKey, globalId);
-    if (earlier) return saved(earlier);
+    const earlier = await store.getItem(ownerKey, globalId);
+    if (earlier) {
+      if (!earlier.deleted) await track();
+      return saved(earlier);
+    }
 
     let content;
     try {
@@ -629,15 +724,17 @@ export function createTelegramBot(options: TelegramBotOptions) {
       store,
       objects,
       job,
-      ownerKey: inbound.ownerKey,
+      ownerKey,
       description,
       bytes: content.bytes,
       quotaBytes: options.quotaBytes,
       now: now(),
-      canStore: () => canStore(sender),
+      canStore: () => canStore(sender, ownerKey),
+      // Recorded with the item, so /delete always finds what was saved here.
+      afterPublish: track,
     });
     if ('cancelled' in outcome) {
-      // Not stored and not answered (/delete or /stop meanwhile); the content goes too.
+      // Not stored and not answered (/delete, /logout or /stop meanwhile); the content goes too.
       await bot.finishJob(job);
       await bot.forgetMessage(key);
       return;
@@ -646,6 +743,7 @@ export function createTelegramBot(options: TelegramBotOptions) {
       await bot.finishJob(job);
       return answer(key, say(sender, REPLIES.full));
     }
+    if ('existing' in outcome && !outcome.existing.deleted) await track();
     return saved('item' in outcome ? outcome.item : outcome.existing);
   }
 

@@ -1,6 +1,8 @@
-// Erasing everything a chat bot keeps for one person (WhatsApp DELETE ALL, Telegram /delete):
-// the same vault reset as `DELETE /vault`, every session of the vault, and the bot's own records
-// of that person except the message IDs that dedupe needs.
+// Erasing everything a chat bot keeps for one person whose vault belongs to the bot (WhatsApp
+// DELETE ALL): the same vault reset as `DELETE /vault`, every session of the vault, and the bot's
+// own records of that person except the message IDs that dedupe needs. Telegram saves into the
+// student's own account instead, so its /delete erases only what was saved there
+// (../telegram/erase.ts).
 import type { ObjectStore, PilotStore } from '../store';
 import { resetOwnerVault } from '../vault-reset';
 import type { BotStore } from '../whatsapp/store';

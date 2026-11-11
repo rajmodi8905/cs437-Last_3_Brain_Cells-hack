@@ -39,9 +39,14 @@ export async function sendBack<To>(input: SendBackInput<To>) {
   const { store, objects, channel, replies, ownerKey, picked, to } = input;
   // Only the person's own vault is read, so another vault's ID finds nothing.
   const item = picked && (await store.getItem(ownerKey, picked.globalId));
+  // Kinds the chat cannot carry (a long video synced from the app, say) are only checked to
+  // exist, not read into memory.
   const bytes =
     item && !item.deleted && item.objectKey?.startsWith(`${ownerKey}/`)
-      ? await objects.get(item.objectKey)
+      ? await objects.get(
+          item.objectKey,
+          SENDABLE.has(item.kind) ? undefined : { start: 0, end: 0 },
+        )
       : undefined;
   await input.answer(async () => {
     if (to === undefined) return;

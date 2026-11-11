@@ -99,7 +99,13 @@ export interface TelegramApi {
   getFile(fileId: string): Promise<{ filePath?: string; fileSize?: number }>;
   /** The file at a path from `getFile`; refused beyond `maxBytes`. */
   download(filePath: string, maxBytes: number): Promise<Uint8Array>;
-  sendMessage(chatId: number, text: string, keyboard?: InlineKeyboard): Promise<void>;
+  /** Sends a text message; resolves with its message ID when Telegram gives one. */
+  sendMessage(chatId: number, text: string, keyboard?: InlineKeyboard): Promise<number | undefined>;
+  /**
+   * Removes the inline buttons from a message the bot sent, so a button whose one-time action is
+   * done no longer looks tappable.
+   */
+  removeButtons(chatId: number, messageId: number): Promise<void>;
   sendPhoto(chatId: number, file: UploadFile, caption?: string): Promise<void>;
   sendDocument(chatId: number, file: UploadFile, caption?: string): Promise<void>;
   /** Acknowledges a button tap, optionally with a short notice shown in the app. */
@@ -230,7 +236,7 @@ export function createTelegramApi(options: TelegramApiOptions): TelegramApi {
   // One queue per chat, so each chat gets at most one message per `interval`.
   const queues = new Map<number, Promise<void>>();
   const lastSent = new Map<number, number>();
-  async function spaced(chatId: number, send: () => Promise<void>) {
+  async function spaced<T>(chatId: number, send: () => Promise<T>): Promise<T> {
     const previous = queues.get(chatId) ?? Promise.resolve();
     let release!: () => void;
     const mine = new Promise<void>((resolve) => (release = resolve));
@@ -240,7 +246,7 @@ export function createTelegramApi(options: TelegramApiOptions): TelegramApi {
     try {
       const wait = (lastSent.get(chatId) ?? -Infinity) + interval - nowMs();
       if (wait > 0) await sleep(wait);
-      await send();
+      return await send();
     } finally {
       lastSent.set(chatId, nowMs());
       if (lastSent.size > 1000)
@@ -363,12 +369,22 @@ export function createTelegramApi(options: TelegramApiOptions): TelegramApi {
 
     sendMessage(chatId, text, keyboard) {
       return spaced(chatId, async () => {
-        await call('sendMessage', {
+        const sent = await call<{ message_id?: unknown } | undefined>('sendMessage', {
           chat_id: chatId,
           text,
           link_preview_options: { is_disabled: true },
           ...(keyboard ? { reply_markup: keyboard } : {}),
         });
+        return Number.isSafeInteger(sent?.message_id) ? (sent!.message_id as number) : undefined;
+      });
+    },
+
+    async removeButtons(chatId, messageId) {
+      // An edit is not a new message, so it is not spaced like one.
+      await call('editMessageReplyMarkup', {
+        chat_id: chatId,
+        message_id: messageId,
+        reply_markup: { inline_keyboard: [] },
       });
     },
 
