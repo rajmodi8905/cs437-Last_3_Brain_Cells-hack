@@ -62,6 +62,13 @@ if [[ -e $root/compose.whatsapp.yaml ]]; then
   compose_files+=(--file "$root/compose.whatsapp.yaml")
   whatsapp=1
 fi
+# The same for the Telegram channel; either channel needs the engine host's models.
+telegram=0
+if [[ -e $root/compose.telegram.yaml ]]; then
+  [[ -f $root/compose.telegram.yaml && ! -L $root/compose.telegram.yaml ]] || fail 'Invalid Telegram Compose overlay.'
+  compose_files+=(--file "$root/compose.telegram.yaml")
+  telegram=1
+fi
 compose() { docker compose --project-directory "$root" --env-file "$root/.env" "${compose_files[@]}" "$@"; }
 compose config --quiet
 old_container=$(compose ps --quiet app)
@@ -101,10 +108,10 @@ new_plan=$(plan "$new_id")
 [[ $old_plan =~ ^[0-9a-f]{64}:[0-9,]+$ && $new_plan == "$old_plan" ]] || fail 'Database migration plan changed; manual release required.'
 applied=$(compose exec --no-TTY postgres psql -U pilot -d pilot -At -c "SELECT string_agg(version::text, ',' ORDER BY version) FROM \"$schema\".schema_migrations;")
 [[ $applied == "${old_plan#*:}" ]] || fail 'Live database migration history differs from the release.'
-# WhatsApp engine host: the candidate's own pinned model list, each file checked by size and
-# SHA-256 before it is kept. This is the one candidate run with network access; it gets no
+# Chat channels' engine host: the candidate's own pinned model list, each file checked by size
+# and SHA-256 before it is kept. This is the one candidate run with network access; it gets no
 # secrets, data other than the models folder, or capabilities.
-if [[ $whatsapp == 1 ]]; then
+if [[ $whatsapp == 1 || $telegram == 1 ]]; then
   install -d -m 0755 "$data/models"
   install -d -m 0700 -o 1000 -g 1000 "$data/engine-host"
   docker run --rm --read-only --cap-drop ALL --security-opt no-new-privileges --user 0:0 \
