@@ -95,16 +95,16 @@ const page = (title: string, body: string) =>
 /** Asks before opening the session; the form posts to this same path. */
 export const confirmPage = (label: string, channel = 'WhatsApp') =>
   page(
-    'Open Campus Recall',
+    'Open AnyRecall',
     `<h1>Open your ${escapeHtml(channel)} library</h1>` +
-      `<p>Sign in to Campus Recall as <strong>${escapeHtml(label)}</strong> on this browser.</p>` +
+      `<p>Sign in to AnyRecall as <strong>${escapeHtml(label)}</strong> on this browser.</p>` +
       `<p>Your device's own library is not uploaded unless you choose to include it.</p>` +
       `<form method="post"><button type="submit">Continue</button></form>`,
   );
 
 /** Expired, used or unknown links all look the same; `again` says how to get a new one. */
 export const linkErrorPage = (
-  again = 'Send OPEN to the Campus Recall WhatsApp number for a new one.',
+  again = 'Send OPEN to the AnyRecall WhatsApp number for a new one.',
 ) =>
   page(
     'Link not valid',

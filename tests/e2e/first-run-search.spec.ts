@@ -9,7 +9,7 @@ async function enter(page: Page) {
   await page.route('**/*', (route) => {
     const request = route.request();
     const url = new URL(request.url());
-    if (url.hostname !== '127.0.0.1' || request.headers()['x-campus-recall-setup'] === '1') {
+    if (url.hostname !== '127.0.0.1' || request.headers()['x-anyrecall-setup'] === '1') {
       assetRequests.push(url.href);
       return route.abort();
     }

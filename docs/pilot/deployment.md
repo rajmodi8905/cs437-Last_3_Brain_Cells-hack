@@ -97,7 +97,7 @@ sudo docker run --rm --read-only --cap-drop ALL --security-opt no-new-privileges
   --volume /srv/campus-recall/models:/app/models --entrypoint node IMAGE /app/fill-models.mjs
 ```
 
-**Resources.** The overlay raises the app's memory limit from 768 MB to 3 GB, its process limit to 1,024 (Chromium's threads count), `/dev/shm` to 512 MB and the stop grace period to 30 seconds. On a Mac, Node plus Chromium peaked at 2.1–2.4 GB summed over processes; PostgreSQL (512 MB), Caddy (128 MB) and the system keep the rest of the VM's 8 GiB. Measure the VM's actual peak with `docker stats` during the demo checks and record it in [2026-11-23-whatsapp-demo.md](2026-11-23-whatsapp-demo.md). If Chromium is killed for memory, the page crash is retried as a failed index job.
+**Resources.** The overlay raises the app's memory limit from 768 MB to 3 GB, its process limit to 1,024 (Chromium's threads count), `/dev/shm` to 512 MB and the stop grace period to 30 seconds. On a Mac, Node plus Chromium peaked at 2.1–2.4 GB summed over processes; PostgreSQL (512 MB), Caddy (128 MB) and the system keep the rest of the VM's 8 GiB. `docker stats` shows the VM's own peak while a file is indexed. If Chromium is killed for memory, the page crash is retried as a failed index job.
 
 **First release with the channel.** Parts 1 and 2 add database migrations 3 and 4, so `deploy-release.sh` refuses the automatic release ("Database migration plan changed; manual release required."). Release that image by hand once, from `/opt/campus-recall`, after the Meta app, secrets, settings and folders are ready:
 
@@ -108,12 +108,18 @@ sudo $COMPOSE exec app node /app/entrypoint.mjs /app/server/backup.mjs now
 sudo docker pull ghcr.io/rajmodi8905/campus-recall-pilot@sha256:DIGEST
 # Fill the models (above), set PILOT_IMAGE in .env to the same digest, then:
 sudo $COMPOSE up --detach --wait app
-# The Caddyfile changed for the link page (below); copy it over the old one in place, then:
+# The Caddyfile changed for the link page (below); copy its contents over the old one in place
+# (see the warning below), check that Caddy sees the new file, then reload:
+sudo sh -c 'cat Caddyfile.new > /opt/campus-recall/Caddyfile'
+sha256sum /opt/campus-recall/Caddyfile
+sudo docker exec "$(sudo $COMPOSE ps -q caddy)" sha256sum /etc/caddy/Caddyfile
 sudo $COMPOSE exec caddy caddy reload --config /etc/caddy/Caddyfile
 sudo $COMPOSE logs app | grep -E 'WhatsApp|engine host'
 ```
 
 Caddy's headers are defaults now (`?Referrer-Policy`, `?Content-Security-Policy`): the one-time link page keeps its own `Referrer-Policy: same-origin` and CSP. With Caddy's `no-referrer` in its place, browsers send `Origin: null` on the page's Continue `POST` and the server refuses it, so links would never open. Check with `curl -sI https://…/api/v1/whatsapp/open/x`, which must show `Referrer-Policy: same-origin`. `deploy-release.sh` never recreates Caddy, so this copy and reload are manual.
+
+**Warning: copy the Caddyfile's contents, do not replace the file.** `compose.yaml` bind-mounts the single file `./Caddyfile` into the Caddy container. A bind mount of a file follows the file itself (its inode), not its name, so anything that writes a new file under the same name leaves the running container reading the old one: `install`, `mv`, `rsync` without `--inplace`, or an editor that saves by writing a new file and renaming it. `caddy reload` then reloads the old configuration and reports success. This happened in the first Telegram release. Either copy the contents into the existing file (`cat Caddyfile.new > Caddyfile`, which keeps the inode) and reload, or, if the file was replaced, restart the Caddy container (`sudo $COMPOSE restart caddy`) so it mounts the new file. Either way, check that the two hashes above match: `sha256sum /opt/campus-recall/Caddyfile` on the VM and `docker exec … sha256sum /etc/caddy/Caddyfile` inside the container.
 
 The log shows `WhatsApp channel on: Meta's webhook is https://…/api/v1/whatsapp/webhook.` and `WhatsApp engine host ready in … s.` If it shows `The WhatsApp engine host could not start`, the bot still answers: searches are by keyword only and index jobs wait until a later start indexes them. Fix the cause (usually the models folder or memory) and restart the app. Rolling back to an image from before the channel leaves the new tables and columns in place; older code applies only the migrations it knows, so it starts, but check compatibility as for any rollback. After this release, later releases with unchanged migrations go through the workflow again.
 
@@ -144,7 +150,7 @@ sudo $COMPOSE logs app | grep -E 'Telegram|engine host'
 
 The log shows `Telegram channel on (webhook): https://…/api/v1/telegram/webhook.`, `Telegram bot @… is answering.`, `Telegram webhook set.` and the engine host's ready line. `Telegram setWebhook failed` means Telegram could not be told; check the token and that the pilot's HTTPS address is reachable, then restart the app. The webhook takes no session or CSRF; a request without the right `X-Telegram-Bot-Api-Secret-Token` gets 401 or 403. Caddy needs no change: the Telegram link pages set their own headers, which Caddy's defaults do not override. Backups include the Telegram tables. Rolling back to an image from before linking leaves migration 6's tables and column in place; older code ignores them, but a restore needs the code's own database version.
 
-**Checks.** From an allowed account on a phone: Start (nothing is saved before login: a forwarded message gets "Log in first with /login."), **Log in with IITGN**, Google's account chooser with an IITGN account, back on "Link Telegram … to …?", **Continue**, then "Linked to …" in the chat and the login button gone. A personal Google account must be refused ("not eligible" in Settings). Then forward a message, send a photo as a file and a PDF, search, tap a result, `/open` and open the link (Settings shows the IITGN email; the items appear after "Include this device's library"), `/logout` and `/login` again, and `/delete` and **Yes, erase my Telegram items** (an item added in the app stays). Record times and memory as for WhatsApp.
+**Checks.** From an allowed account on a phone: Start (nothing is saved before login: a forwarded message gets "Log in first with /login."), **Log in with IITGN**, Google's account chooser with an IITGN account, back on "Link Telegram … to …?", **Continue**, then "Linked to …" in the chat and the login button gone. A personal Google account must be refused ("not eligible" in Settings). Then forward a message, send a photo as a file and a PDF, search, tap a result, `/open` and open the link (Settings shows the IITGN email; the items appear after "Include this device's library"), `/logout` and `/login` again, and `/delete` and **Yes, erase my Telegram items** (an item added in the app stays).
 
 **Polling instead.** Long polling also works on the VM (`PILOT_TELEGRAM_MODE=polling`, no webhook secret), for example while the domain is unavailable; only one process may poll a bot, so stop any laptop trial with the same token. Starting a polling process removes the webhook. Linking still uses the pilot's Google sign-in.
 

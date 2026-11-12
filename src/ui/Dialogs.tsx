@@ -1,6 +1,6 @@
 import { ChevronRight } from 'lucide-react';
-import type { CampusRecallModel } from '../app/useCampusRecall';
-export function Dialogs({ model }: { model: CampusRecallModel }) {
+import type { AnyRecallModel } from '../app/useAnyRecall';
+export function Dialogs({ model }: { model: AnyRecallModel }) {
   const {
     firstUse,
     setFirstUse,
@@ -25,7 +25,7 @@ export function Dialogs({ model }: { model: CampusRecallModel }) {
             aria-modal="true"
             aria-labelledby="welcome-title"
           >
-            <span className="eyebrow">WELCOME TO CAMPUS RECALL</span>
+            <span className="eyebrow">WELCOME TO ANYRECALL</span>
             <h2 id="welcome-title">Save it here. Find it again.</h2>
             <p>
               Keep your screenshots, files and notes in a personal library on this device. Download

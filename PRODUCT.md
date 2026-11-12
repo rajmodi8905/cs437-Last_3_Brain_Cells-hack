@@ -1,4 +1,4 @@
-# Campus Recall product context
+# AnyRecall product context
 
 Students at IIT Gandhinagar save academic and campus information across files, chats and websites, then forget where they put it. Two documented student interviews support the need to find saved originals and trust that saving succeeded. The full evidence is in SPEC.md and docs/user/.
 

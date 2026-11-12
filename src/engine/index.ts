@@ -224,163 +224,159 @@ export class LocalEngine implements EngineClient {
         throw new Error(
           'This browser does not support safe processing locks. Use a current Safari, Chrome or Firefox.',
         );
-      await navigator.locks.request(
-        'campus-recall-processor',
-        { ifAvailable: true },
-        async (lock) => {
-          if (!lock) return;
-          await this.repository.recoverInterruptedJobs();
-          await this.invalidateOldIndexes();
-          for (;;) {
-            if (this.disposed || !this.ready) break;
-            const claim = await this.repository.claimNextJob();
-            if (!claim) break;
-            const active = (this.active = { id: claim.item.id, cancelled: false });
-            // The whole job uses the model it started with, even if the student switches.
-            const model = this.model;
-            const check = () => {
-              if (active.cancelled || this.disposed) throw new Error('Processing cancelled.');
-            };
-            const progress = (
-              stage: EngineProgress['stage'],
-              message: string,
-              completedUnits?: number,
-              totalUnits?: number,
-            ) => this.emit({ stage, message, itemId: claim.item.id, completedUnits, totalUnits });
-            try {
-              const original = await this.repository.getOriginal(claim.item.id);
-              if (!original) throw new Error('The original file is unavailable.');
-              progress('extracting', 'Getting it ready to search');
-              let extracted: Extracted;
-              switch (claim.item.kind) {
-                case 'note':
-                case 'webpage':
-                  extracted = {
-                    parts: [{ text: await original.text(), location: { kind: 'whole' } }],
-                  };
-                  break;
-                case 'image':
-                  await assertDecodableImage(original);
-                  extracted = {
-                    parts: [
-                      {
-                        image: original,
-                        text: await imageOcr(original),
-                        location: { kind: 'whole' },
-                      },
-                    ],
-                  };
-                  break;
-                case 'pdf':
-                  extracted = await extractPdf(original, check, (n, total) =>
-                    progress('extracting', `Reading page ${n} of ${total}`, n, total),
+      await navigator.locks.request('anyrecall-processor', { ifAvailable: true }, async (lock) => {
+        if (!lock) return;
+        await this.repository.recoverInterruptedJobs();
+        await this.invalidateOldIndexes();
+        for (;;) {
+          if (this.disposed || !this.ready) break;
+          const claim = await this.repository.claimNextJob();
+          if (!claim) break;
+          const active = (this.active = { id: claim.item.id, cancelled: false });
+          // The whole job uses the model it started with, even if the student switches.
+          const model = this.model;
+          const check = () => {
+            if (active.cancelled || this.disposed) throw new Error('Processing cancelled.');
+          };
+          const progress = (
+            stage: EngineProgress['stage'],
+            message: string,
+            completedUnits?: number,
+            totalUnits?: number,
+          ) => this.emit({ stage, message, itemId: claim.item.id, completedUnits, totalUnits });
+          try {
+            const original = await this.repository.getOriginal(claim.item.id);
+            if (!original) throw new Error('The original file is unavailable.');
+            progress('extracting', 'Getting it ready to search');
+            let extracted: Extracted;
+            switch (claim.item.kind) {
+              case 'note':
+              case 'webpage':
+                extracted = {
+                  parts: [{ text: await original.text(), location: { kind: 'whole' } }],
+                };
+                break;
+              case 'image':
+                await assertDecodableImage(original);
+                extracted = {
+                  parts: [
+                    {
+                      image: original,
+                      text: await imageOcr(original),
+                      location: { kind: 'whole' },
+                    },
+                  ],
+                };
+                break;
+              case 'pdf':
+                extracted = await extractPdf(original, check, (n, total) =>
+                  progress('extracting', `Reading page ${n} of ${total}`, n, total),
+                );
+                break;
+              default:
+                extracted = await extractMedia(claim.item, original, check);
+            }
+            check();
+            if (extracted.samples) {
+              progress('transcribing', 'Turning speech into text on this device');
+              const speech = await this.models.transcribe(extracted.samples);
+              check();
+              for (const chunk of speech.chunks ?? [])
+                if (chunk.text.trim()) {
+                  const startMs = Math.max(0, chunk.timestamp[0] * 1000);
+                  const endMs = Math.min(
+                    extracted.durationMs!,
+                    Math.max(
+                      startMs + 1,
+                      (chunk.timestamp[1] ?? extracted.durationMs! / 1000) * 1000,
+                    ),
                   );
-                  break;
-                default:
-                  extracted = await extractMedia(claim.item, original, check);
-              }
-              check();
-              if (extracted.samples) {
-                progress('transcribing', 'Turning speech into text on this device');
-                const speech = await this.models.transcribe(extracted.samples);
-                check();
-                for (const chunk of speech.chunks ?? [])
-                  if (chunk.text.trim()) {
-                    const startMs = Math.max(0, chunk.timestamp[0] * 1000);
-                    const endMs = Math.min(
-                      extracted.durationMs!,
-                      Math.max(
-                        startMs + 1,
-                        (chunk.timestamp[1] ?? extracted.durationMs! / 1000) * 1000,
-                      ),
-                    );
-                    extracted.parts.push({
-                      text: chunk.text.trim(),
-                      location: { kind: 'time', startMs, endMs },
-                    });
-                  }
-                extracted.samples = undefined;
-              }
-              const segments: IndexedSegment[] = [];
-              let pictureOnly = false;
-              const add = (
-                modality: 'text' | 'visual',
-                location: SourceLocation,
-                vector: Float32Array,
-                text?: string,
-              ) =>
-                segments.push({
-                  id: crypto.randomUUID(),
-                  itemId: claim.item.id,
-                  modality,
-                  location,
-                  vector,
-                  text,
-                  indexVersion: model.indexVersion,
-                });
-              for (let i = 0; i < extracted.parts.length; i++) {
-                check();
-                const part = extracted.parts[i];
-                progress(
-                  'embedding',
-                  `Getting it ready to search (${i + 1} of ${extracted.parts.length})`,
-                  i,
-                  extracted.parts.length,
-                );
-                if (part.text?.trim())
-                  for (const chunk of await this.embedder(model).documents(
-                    part.text,
-                    embeddingTitle(claim.item, part.text),
-                  )) {
-                    check();
-                    add('text', part.location, chunk.vector, chunk.text);
-                  }
-                if (part.image && !model.visual) {
-                  pictureOnly = true;
-                  part.image = undefined;
+                  extracted.parts.push({
+                    text: chunk.text.trim(),
+                    location: { kind: 'time', startMs, endMs },
+                  });
                 }
-                if (part.image) {
-                  const vector = await this.models.image(part.image);
-                  check();
-                  add('visual', part.location, vector);
-                  part.image = undefined;
-                }
-              }
-              if (!segments.length && pictureOnly)
-                throw new Error(
-                  `There is no text or speech to search here, and your own search model cannot search what is in a picture or video. Switch to ${GEMMA.label} in Settings to search it. The original is still saved and can be opened.`,
-                );
-              if (!segments.length)
-                throw new Error(
-                  'No searchable content was extracted. The original is still saved and can be opened.',
-                );
-              check();
-              progress('publishing', 'Finishing up');
-              const published = await this.repository.publishSegments(claim, segments, {
-                durationMs: extracted.durationMs,
-                pageCount: extracted.pageCount,
+              extracted.samples = undefined;
+            }
+            const segments: IndexedSegment[] = [];
+            let pictureOnly = false;
+            const add = (
+              modality: 'text' | 'visual',
+              location: SourceLocation,
+              vector: Float32Array,
+              text?: string,
+            ) =>
+              segments.push({
+                id: crypto.randomUUID(),
+                itemId: claim.item.id,
+                modality,
+                location,
+                vector,
+                text,
+                indexVersion: model.indexVersion,
               });
-              if (published) progress('ready', 'Ready to search');
-              else
-                await this.repository.failJob(claim, {
-                  code: 'INDEX_INCOMPATIBLE',
-                  message: 'The search index did not pass validation. The original is still saved.',
-                  retryable: true,
-                });
-            } catch (cause) {
-              const message = cause instanceof Error ? cause.message : String(cause);
+            for (let i = 0; i < extracted.parts.length; i++) {
+              check();
+              const part = extracted.parts[i];
+              progress(
+                'embedding',
+                `Getting it ready to search (${i + 1} of ${extracted.parts.length})`,
+                i,
+                extracted.parts.length,
+              );
+              if (part.text?.trim())
+                for (const chunk of await this.embedder(model).documents(
+                  part.text,
+                  embeddingTitle(claim.item, part.text),
+                )) {
+                  check();
+                  add('text', part.location, chunk.vector, chunk.text);
+                }
+              if (part.image && !model.visual) {
+                pictureOnly = true;
+                part.image = undefined;
+              }
+              if (part.image) {
+                const vector = await this.models.image(part.image);
+                check();
+                add('visual', part.location, vector);
+                part.image = undefined;
+              }
+            }
+            if (!segments.length && pictureOnly)
+              throw new Error(
+                `There is no text or speech to search here, and your own search model cannot search what is in a picture or video. Switch to ${GEMMA.label} in Settings to search it. The original is still saved and can be opened.`,
+              );
+            if (!segments.length)
+              throw new Error(
+                'No searchable content was extracted. The original is still saved and can be opened.',
+              );
+            check();
+            progress('publishing', 'Finishing up');
+            const published = await this.repository.publishSegments(claim, segments, {
+              durationMs: extracted.durationMs,
+              pageCount: extracted.pageCount,
+            });
+            if (published) progress('ready', 'Ready to search');
+            else
               await this.repository.failJob(claim, {
-                code: 'EXTRACTION_FAILED',
-                message,
+                code: 'INDEX_INCOMPATIBLE',
+                message: 'The search index did not pass validation. The original is still saved.',
                 retryable: true,
               });
-              progress('failed', message);
-            } finally {
-              this.active = undefined;
-            }
+          } catch (cause) {
+            const message = cause instanceof Error ? cause.message : String(cause);
+            await this.repository.failJob(claim, {
+              code: 'EXTRACTION_FAILED',
+              message,
+              retryable: true,
+            });
+            progress('failed', message);
+          } finally {
+            this.active = undefined;
           }
-        },
-      );
+        }
+      });
     })()
       .catch((cause) =>
         this.emit({

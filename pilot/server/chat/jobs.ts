@@ -4,14 +4,16 @@ import type { BotJob, BotStore, JobKind } from '../whatsapp/store';
 
 /**
  * A job that would fail the same way every time, so it fails at once instead of being retried.
- * For an index job, `reply` replaces the usual message to the student.
+ * For an index job, `reply` replaces the usual message to the student, and `cause` keeps the
+ * error it came from, so a channel can word its own message from the real reason.
  */
 export class PermanentJobError extends Error {
   constructor(
     message: string,
     readonly reply?: string,
+    options?: { cause?: unknown },
   ) {
-    super(message);
+    super(message, options);
     this.name = 'PermanentJobError';
   }
 }

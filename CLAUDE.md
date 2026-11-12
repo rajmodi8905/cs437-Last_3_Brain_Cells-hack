@@ -1,4 +1,4 @@
-# Campus Recall (Last 3 Brain Cells)
+# AnyRecall (Last 3 Brain Cells)
 
 Local-first PWA: save files and notes, search by meaning on the device, open the exact original. React + Vite + TypeScript, Node 24.
 

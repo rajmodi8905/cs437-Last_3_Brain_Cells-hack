@@ -13,9 +13,9 @@ import type { BotJob, BotStore, JobKind, WaMedia, WaMessage, WhatsAppSender } fr
 
 export const REPLIES = {
   help: "Forward things here to save them, or start a message with 'note ' to save it as a note.",
-  saved: (title: string) => `Saved to Campus Recall: ${title}`,
+  saved: (title: string) => `Saved to AnyRecall: ${title}`,
   failed: "Couldn't save this. Please send it again.",
-  full: 'Your Campus Recall library is full, so this was not saved.',
+  full: 'Your AnyRecall library is full, so this was not saved.',
   empty: 'This file is empty, so it was not saved.',
   voice: "Can't save voice notes yet.",
   audio: "Can't save audio files yet.",
@@ -30,9 +30,9 @@ export const REPLIES = {
   bigPdf: `This PDF is over ${LIMITS.maxPdfBytes / 1_000_000} MB, so it was not saved.`,
   longNote: `This note is over ${LIMITS.maxTextCodePoints.toLocaleString('en-US')} characters, so it was not saved.`,
   notSearchable: (title: string) =>
-    `Couldn't make "${title}" searchable, but it is still saved in Campus Recall.`,
+    `Couldn't make "${title}" searchable, but it is still saved in AnyRecall.`,
   indexFull: (title: string) =>
-    `Your Campus Recall library is full, so "${title}" was saved but can't be searched yet.`,
+    `Your AnyRecall library is full, so "${title}" was saved but can't be searched yet.`,
 };
 
 const IMAGE_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp']);

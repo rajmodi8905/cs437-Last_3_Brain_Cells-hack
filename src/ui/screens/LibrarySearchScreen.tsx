@@ -1,10 +1,10 @@
 import { ArrowUpRight, ChevronRight, LoaderCircle, X } from 'lucide-react';
-import type { CampusRecallModel } from '../../app/useCampusRecall';
+import type { AnyRecallModel } from '../../app/useAnyRecall';
 import { kinds, kindLabels } from '../presentation';
 import { ItemRow } from '../ItemRow';
 import { CloudResultRow } from '../../../pilot/ui/CloudResultRow';
 import { SearchSetupCard } from '../SearchSetupCard';
-export function LibrarySearchScreen({ model }: { model: CampusRecallModel }) {
+export function LibrarySearchScreen({ model }: { model: AnyRecallModel }) {
   const {
     screen,
     ready,

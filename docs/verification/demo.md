@@ -1,4 +1,4 @@
-# Campus Recall demo
+# AnyRecall demo
 
 Use the merged application's local checker or the [deployed pilot](https://campusrecall.indiasouthcentral.cloudapp.azure.com). All supplied course rules, dates, announcements, recordings and drawings are **synthetic demonstration data**, not official IITGN information or interview evidence. Do not import private student material into a public demonstration profile. A demo rehearsal is a procedure, not evidence that every step has passed on a physical phone.
 

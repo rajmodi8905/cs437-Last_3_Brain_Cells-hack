@@ -1,7 +1,7 @@
 import 'fake-indexeddb/auto';
 import { describe, expect, it } from 'vitest';
 import { LocalEngine } from '../../src/engine';
-import { CampusRecallDatabase, DexieLibraryRepository } from '../../src/storage';
+import { AnyRecallDatabase, DexieLibraryRepository } from '../../src/storage';
 import { PILOT_INDEX_VERSIONS } from '../contract';
 
 const unit = (axis: number) => Float32Array.from({ length: 768 }, (_, i) => (i === axis ? 1 : 0));
@@ -18,7 +18,7 @@ const cloudSegment = (globalId: string, kind: 'pdf' | 'image', axis: number) => 
 
 function engineWithQueryVector(vector: Float32Array) {
   const repository = new DexieLibraryRepository(
-    new CampusRecallDatabase(`campus-recall-test-${Math.random().toString(16).slice(2)}`),
+    new AnyRecallDatabase(`anyrecall-test-${Math.random().toString(16).slice(2)}`),
   );
   const engine = new LocalEngine(repository);
   engine.ready = true;

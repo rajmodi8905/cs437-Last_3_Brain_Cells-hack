@@ -1,5 +1,5 @@
 # Local checker/development stack. Production uses pilot/deploy/compose.yaml.
-name: campus-recall-checker
+name: anyrecall-checker
 
 x-blob: &blob >-
   DefaultEndpointsProtocol=http;AccountName=devstoreaccount1;AccountKey=Eby8vdM02xNOcqFlqUwJPLlmEtlCDXJ1OUzFT50uSRZ6IFsuFq2UVErCz4I6tq/K1SZFPTOtr/KBHBeksoGMGw==;BlobEndpoint=http://azurite:10000/devstoreaccount1;
@@ -11,9 +11,9 @@ services:
       dockerfile: pilot/deploy/Dockerfile
       target: checker
     init: true
-    ports: ['127.0.0.1:${CAMPUS_RECALL_PORT:-4600}:4600']
+    ports: ['127.0.0.1:${ANYRECALL_PORT:-4600}:4600']
     environment:
-      PILOT_ORIGIN: http://localhost:${CAMPUS_RECALL_PORT:-4600}
+      PILOT_ORIGIN: http://localhost:${ANYRECALL_PORT:-4600}
       PILOT_DATABASE_URL: postgres://pilot:local-checker-only@postgres:5432/pilot
       PILOT_BLOB_CONNECTION_STRING: *blob
     volumes:

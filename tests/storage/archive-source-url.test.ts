@@ -2,7 +2,7 @@
 // (issue #44). The Viewer shows sourceUrl as a link for every kind.
 import { expect, it } from 'vitest';
 import { strToU8, zipSync } from 'fflate';
-import { CampusRecallDatabase, DexieLibraryRepository } from '../../src/storage/index.js';
+import { AnyRecallDatabase, DexieLibraryRepository } from '../../src/storage/index.js';
 
 const archiveWith = async (kind: 'note' | 'pdf', sourceUrl: string) => {
   const id = crypto.randomUUID();
@@ -14,7 +14,7 @@ const archiveWith = async (kind: 'note' | 'pdf', sourceUrl: string) => {
     byte.toString(16).padStart(2, '0'),
   ).join('');
   const manifest = {
-    format: 'campus-recall',
+    format: 'anyrecall',
     version: 1,
     exportedAt: Date.now(),
     items: [
@@ -42,7 +42,7 @@ const archiveWith = async (kind: 'note' | 'pdf', sourceUrl: string) => {
 
 it('rejects a non-web source link on any imported item kind', async () => {
   const repository = new DexieLibraryRepository(
-    new CampusRecallDatabase(`test-${crypto.randomUUID()}`),
+    new AnyRecallDatabase(`test-${crypto.randomUUID()}`),
   );
   await repository.open();
   for (const kind of ['note', 'pdf'] as const)
@@ -55,7 +55,7 @@ it('rejects a non-web source link on any imported item kind', async () => {
 
 it('accepts only plain text as the type of an imported note', async () => {
   const repository = new DexieLibraryRepository(
-    new CampusRecallDatabase(`test-${crypto.randomUUID()}`),
+    new AnyRecallDatabase(`test-${crypto.randomUUID()}`),
   );
   await repository.open();
   const noteWithType = async (mimeType: string) => {
@@ -66,7 +66,7 @@ it('accepts only plain text as the type of an imported note', async () => {
       (byte) => byte.toString(16).padStart(2, '0'),
     ).join('');
     const manifest = {
-      format: 'campus-recall',
+      format: 'anyrecall',
       version: 1,
       exportedAt: Date.now(),
       items: [

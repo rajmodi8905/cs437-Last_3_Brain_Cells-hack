@@ -132,7 +132,7 @@ if (command === 'prepare') {
     const config = join(privateDirectory, 'certificate.cnf');
     await writeFile(
       config,
-      `[req]\ndistinguished_name=dn\nprompt=no\n[dn]\nCN=Campus Recall Local QA Root\n[v3_ca]\nbasicConstraints=critical,CA:TRUE,pathlen:0\nkeyUsage=critical,keyCertSign,cRLSign\nsubjectKeyIdentifier=hash\n[server_cert]\nbasicConstraints=critical,CA:FALSE\nkeyUsage=critical,digitalSignature,keyEncipherment\nextendedKeyUsage=serverAuth\nsubjectKeyIdentifier=hash\nauthorityKeyIdentifier=keyid,issuer\nsubjectAltName=DNS:localhost,IP:127.0.0.1${address === '127.0.0.1' ? '' : `,IP:${address}`}\n`,
+      `[req]\ndistinguished_name=dn\nprompt=no\n[dn]\nCN=AnyRecall Local QA Root\n[v3_ca]\nbasicConstraints=critical,CA:TRUE,pathlen:0\nkeyUsage=critical,keyCertSign,cRLSign\nsubjectKeyIdentifier=hash\n[server_cert]\nbasicConstraints=critical,CA:FALSE\nkeyUsage=critical,digitalSignature,keyEncipherment\nextendedKeyUsage=serverAuth\nsubjectKeyIdentifier=hash\nauthorityKeyIdentifier=keyid,issuer\nsubjectAltName=DNS:localhost,IP:127.0.0.1${address === '127.0.0.1' ? '' : `,IP:${address}`}\n`,
       { mode: 0o600 },
     );
     const openssl = (...arguments_) => execFileSync('openssl', arguments_, { stdio: 'pipe' });
@@ -170,7 +170,7 @@ if (command === 'prepare') {
       '-out',
       csr,
       '-subj',
-      '/CN=Campus Recall Local QA Server',
+      '/CN=AnyRecall Local QA Server',
       '-config',
       config,
     );
@@ -212,7 +212,7 @@ if (command === 'prepare') {
       'Source inputs changed during preparation. Prepare a new session from stable files.',
     );
   const metadata = {
-    kind: 'Campus Recall local device session',
+    kind: 'AnyRecall local device session',
     version: 1,
     preparedAt: new Date().toISOString(),
     address,

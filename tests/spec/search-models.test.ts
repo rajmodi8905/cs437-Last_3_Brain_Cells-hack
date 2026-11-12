@@ -23,7 +23,7 @@ import {
   chooseThreshold,
 } from '../../src/engine/calibration';
 import { assetsFor, offlineStatus, setupAssets, type AssetManifest } from '../../src/engine/assets';
-import { CampusRecallDatabase, DexieLibraryRepository } from '../../src/storage/index';
+import { AnyRecallDatabase, DexieLibraryRepository } from '../../src/storage/index';
 import type { IndexedSegment, SearchableSegment } from '../../src/shared';
 
 afterEach(() => vi.unstubAllGlobals());
@@ -426,7 +426,7 @@ it('[S16] ranking with explicit thresholds matches the frozen ranking exactly', 
 
 async function claimedNote() {
   const repository = new DexieLibraryRepository(
-    new CampusRecallDatabase(`s16-${crypto.randomUUID()}`),
+    new AnyRecallDatabase(`s16-${crypto.randomUUID()}`),
   );
   await repository.open();
   const item = await repository.save({ kind: 'note', text: 'Lab moved to room 204.' });

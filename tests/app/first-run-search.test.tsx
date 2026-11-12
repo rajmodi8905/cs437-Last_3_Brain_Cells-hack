@@ -5,7 +5,7 @@
 import { afterEach, expect, it, vi } from 'vitest';
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { App } from '../../src/ui/App';
-import type { CampusRecallServices } from '../../src/app/services';
+import type { AnyRecallServices } from '../../src/app/services';
 import type { LibraryItem, ProgressListener } from '../../src/shared';
 import { AppOperationError } from '../../src/shared';
 
@@ -61,7 +61,7 @@ function stubServices(items: LibraryItem[] = []) {
     },
     dispose: vi.fn(async () => {}),
   };
-  const services: CampusRecallServices = {
+  const services: AnyRecallServices = {
     initialize: vi.fn(async () => {}),
     subscribeLibrary(next) {
       next(items);
@@ -81,7 +81,7 @@ function stubServices(items: LibraryItem[] = []) {
       exportItems: vi.fn(),
       importArchive: vi.fn(),
     },
-    engine: engine as unknown as CampusRecallServices['engine'],
+    engine: engine as unknown as AnyRecallServices['engine'],
     capture: {
       captureWebpage: vi.fn(),
       extractHtml: vi.fn(),
@@ -112,7 +112,7 @@ const note: LibraryItem = {
   processingGeneration: 1,
 };
 
-async function searchFor(services: CampusRecallServices, text: string) {
+async function searchFor(services: AnyRecallServices, text: string) {
   render(<App services={services} />);
   await waitFor(() => expect(services.initialize).toHaveBeenCalledOnce());
   fireEvent.change(screen.getByRole('textbox', { name: 'Search saved information' }), {

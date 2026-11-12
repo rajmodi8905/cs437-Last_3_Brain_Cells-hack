@@ -10,7 +10,7 @@ export async function verifyRelease(
   expectedManifestPath = 'public/asset-manifest.json',
 ) {
   if (!/^\/(?:[A-Za-z0-9_-]+\/)*$/.test(basePath))
-    throw Error('Supply a base path such as / or /campus-recall/.');
+    throw Error('Supply a base path such as / or /anyrecall/.');
   directory = resolve(directory);
   const files = [];
   async function walk(prefix = '') {

@@ -43,7 +43,7 @@ self.addEventListener('fetch', (event) => {
         const cached = await (await caches.open(ASSET_CACHE)).match(lookup);
         return (
           cached ??
-          (event.request.headers.get('X-Campus-Recall-Setup') === '1'
+          (event.request.headers.get('X-AnyRecall-Setup') === '1'
             ? fetch(event.request)
             : new Response('Offline asset missing. Repair setup in Settings.', { status: 503 }))
         );

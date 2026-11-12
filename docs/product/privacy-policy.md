@@ -2,13 +2,13 @@
 
 Version 1.0 · Updated 23 October 2026
 
-Campus Recall is a student project by Raj Modi, Chaitanya and Nakshatra. This policy describes the application in this repository. The team must review it again if hosting or data handling changes.
+AnyRecall is a student project by Raj Modi, Chaitanya and Nakshatra. This policy describes the application in this repository. The team must review it again if hosting or data handling changes.
 
 ## Your library stays in this browser
 
 Original files, notes, saved webpage text, titles, source URLs, extracted text, transcripts, embeddings and processing records are stored in IndexedDB on your device. Downloaded models and runtimes are stored in the browser's Cache Storage. No account is required. Libraries on different devices do not automatically synchronize.
 
-Campus Recall does not upload library content, extracted data, embeddings or search queries for storage, analytics or inference. The application has no advertising or analytics. Local storage is not application-level encrypted. Someone with access to this browser profile may be able to access your library.
+AnyRecall does not upload library content, extracted data, embeddings or search queries for storage, analytics or inference. The application has no advertising or analytics. Local storage is not application-level encrypted. Someone with access to this browser profile may be able to access your library.
 
 ## Requests that need internet
 
@@ -22,7 +22,7 @@ Opening an original website, the project repository or its issue tracker leaves 
 
 ## Offline use and browser storage
 
-After setup, core file processing, search and opening saved originals work without internet. The browser and operating system still control storage, permissions, eviction and backups. Campus Recall cannot prevent site data being cleared or determine whether the OS or browser backs up local data. Persistent storage requests are best-effort and do not replace backups.
+After setup, core file processing, search and opening saved originals work without internet. The browser and operating system still control storage, permissions, eviction and backups. AnyRecall cannot prevent site data being cleared or determine whether the OS or browser backs up local data. Persistent storage requests are best-effort and do not replace backups.
 
 ## Delete, export and restore
 

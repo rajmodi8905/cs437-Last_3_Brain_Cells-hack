@@ -550,7 +550,7 @@ describe.each(backends)('WhatsApp conversation: %s', (name, available, open) => 
       // Jobs that arrive together run in queue order, so the titles may come in any order.
       const replies = texts().slice(before);
       expect(replies).toHaveLength(1);
-      expect(replies[0]).toMatch(/^Saved 3 items to Campus Recall: /);
+      expect(replies[0]).toMatch(/^Saved 3 items to AnyRecall: /);
       expect(replies[0].split(': ')[1].split(', ').sort()).toEqual(['One', 'Three', 'Two']);
       // Running again sends nothing more: every reply was claimed.
       await worker.drain();
@@ -616,7 +616,7 @@ describe.each(backends)('WhatsApp conversation: %s', (name, available, open) => 
       await t.conversation.flush();
       const replies = t.texts().slice(before);
       expect(replies).toHaveLength(2);
-      expect(replies[1]).toMatch(/^Saved to Campus Recall: A\d$/);
+      expect(replies[1]).toMatch(/^Saved to AnyRecall: A\d$/);
     });
   });
 

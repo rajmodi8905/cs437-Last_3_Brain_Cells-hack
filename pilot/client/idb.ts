@@ -36,7 +36,7 @@ export class IndexedDbSyncStateStore implements SyncStateStore {
    */
   constructor(account: string, options?: DexieOptions) {
     if (!/^[A-Za-z0-9]{8,64}$/.test(account)) throw new Error('Invalid account ID.');
-    this.databaseName = `campus-recall-pilot-sync-${account}`;
+    this.databaseName = `anyrecall-pilot-sync-${account}`;
     this.database = new SyncStateDatabase(this.databaseName, options);
   }
 

@@ -1,7 +1,7 @@
 import 'fake-indexeddb/auto';
 import { IDBFactory, IDBKeyRange } from 'fake-indexeddb';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { CampusRecallDatabase, DexieLibraryRepository } from '../../src/storage';
+import { AnyRecallDatabase, DexieLibraryRepository } from '../../src/storage';
 import { createApiClient } from '../client/api';
 import { IndexedDbSyncStateStore } from '../client/idb';
 import { repositoryLibrary } from '../client/library';
@@ -20,8 +20,8 @@ const pdfBytes = new TextEncoder().encode(
 const unique = () => Math.random().toString(16).slice(2, 12);
 
 async function appDevice() {
-  const libraryName = `campus-recall-test-${unique()}`;
-  const repository = new DexieLibraryRepository(new CampusRecallDatabase(libraryName));
+  const libraryName = `anyrecall-test-${unique()}`;
+  const repository = new DexieLibraryRepository(new AnyRecallDatabase(libraryName));
   const net = deviceFetch();
   const api = createApiClient({ base: pilot.base, fetch: net.fetchImpl });
   const session = await api.signIn(idToken());
@@ -42,7 +42,7 @@ async function appDevice() {
 describe('Adapter around the app library', () => {
   it('reads items and exact originals from the real Dexie library', async () => {
     const repository = new DexieLibraryRepository(
-      new CampusRecallDatabase(`campus-recall-test-${unique()}`),
+      new AnyRecallDatabase(`anyrecall-test-${unique()}`),
     );
     const saved = await repository.save({
       kind: 'file',

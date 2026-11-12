@@ -39,8 +39,8 @@ export default defineConfig({
       filename: 'sw.ts',
       injectRegister: false,
       manifest: {
-        name: 'Campus Recall',
-        short_name: 'Recall',
+        name: 'AnyRecall',
+        short_name: 'AnyRecall',
         description: 'Save campus information and find the original on this device.',
         start_url: './#/library',
         scope: './',

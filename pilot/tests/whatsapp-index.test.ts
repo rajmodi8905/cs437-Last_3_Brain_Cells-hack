@@ -9,7 +9,7 @@ import { createServer, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { afterEach, describe, expect, it } from 'vitest';
 import { LocalEngine } from '../../src/engine';
-import { CampusRecallDatabase, DexieLibraryRepository } from '../../src/storage';
+import { AnyRecallDatabase, DexieLibraryRepository } from '../../src/storage';
 import {
   PILOT_INDEX_VERSIONS,
   searchMetadataDigest,
@@ -259,7 +259,7 @@ describe.each(backends)('W7 server indexing: %s', (name, available, open) => {
     expect(valid).toEqual({ ok: true, value: stored?.index });
     expect(bundle).toMatchObject({ dimension: 768, indexVersion: VERSION });
     // Nothing but the confirmation was sent.
-    expect(graph.textsTo(BSUID_A)).toEqual(['Saved to Campus Recall: Hostel guest rules.pdf']);
+    expect(graph.textsTo(BSUID_A)).toEqual(['Saved to AnyRecall: Hostel guest rules.pdf']);
   });
 
   it('a device can still replace the server-made bundle through the usual route', async () => {
@@ -309,7 +309,7 @@ describe.each(backends)('W7 server indexing: %s', (name, available, open) => {
     clock.now += 7200;
     expect(await worker.drain()).toBe(0);
     expect(graph.textsTo(BSUID_A)).toEqual([
-      'Saved to Campus Recall: Mess menu.pdf',
+      'Saved to AnyRecall: Mess menu.pdf',
       REPLIES.indexFull('Mess menu.pdf'),
     ]);
   });
@@ -328,7 +328,7 @@ describe.each(backends)('W7 server indexing: %s', (name, available, open) => {
     expect(engine.calls).toEqual([]);
     expect((await bot.getJob(jobId('index', wamid)))?.state).toBe('done');
     expect(await objects.list(`${OWNER_A}/`)).toEqual([]);
-    expect(graph.textsTo(BSUID_A)).toEqual(['Saved to Campus Recall: First.pdf']);
+    expect(graph.textsTo(BSUID_A)).toEqual(['Saved to AnyRecall: First.pdf']);
   });
 
   it('publishes nothing for an item deleted while it was being indexed', async () => {
@@ -349,7 +349,7 @@ describe.each(backends)('W7 server indexing: %s', (name, available, open) => {
     expect((await item(wamid))?.index).toBeUndefined();
     expect(await objects.list(`${OWNER_A}/`)).toEqual([]);
     expect((await bot.getJob(jobId('index', wamid)))?.state).toBe('done');
-    expect(graph.textsTo(BSUID_A)).toEqual(['Saved to Campus Recall: Second.pdf']);
+    expect(graph.textsTo(BSUID_A)).toEqual(['Saved to AnyRecall: Second.pdf']);
   });
 
   it('indexes again with the new title when the item is renamed meanwhile', async () => {
@@ -392,8 +392,8 @@ describe.each(backends)('W7 server indexing: %s', (name, available, open) => {
     expect(await makeWorker().drain()).toBe(0);
     expect(engine.calls).toHaveLength(1);
     expect(graph.textsTo(BSUID_A)).toEqual([
-      'Saved to Campus Recall: Scanned notice.pdf',
-      'Couldn\'t make "Scanned notice.pdf" searchable, but it is still saved in Campus Recall.',
+      'Saved to AnyRecall: Scanned notice.pdf',
+      'Couldn\'t make "Scanned notice.pdf" searchable, but it is still saved in AnyRecall.',
     ]);
   });
 
@@ -420,7 +420,7 @@ describe.each(backends)('W7 server indexing: %s', (name, available, open) => {
     expect((await bot.getJob(jobId('index', wamid)))?.state).toBe('done');
     expect((await item(wamid))?.index?.indexVersion).toBe(VERSION);
     expect(engine.calls).toHaveLength(3);
-    expect(graph.textsTo(BSUID_A)).toEqual(['Saved to Campus Recall: Lab manual.pdf']);
+    expect(graph.textsTo(BSUID_A)).toEqual(['Saved to AnyRecall: Lab manual.pdf']);
   });
 
   it('after the last attempt the job fails and the student is told once', async () => {
@@ -438,7 +438,7 @@ describe.each(backends)('W7 server indexing: %s', (name, available, open) => {
     clock.now += 3600;
     expect(await worker.drain()).toBe(0);
     expect(graph.textsTo(BSUID_A)).toEqual([
-      'Saved to Campus Recall: Timetable.pdf',
+      'Saved to AnyRecall: Timetable.pdf',
       REPLIES.notSearchable('Timetable.pdf'),
     ]);
   });
@@ -486,7 +486,7 @@ describe('Engine host page logic', () => {
   const unit = (axis: number) => Array.from({ length: 768 }, (_, i) => (i === axis ? 1 : 0));
   function host() {
     const repository = new DexieLibraryRepository(
-      new CampusRecallDatabase(`engine-host-test-${Math.random().toString(16).slice(2)}`),
+      new AnyRecallDatabase(`engine-host-test-${Math.random().toString(16).slice(2)}`),
     );
     const engine = new LocalEngine(repository);
     engine.ready = true;

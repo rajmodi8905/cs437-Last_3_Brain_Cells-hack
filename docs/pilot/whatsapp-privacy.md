@@ -1,8 +1,8 @@
-# Campus Recall on WhatsApp: privacy
+# AnyRecall on WhatsApp: privacy
 
 Pilot version 2.1 · Updated 11 November 2026
 
-This page is for students who message the Campus Recall bot on WhatsApp. It adds to the pilot Privacy Policy (docs/pilot/privacy-policy.md in the repository) and does not change it for anyone else. Campus Recall is a student project, not an official IIT Gandhinagar service. Using the bot is your choice: if you never message it, nothing on this page applies to you.
+This page is for students who message the AnyRecall bot on WhatsApp. It adds to the pilot Privacy Policy (docs/pilot/privacy-policy.md in the repository) and does not change it for anyone else. AnyRecall is a student project, not an official IIT Gandhinagar service. Using the bot is your choice: if you never message it, nothing on this page applies to you.
 
 ## Using the bot is opt-in
 
@@ -28,11 +28,11 @@ WhatsApp normally encrypts chats end to end. A chat with a business that uses Me
 
 Our server, on Microsoft Azure, stores and processes your files to make them searchable, and sees the searches you type to the bot, because it searches on the server for you. Storage is encrypted at rest but not end to end: the project's operators and the cloud provider can technically access it. We do not use your files or searches for advertising, analytics or training models, and we do not share them with other students.
 
-The Campus Recall app's own promise is unchanged: for students who do not use the bot, files and searches stay on their device, and nothing is uploaded unless they sign in and choose to include their library.
+The AnyRecall app's own promise is unchanged: for students who do not use the bot, files and searches stay on their device, and nothing is uploaded unless they sign in and choose to include their library.
 
 ## Using it in the app
 
-Send `OPEN` (or tap "Open in app" after a search) for a link that opens your WhatsApp library in the Campus Recall app. The link works once, for 10 minutes. The app lists and searches your WhatsApp items without uploading the library already on that device, unless you choose "Include this device's library", as for any account.
+Send `OPEN` (or tap "Open in app" after a search) for a link that opens your WhatsApp library in the AnyRecall app. The link works once, for 10 minutes. The app lists and searches your WhatsApp items without uploading the library already on that device, unless you choose "Include this device's library", as for any account.
 
 ## Stopping and deleting
 

@@ -117,7 +117,7 @@ it('provides real phone-downloadable synthetic fixtures and no private key/libra
 });
 
 it('serves app, manifest, service worker and media runtime with usable MIME types over verified TLS', async () => {
-  expect((await request('/')).body.toString()).toContain('Campus Recall');
+  expect((await request('/')).body.toString()).toContain('AnyRecall');
   expect((await request('/manifest.webmanifest')).status).toBe(200);
   expect((await request('/sw.js')).status).toBe(200);
   expect((await request('/runtime/ffmpeg/ffmpeg-core.wasm', 'HEAD')).type).toContain(
@@ -168,7 +168,7 @@ it('serves the certificate-supplied QA command over HTTP/1.1 too', async () => {
         response.on('end', () => resolve(body));
       }).on('error', reject),
     );
-    expect(text).toContain('Campus Recall');
+    expect(text).toContain('AnyRecall');
     const endpoint = new URL(url);
     const protocol = await new Promise<string | false | null>((resolve, reject) => {
       const socket = connect(

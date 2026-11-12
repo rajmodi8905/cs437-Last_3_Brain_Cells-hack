@@ -32,10 +32,6 @@
   border: var(--rule);
   margin-bottom: 14px;
 }
-.brand strong {
-  display: block;
-  font-weight: 700;
-}
 .sidebar-label {
   font-family: var(--mono);
   font-size: 13px;

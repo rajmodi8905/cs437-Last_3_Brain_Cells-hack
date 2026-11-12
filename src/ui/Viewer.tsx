@@ -263,7 +263,7 @@ export function Viewer({
           onClick={() =>
             void repository.exportItems!([item.id])
               .then((archive) => {
-                downloadBlob(archive, `campus-recall-${item.id}.zip`);
+                downloadBlob(archive, `anyrecall-${item.id}.zip`);
                 onNotify?.('Item backup created. Keep this unencrypted ZIP somewhere private.');
               })
               .catch((cause) => setError(plainMessage(cause)))

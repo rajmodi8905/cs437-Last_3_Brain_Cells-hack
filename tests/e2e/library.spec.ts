@@ -128,7 +128,7 @@ test('duplicate titles open exact originals and a missing source never substitut
   const oldest = await page.evaluate(
     () =>
       new Promise<any>((resolve, reject) => {
-        const request = indexedDB.open('campus-recall');
+        const request = indexedDB.open('anyrecall');
         request.onsuccess = () => {
           const db = request.result;
           const tx = db.transaction('items');
@@ -146,7 +146,7 @@ test('duplicate titles open exact originals and a missing source never substitut
   await page.evaluate(
     (item) =>
       new Promise<void>((resolve, reject) => {
-        const request = indexedDB.open('campus-recall');
+        const request = indexedDB.open('anyrecall');
         request.onsuccess = () => {
           const db = request.result;
           const tx = db.transaction('originals', 'readwrite');

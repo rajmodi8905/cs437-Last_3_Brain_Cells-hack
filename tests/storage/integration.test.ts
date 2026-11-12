@@ -1,9 +1,9 @@
 import { expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { zipSync, strToU8 } from 'fflate';
-import { CampusRecallDatabase, DexieLibraryRepository } from '../../src/storage';
+import { AnyRecallDatabase, DexieLibraryRepository } from '../../src/storage';
 const repo = () =>
-  new DexieLibraryRepository(new CampusRecallDatabase(`integration-${crypto.randomUUID()}`));
+  new DexieLibraryRepository(new AnyRecallDatabase(`integration-${crypto.randomUUID()}`));
 const vector = () => new Float32Array(768).fill(1 / Math.sqrt(768));
 it('does not requeue ready items after an idempotent index request', async () => {
   const r = repo();
@@ -43,7 +43,7 @@ it('does not publish empty or unnormalized segments', async () => {
 });
 it('reports malformed JSON manifests consistently without writes', async () => {
   const r = repo();
-  for (const manifest of [null, { format: 'campus-recall', version: 1, items: [null] }]) {
+  for (const manifest of [null, { format: 'anyrecall', version: 1, items: [null] }]) {
     const z = zipSync({ 'manifest.json': strToU8(JSON.stringify(manifest)) });
     await expect(r.importArchive(new Blob([z as BlobPart]))).rejects.toMatchObject({
       detail: { code: 'INVALID_ARCHIVE' },
@@ -72,7 +72,7 @@ it('recovers interrupted processing but rejects its previous claim', async () =>
 it('rejects archive entries outside the original-file namespace', async () => {
   const r = repo();
   const z = zipSync({
-    'manifest.json': strToU8('{"format":"campus-recall","version":1,"items":[]}'),
+    'manifest.json': strToU8('{"format":"anyrecall","version":1,"items":[]}'),
     'unexpected.js': strToU8('alert(1)'),
   });
   await expect(r.importArchive(new Blob([z as BlobPart]))).rejects.toMatchObject({

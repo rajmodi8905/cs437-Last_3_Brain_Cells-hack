@@ -7,7 +7,7 @@ import {
   type SearchResult,
   type SourceLocation,
 } from '../shared';
-import type { CampusRecallServices } from './services';
+import type { AnyRecallServices } from './services';
 import { useLibraryItems } from './useLibraryItems';
 import { backupCreatedMessage, downloadParts, exportLibrary } from './backup';
 import { plainError } from './plainError';
@@ -33,7 +33,7 @@ interface ScreenError {
   screen: string;
 }
 const NO_ERROR: ScreenError = { message: '', screen: '' };
-export function useCampusRecall(services: CampusRecallServices) {
+export function useAnyRecall(services: AnyRecallServices) {
   const { library: repository, engine } = services;
   const [statusFilter, setStatusFilter] = useState('');
   const [screen, setScreen] = useState(route);
@@ -466,7 +466,7 @@ export function useCampusRecall(services: CampusRecallServices) {
   const exportAll = () =>
     perform('export', async () => {
       const archives = await exportLibrary(repository, items);
-      await downloadParts(archives, `campus-recall-${new Date().toISOString().slice(0, 10)}`);
+      await downloadParts(archives, `anyrecall-${new Date().toISOString().slice(0, 10)}`);
       notify(backupCreatedMessage(archives.length));
     });
   const action = (value: LibraryItem, name: string) => {
@@ -577,4 +577,4 @@ export function useCampusRecall(services: CampusRecallServices) {
     services,
   };
 }
-export type CampusRecallModel = ReturnType<typeof useCampusRecall>;
+export type AnyRecallModel = ReturnType<typeof useAnyRecall>;

@@ -1,5 +1,5 @@
 import { ArrowUpRight, ChevronRight, LoaderCircle } from 'lucide-react';
-import type { CampusRecallModel } from '../../app/useCampusRecall';
+import type { AnyRecallModel } from '../../app/useAnyRecall';
 import { bytes } from '../hooks';
 import { AutoSyncSection } from '../../../pilot/ui/AutoSyncSection';
 import { SetupProgress, downloadSize } from '../SetupProgress';
@@ -7,7 +7,7 @@ import { SearchModelPicker } from '../SearchModelPicker';
 /** Browsers allow roughly a share of the disk, so the limit is given loosely. */
 const roughSize = (value: number) =>
   value >= 1e9 ? `${(value / 1e9).toFixed(1)} GB` : bytes(value);
-export function SettingsScreen({ model }: { model: CampusRecallModel }) {
+export function SettingsScreen({ model }: { model: AnyRecallModel }) {
   const {
     ready,
     downloadBytes,
@@ -206,9 +206,9 @@ export function SettingsScreen({ model }: { model: CampusRecallModel }) {
             Screen.
           </p>
           <p>
-            Campus Recall is a student project by Raj, Chaitanya and Nakshatra. It is not an
-            official IITGN service. Local only keeps a separate library on each device. Optional
-            Auto-sync shares included content through your private Azure cloud library.
+            AnyRecall is a student project by Raj, Chaitanya and Nakshatra. It is not an official
+            IITGN service. Local only keeps a separate library on each device. Optional Auto-sync
+            shares included content through your private Azure cloud library.
           </p>
           <a className="settings-policy" href="#/privacy">
             Privacy Policy <ChevronRight size={17} />

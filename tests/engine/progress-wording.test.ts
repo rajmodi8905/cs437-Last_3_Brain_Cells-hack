@@ -3,7 +3,7 @@
 // Uses the real engine loop and repository; the model call is a stub.
 import { afterEach, expect, it, vi } from 'vitest';
 import { LocalEngine } from '../../src/engine';
-import { CampusRecallDatabase, DexieLibraryRepository } from '../../src/storage';
+import { AnyRecallDatabase, DexieLibraryRepository } from '../../src/storage';
 import type { EngineProgress } from '../../src/shared';
 
 const locks = Object.getOwnPropertyDescriptor(navigator, 'locks');
@@ -21,7 +21,7 @@ it('describes each processing step in plain words', async () => {
     },
   });
   const repository = new DexieLibraryRepository(
-    new CampusRecallDatabase(`progress-wording-${crypto.randomUUID()}`),
+    new AnyRecallDatabase(`progress-wording-${crypto.randomUUID()}`),
   );
   const engine = new LocalEngine(repository);
   const vector = new Float32Array(768).fill(1 / Math.sqrt(768));

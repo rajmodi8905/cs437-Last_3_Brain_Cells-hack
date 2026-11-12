@@ -1,8 +1,8 @@
-# Campus Recall on Telegram: privacy
+# AnyRecall on Telegram: privacy
 
 Pilot version 2.3 · Updated 11 November 2026
 
-This page is for students who use the Campus Recall bot on Telegram. It adds to the pilot Privacy Policy (docs/pilot/privacy-policy.md in the repository) and does not change it for anyone else. Campus Recall is a student project, not an official IIT Gandhinagar service. Using the bot is your choice: if you never open it, nothing on this page applies to you.
+This page is for students who use the AnyRecall bot on Telegram. It adds to the pilot Privacy Policy (docs/pilot/privacy-policy.md in the repository) and does not change it for anyone else. AnyRecall is a student project, not an official IIT Gandhinagar service. Using the bot is your choice: if you never open it, nothing on this page applies to you.
 
 ## Using the bot is opt-in
 
@@ -10,11 +10,11 @@ When you tap Start, the bot sends a short notice and a **Log in with IITGN** but
 
 You must be 18 or older to use the bot.
 
-## Your Telegram chat is linked to your Campus Recall account
+## Your Telegram chat is linked to your AnyRecall account
 
-Logging in links this Telegram account to your IITGN account in Campus Recall. What you send the bot then goes into that account's cloud library: the same library the app's Auto-sync uses, so the items appear in the app on any device where you sign in and use Auto-sync. One Telegram account is linked to one IITGN account at a time; to use another, send `/logout` first. Linking always needs your IITGN account's own Google sign-in.
+Logging in links this Telegram account to your IITGN account in AnyRecall. What you send the bot then goes into that account's cloud library: the same library the app's Auto-sync uses, so the items appear in the app on any device where you sign in and use Auto-sync. One Telegram account is linked to one IITGN account at a time; to use another, send `/logout` first. Linking always needs your IITGN account's own Google sign-in.
 
-Whoever has your Telegram account can use the bot as you, and can open your cloud library from the bot's one-time "Open in app" links. Each link works once, for 10 minutes; `/logout` makes unused links stop working. Keep your Telegram account secure, and send `/logout` if you lose access to it or no longer want this.
+Whoever has your Telegram account can use the bot as you, and can open your cloud library from the bot's one-time "Open in browser" links. Each link works once, for 10 minutes; `/logout` makes unused links stop working. Keep your Telegram account secure, and send `/logout` if you lose access to it or no longer want this.
 
 ## What is stored
 
@@ -35,7 +35,7 @@ Telegram stores chats with bots on its own servers. Chats with bots are cloud ch
 
 Our server, on Microsoft Azure, stores and processes your files to make them searchable, and sees the searches you type to the bot, because it searches your library on the server for you (including items you synced from the app). Storage is encrypted at rest but not end to end: the project's operators and the cloud provider can technically access it. We do not use your files or searches for advertising, analytics or training models, and we do not share them with other students.
 
-The Campus Recall app's own promise is unchanged: for students who do not use the bot, files and searches stay on their device, and nothing is uploaded unless they sign in and choose to include their library. Opening the app from the bot does not upload the library already on that device unless you choose "Include this device's library", as for any sign-in.
+The AnyRecall app's own promise is unchanged: for students who do not use the bot, files and searches stay on their device, and nothing is uploaded unless they sign in and choose to include their library. Opening the app from the bot does not upload the library already on that device unless you choose "Include this device's library", as for any sign-in.
 
 ## Stopping, logging out and deleting
 

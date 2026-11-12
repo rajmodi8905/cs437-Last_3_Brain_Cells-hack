@@ -1,10 +1,10 @@
 import { afterEach, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
-import { CampusRecallDatabase, DexieLibraryRepository } from '../../src/storage';
+import { AnyRecallDatabase, DexieLibraryRepository } from '../../src/storage';
 import type { IndexedSegment, ItemStatus, LibraryItem, SaveInput } from '../../src/shared';
-const databases: CampusRecallDatabase[] = [];
+const databases: AnyRecallDatabase[] = [];
 function fresh(name = 'spec') {
-  const database = new CampusRecallDatabase(`${name}-${crypto.randomUUID()}`);
+  const database = new AnyRecallDatabase(`${name}-${crypto.randomUUID()}`);
   databases.push(database);
   return new DexieLibraryRepository(database);
 }
@@ -46,7 +46,7 @@ it('[S1] all six supported item kinds retain exact originals and recent records 
   }
   const name = repository.database.name;
   repository.database.close();
-  const reopenedDb = new CampusRecallDatabase(name);
+  const reopenedDb = new AnyRecallDatabase(name);
   databases.push(reopenedDb);
   const reopened = new DexieLibraryRepository(reopenedDb);
   await reopened.open();

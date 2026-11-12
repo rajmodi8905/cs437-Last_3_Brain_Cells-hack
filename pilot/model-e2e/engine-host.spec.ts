@@ -154,7 +154,7 @@ async function appSegments(page: Page, file: string, mimeType: string, title: st
     .getAttribute('data-item-id');
   return page.evaluate(async (id) => {
     const db = await new Promise<IDBDatabase>((resolve, reject) => {
-      const opening = indexedDB.open('campus-recall');
+      const opening = indexedDB.open('anyrecall');
       opening.onsuccess = () => resolve(opening.result);
       opening.onerror = () => reject(opening.error);
     });

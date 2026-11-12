@@ -1,5 +1,5 @@
 import { useMemo, useSyncExternalStore } from 'react';
-import type { CampusRecallServices } from '../../src/app/services';
+import type { AnyRecallServices } from '../../src/app/services';
 import type { LibraryItem } from '../../src/shared';
 import { Viewer } from '../../src/ui/Viewer';
 import { fileNameFor, getAutoSync } from '../client/autosync';
@@ -13,7 +13,7 @@ export function CloudViewer({
   services,
   notify,
 }: {
-  services: CampusRecallServices;
+  services: AnyRecallServices;
   /** Confirms a finished action, such as a download. */
   notify?: (message: string) => void;
 }) {

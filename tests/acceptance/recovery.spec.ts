@@ -11,7 +11,7 @@ test('[S12] interrupt real indexing, retain the source and retry one current gen
   const report = await page.evaluate(async () => {
     const h = (window as any).harness;
     const repository = new h.DexieLibraryRepository(
-      new h.CampusRecallDatabase(`retry-${crypto.randomUUID()}`),
+      new h.AnyRecallDatabase(`retry-${crypto.randomUUID()}`),
     );
     await repository.open();
     const source =

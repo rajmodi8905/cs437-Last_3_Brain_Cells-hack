@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import type { LibraryItem } from '../shared';
-import type { CampusRecallServices } from './services';
-export function useLibraryItems(services: CampusRecallServices) {
+import type { AnyRecallServices } from './services';
+export function useLibraryItems(services: AnyRecallServices) {
   const [items, setItems] = useState<LibraryItem[]>([]);
   const [error, setError] = useState('');
   useEffect(

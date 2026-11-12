@@ -33,7 +33,7 @@ test('pinned local text and vision pipeline loads, embeds, searches and rejects 
     await h.setupAssets(await h.getManifest(), (event: any) => {
       if (event.loadedBytes === event.totalBytes) console.log('ASSETS VERIFIED');
     });
-    const repository = new h.DexieLibraryRepository(new h.CampusRecallDatabase('acceptance-text'));
+    const repository = new h.DexieLibraryRepository(new h.AnyRecallDatabase('acceptance-text'));
     await repository.database.delete();
     await repository.open();
     const engine = new h.LocalEngine(repository);

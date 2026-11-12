@@ -3,8 +3,8 @@
 //
 //   npm run pilot:whatsapp-local -- --origin https://<tunnel host> [--port 4600]
 //
-// Settings come from a private folder outside the repository, ~/.config/campus-recall/whatsapp/
-// (or CAMPUS_RECALL_WHATSAPP_DIR): the files app_secret, verify_token and access_token, and
+// Settings come from a private folder outside the repository, ~/.config/anyrecall/whatsapp/
+// (or ANYRECALL_WHATSAPP_DIR): the files app_secret, verify_token and access_token, and
 // settings.env with plain settings. This script never reads the three secret files; it passes
 // their paths, and the server reads them. Nothing secret goes on a command line or in the output.
 import { spawn, execFileSync } from 'node:child_process';
@@ -26,7 +26,7 @@ const { values } = parseArgs({
   },
 });
 const dir =
-  process.env.CAMPUS_RECALL_WHATSAPP_DIR || join(homedir(), '.config', 'campus-recall', 'whatsapp');
+  process.env.ANYRECALL_WHATSAPP_DIR || join(homedir(), '.config', 'anyrecall', 'whatsapp');
 if (!existsSync(dir)) fail(`Create ${dir} first (see docs/pilot/whatsapp-setup.md).`);
 
 // The secrets: only checked to exist and be private; their contents are read by the server.

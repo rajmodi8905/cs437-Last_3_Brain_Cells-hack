@@ -1,11 +1,11 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { CampusRecallDatabase, DexieLibraryRepository } from '../../src/storage/index.js';
+import { AnyRecallDatabase, DexieLibraryRepository } from '../../src/storage/index.js';
 import { ARCHIVE_LIMITS, LIMITS, planArchiveParts } from '../../src/shared/index.js';
 import { exportLibrary } from '../../src/app/backup.js';
 
 async function freshRepository() {
   const repository = new DexieLibraryRepository(
-    new CampusRecallDatabase(`test-${crypto.randomUUID()}`),
+    new AnyRecallDatabase(`test-${crypto.randomUUID()}`),
   );
   await repository.open();
   return repository;

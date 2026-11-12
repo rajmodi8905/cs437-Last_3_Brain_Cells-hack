@@ -5,20 +5,20 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createHash } from 'node:crypto';
 import { unzipSync } from 'fflate';
-import { CampusRecallDatabase, DexieLibraryRepository } from '../../src/storage';
+import { AnyRecallDatabase, DexieLibraryRepository } from '../../src/storage';
 
 let parent: string;
 let output: string;
-const databases: CampusRecallDatabase[] = [];
+const databases: AnyRecallDatabase[] = [];
 const fresh = () => {
-  const db = new CampusRecallDatabase(`qa-kit-${crypto.randomUUID()}`);
+  const db = new AnyRecallDatabase(`qa-kit-${crypto.randomUUID()}`);
   databases.push(db);
   return new DexieLibraryRepository(db);
 };
 const archive = async (name: string) => new Blob([await readFile(join(output, name))]);
 
 beforeAll(async () => {
-  parent = await mkdtemp(join(tmpdir(), 'campus-recall-qa-'));
+  parent = await mkdtemp(join(tmpdir(), 'anyrecall-qa-'));
   output = join(parent, 'kit');
   execFileSync(process.execPath, ['scripts/prepare-qa-kit.mjs', '--output-dir', output]);
 });

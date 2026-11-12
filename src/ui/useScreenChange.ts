@@ -9,7 +9,7 @@ const TITLES: Record<string, string> = {
   terms: 'Terms and Conditions',
 };
 export const screenTitle = (screen: string) =>
-  screen === 'home' ? 'Campus Recall' : `${TITLES[screen] ?? 'Page not found'} · Campus Recall`;
+  screen === 'home' ? 'AnyRecall' : `${TITLES[screen] ?? 'Page not found'} · AnyRecall`;
 
 /** Focuses the main heading, unless a dialog owns focus. Returns false while there is none. */
 function focusHeading() {

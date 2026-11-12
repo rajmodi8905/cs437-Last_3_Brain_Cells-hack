@@ -20,7 +20,7 @@ test('landing page opens at the root, jumps within the page and enters the libra
   await expect(page).toHaveURL(/#\/library$/);
   await expect(page.getByRole('heading', { level: 1, name: 'Your library' })).toBeVisible();
   await page.getByRole('button', { name: 'Open my library' }).click();
-  await page.getByRole('link', { name: 'About Campus Recall' }).click();
+  await page.getByRole('link', { name: 'About AnyRecall' }).click();
   await expect(page.getByRole('heading', { level: 1, name: /Save it here/ })).toBeVisible();
 });
 test('landing page has no horizontal overflow or automated WCAG A/AA violations', async ({
@@ -80,7 +80,7 @@ test('landing entry contains welcome focus and remembers dismissal on return', a
   await enter.click();
   await expect(dialog).toHaveCount(0);
   await expect(page.locator('.workspace')).toHaveJSProperty('inert', false);
-  await page.getByRole('link', { name: 'About Campus Recall' }).click();
+  await page.getByRole('link', { name: 'About AnyRecall' }).click();
   await page.getByRole('link', { name: 'Open library', exact: true }).click();
   await expect(dialog).toHaveCount(0);
   await page.reload();

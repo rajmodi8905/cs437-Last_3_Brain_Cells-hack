@@ -1,6 +1,6 @@
-# Using Campus Recall
+# Using AnyRecall
 
-Campus Recall keeps a separate personal library in each browser and on each device. It can retrieve only information you explicitly save. All examples in the test/demo corpus are synthetic, not actual campus rules or interview evidence.
+AnyRecall keeps a separate personal library in each browser and on each device. It can retrieve only information you explicitly save. All examples in the test/demo corpus are synthetic, not actual campus rules or interview evidence.
 
 ## Save an original
 
@@ -52,7 +52,7 @@ Browser eviction, cleared site data or device loss can remove your library. Afte
 
 ## Install, update and use offline
 
-Open a production build over HTTPS, then use Chrome's install menu (or the app's one-time **Install** offer after a save) or Safari's Share menu and **Add to Home Screen**. On iPhone, add it to the Home Screen before the model download: Safari can clear website data after seven days without use, while the Home Screen app keeps its own storage. In installed Android Chrome, Campus Recall appears in the share sheet; shared files and text open on Add, kept only on this device until you save them. Desktop localhost is also a secure development context. A plain HTTP LAN address is not enough for phone PWA/WebGPU testing.
+Open a production build over HTTPS, then use Chrome's install menu (or the app's one-time **Install** offer after a save) or Safari's Share menu and **Add to Home Screen**. On iPhone, add it to the Home Screen before the model download: Safari can clear website data after seven days without use, while the Home Screen app keeps its own storage. In installed Android Chrome, AnyRecall appears in the share sheet; shared files and text open on Add, kept only on this device until you save them. Desktop localhost is also a secure development context. A plain HTTP LAN address is not enough for phone PWA/WebGPU testing.
 
 After caching, the production app's interface, originals, processing and search can run offline. New webpage capture still needs internet. Finish processing and back up before applying an app update. Use the Privacy Policy and Terms links in Settings for the current data-handling details.
 

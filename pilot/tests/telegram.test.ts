@@ -25,6 +25,7 @@ import {
   createTelegramBot,
   createTelegramIndexer,
   refuseTelegramUser,
+  startTelegramBot,
   type TelegramBotOptions,
 } from '../server/telegram/bot';
 import { createTelegramIntake, type AllowedUsers } from '../server/telegram/intake';
@@ -36,7 +37,7 @@ import {
   type TelegramStateStore,
 } from '../server/telegram/store';
 import { staticKeySource } from '../server/tokens';
-import { FakeEngineHost } from '../server/whatsapp/engine-host';
+import { EngineIndexError, FakeEngineHost } from '../server/whatsapp/engine-host';
 import { hashLinkToken } from '../server/whatsapp/links';
 import { REPLIES } from '../server/whatsapp/ingest';
 import { PostgresBotStore } from '../server/whatsapp/postgres';
@@ -44,6 +45,7 @@ import { MemoryBotStore, jobId, type BotStore } from '../server/whatsapp/store';
 import {
   BOT_TOKEN,
   CLIENT_ID,
+  ENGINE_MESSAGES,
   ID_KEY,
   ID_KEY_ID,
   USER_A,
@@ -232,30 +234,34 @@ describe.each(backends)('Telegram bot: %s', (name, available, open) => {
     const base = `http://127.0.0.1:${(server.address() as AddressInfo).port}/api/v1`;
     const engine = over.engine === false ? undefined : (over.engine ?? new FakeEngineHost());
     const timers = new Set<() => void>();
+    const botOptions = (
+      apiFor: TelegramApi = api,
+      extra: Partial<TelegramBotOptions> = {},
+    ): TelegramBotOptions => ({
+      ...stores,
+      api: apiFor,
+      quotaBytes,
+      ...(engine
+        ? {
+            engine,
+            onIndexJob: createTelegramIndexer({ ...stores, engine, quotaBytes }),
+          }
+        : {}),
+      origin: ORIGIN,
+      privacyUrl: PRIVACY_URL,
+      contactEmail: CONTACT,
+      batchMs: 60_000,
+      schedule: (run) => {
+        timers.add(run);
+        return () => timers.delete(run);
+      },
+      nowSeconds: () => clock.now,
+      log,
+      ...over.bot,
+      ...extra,
+    });
     const makeBot = (apiFor: TelegramApi = api, extra: Partial<TelegramBotOptions> = {}) =>
-      createTelegramBot({
-        ...stores,
-        api: apiFor,
-        quotaBytes,
-        ...(engine
-          ? {
-              engine,
-              onIndexJob: createTelegramIndexer({ ...stores, engine, quotaBytes }),
-            }
-          : {}),
-        origin: ORIGIN,
-        privacyUrl: PRIVACY_URL,
-        contactEmail: CONTACT,
-        batchMs: 60_000,
-        schedule: (run) => {
-          timers.add(run);
-          return () => timers.delete(run);
-        },
-        nowSeconds: () => clock.now,
-        log,
-        ...over.bot,
-        ...extra,
-      });
+      createTelegramBot(botOptions(apiFor, extra));
     const telegram = makeBot();
     /** Posts updates to the webhook, as Telegram does, without running a worker. */
     const deliver = async (updates: Record<string, unknown>[]) => {
@@ -471,6 +477,7 @@ describe.each(backends)('Telegram bot: %s', (name, available, open) => {
       google,
       telegram,
       makeBot,
+      botOptions,
       intake,
       timers,
       deliver,
@@ -807,9 +814,9 @@ describe.each(backends)('Telegram bot: %s', (name, available, open) => {
       expect(t.tg.state.downloads).toEqual([]);
       expect(await t.liveItems()).toEqual([]);
       expect(t.tg.textsTo(USER_A.id).slice(-3)).toEqual([
-        REPLIES.bigPdf,
-        REPLIES.bigImage,
-        REPLIES.bigPdf,
+        TELEGRAM_REPLIES.tooBig({ kind: 'pdf', bytes: LIMITS.maxPdfBytes + 1 }),
+        TELEGRAM_REPLIES.tooBig({ kind: 'image', bytes: LIMITS.maxImageBytes + 1 }),
+        TELEGRAM_REPLIES.tooBig({ kind: 'pdf', byTelegram: true }),
       ]);
     });
 
@@ -830,12 +837,12 @@ describe.each(backends)('Telegram bot: %s', (name, available, open) => {
       );
       expect(await t.liveItems()).toEqual([]);
       expect(t.tg.textsTo(USER_A.id).slice(-6)).toEqual([
-        REPLIES.voice,
-        REPLIES.audio,
-        REPLIES.video,
-        REPLIES.sticker,
-        REPLIES.file,
-        REPLIES.location,
+        TELEGRAM_REPLIES.voice,
+        TELEGRAM_REPLIES.audio,
+        TELEGRAM_REPLIES.video,
+        TELEGRAM_REPLIES.sticker,
+        TELEGRAM_REPLIES.unsupportedFile('docx'),
+        TELEGRAM_REPLIES.location,
       ]);
     });
 
@@ -896,7 +903,7 @@ describe.each(backends)('Telegram bot: %s', (name, available, open) => {
       await t.send(tap, tap);
       const id = (tap.callback_query as { id: string }).id;
       expect(t.tg.state.answered.filter((a) => a.id === id)).toHaveLength(1);
-      // The note and its "Open in app" link, once.
+      // The note and its "Open in browser" link, once.
       expect(t.tg.to(USER_A.id).length - before).toBe(2);
     });
 
@@ -1084,7 +1091,7 @@ describe.each(backends)('Telegram bot: %s', (name, available, open) => {
       expect((await t.post(`/telegram/link/${token}`, session.cookie)).status).toBe(404);
       const again = await t.get(`/telegram/link/${token}`, session.cookie);
       expect(again.status).toBe(404);
-      expect(await again.text()).toContain('Send /login to the Campus Recall Telegram bot');
+      expect(await again.text()).toContain('Send /login to the AnyRecall Telegram bot');
     });
 
     it('expires login links after 10 minutes and refuses malformed or app-link tokens', async () => {
@@ -1168,7 +1175,7 @@ describe.each(backends)('Telegram bot: %s', (name, available, open) => {
       const page = await t.get(`/telegram/open/${token}`);
       expect(page.status).toBe(200);
       const html = await page.text();
-      expect(html).toContain('Sign in to Campus Recall as <strong>student.a@iitgn.ac.in</strong>');
+      expect(html).toContain('Sign in to AnyRecall as <strong>student.a@iitgn.ac.in</strong>');
       expect(html).not.toContain('<script');
       expect(page.headers.get('content-security-policy')).toContain("default-src 'none'");
 
@@ -1198,7 +1205,7 @@ describe.each(backends)('Telegram bot: %s', (name, available, open) => {
       expect((await t.follow(token)).status).toBe(404);
       const again = await t.get(`/telegram/open/${token}`);
       expect(again.status).toBe(404);
-      expect(await again.text()).toContain('Send /open to the Campus Recall Telegram bot');
+      expect(await again.text()).toContain('Send /open to the AnyRecall Telegram bot');
     });
 
     it('expires app links after 10 minutes, and /logout revokes unused ones', async () => {
@@ -1444,7 +1451,7 @@ describe.each(backends)('Telegram bot: %s', (name, available, open) => {
       expect(await t.state.savedItems(OWNER_X)).not.toContain(appItem);
     });
 
-    it('sends a photo, a PDF and a note back, each with an Open in app button', async () => {
+    it('sends a photo, a PDF and a note back, each with an Open in browser button', async () => {
       const t = await setup();
       await t.link();
       const photo = jpegBytes(6000, 9);
@@ -1506,7 +1513,7 @@ describe.each(backends)('Telegram bot: %s', (name, available, open) => {
         check();
         const cta = t.tg.to(USER_A.id).at(-1)!;
         expect(cta.text).toBe(TELEGRAM_REPLIES.openCta);
-        expect(cta.replyMarkup?.inline_keyboard[0][0].text).toBe('Open in app');
+        expect(cta.replyMarkup?.inline_keyboard[0][0].text).toBe('Open in browser');
         const token = OPEN.exec(cta.replyMarkup?.inline_keyboard[0][0].url ?? '')![1];
         expect((await t.follow(token)).status).toBe(303);
       }
@@ -1653,6 +1660,573 @@ describe.each(backends)('Telegram bot: %s', (name, available, open) => {
     });
   });
 
+  describe('Error and refusal messages', () => {
+    /** setup's account quota. */
+    const QUOTA = 50_000_000;
+    const LECTURE = 'Lecture 19_01_04_2026.pdf';
+    /** Delivers updates and runs them with `telegram` (another bot than setup's, say). */
+    const runWith = async (
+      t: Awaited<ReturnType<typeof setup>>,
+      telegram: ReturnType<typeof createTelegramBot>,
+      ...updates: Record<string, unknown>[]
+    ) => {
+      await t.deliver(updates);
+      await telegram.drain();
+      await telegram.flush();
+      return updates;
+    };
+    /** No reply shows an internal code, an error name or the engine's own wording. */
+    const plainOnly = (texts: string[]) => {
+      for (const text of texts) {
+        expect(text).not.toMatch(/[A-Z]{2,}_[A-Z_]+|Error\b|\bat \S+:\d+/);
+        for (const raw of Object.values(ENGINE_MESSAGES)) expect(text).not.toContain(raw);
+      }
+    };
+
+    it('says a 71-page PDF is saved but over the 50-page search limit, and how to fix it', async () => {
+      const t = await setup();
+      await t.link();
+      t.engine!.failures.push(
+        new EngineIndexError('EXTRACTION_FAILED', ENGINE_MESSAGES.pageLimit, 71),
+      );
+      const pdf = pdfBytes('Lecture 19. ');
+      t.tg.addFile('lecture', pdf);
+      const [doc] = await t.send(
+        documentUpdate({
+          fileId: 'lecture',
+          size: pdf.length,
+          mimeType: 'application/pdf',
+          fileName: LECTURE,
+        }),
+      );
+      const item = await t.store.getItem(OWNER_X, telegramGlobalId(t.keyOf(doc)));
+      expect(item).toMatchObject({ title: LECTURE, kind: 'pdf', deleted: false });
+      expect(item?.index).toBeUndefined();
+      expect(await t.bot.getJob(jobId('index', t.keyOf(doc)))).toMatchObject({
+        state: 'failed',
+        attempts: 1,
+      });
+      const expected =
+        '"Lecture 19_01_04_2026.pdf" has 71 pages — search works on PDFs up to 50 pages. It\'s still saved; split it into smaller PDFs to make it searchable.';
+      expect(
+        TELEGRAM_REPLIES.notSearchable(
+          { kind: 'too-many-pages', pageCount: 71 },
+          { title: LECTURE, kind: 'pdf' },
+          QUOTA,
+        ),
+      ).toBe(expected);
+      const texts = t.tg.textsTo(USER_A.id);
+      expect(texts.filter((text) => text === expected)).toHaveLength(1);
+      expect(texts).toContain(REPLIES.saved(LECTURE));
+      plainOnly(texts);
+      // Told once: nothing more later, from this worker or another.
+      t.clock.now += 86_400;
+      expect(await t.telegram.drain()).toBe(0);
+      expect(await t.makeBot().drain()).toBe(0);
+      expect(t.tg.textsTo(USER_A.id)).toEqual(texts);
+    });
+
+    it('explains each other indexing failure with the file name, that it is still saved, and the fix', async () => {
+      const t = await setup();
+      await t.link();
+      const cases = [
+        [
+          ENGINE_MESSAGES.pageLimit,
+          'application/pdf',
+          'Big lecture.pdf',
+          { kind: 'too-many-pages' },
+        ],
+        [
+          ENGINE_MESSAGES.password,
+          'application/pdf',
+          'Payslip.pdf',
+          { kind: 'password-protected' },
+        ],
+        [
+          ENGINE_MESSAGES.unreadablePdf,
+          'application/pdf',
+          'Broken.pdf',
+          { kind: 'unreadable-pdf' },
+        ],
+        [ENGINE_MESSAGES.badImage, 'image/png', 'scan.png', { kind: 'bad-image' }],
+        [
+          ENGINE_MESSAGES.nothingSearchable,
+          'application/pdf',
+          'Blank page.pdf',
+          { kind: 'nothing-searchable' },
+        ],
+        [
+          ENGINE_MESSAGES.nothingSearchable,
+          'image/jpeg',
+          'Sky.jpg',
+          { kind: 'nothing-searchable' },
+        ],
+        [
+          'The engine stopped for an unknown reason.',
+          'application/pdf',
+          'Odd.pdf',
+          { kind: 'other' },
+        ],
+      ] as const;
+      let n = 0;
+      for (const [message, mimeType, fileName, failure] of cases) {
+        t.engine!.failures.push(new EngineIndexError('EXTRACTION_FAILED', message));
+        const bytes =
+          mimeType === 'application/pdf' ? pdfBytes(`File ${++n}. `) : jpegBytes(3000, ++n);
+        t.tg.addFile(`f-${n}`, bytes);
+        await t.send(documentUpdate({ fileId: `f-${n}`, size: bytes.length, mimeType, fileName }));
+        const kind = mimeType === 'application/pdf' ? 'pdf' : 'image';
+        expect(t.tg.textsTo(USER_A.id)).toContain(
+          TELEGRAM_REPLIES.notSearchable(failure, { title: fileName, kind }, QUOTA),
+        );
+      }
+      const texts = t.tg.textsTo(USER_A.id);
+      expect(texts).toContain(
+        '"Big lecture.pdf" has more than 50 pages — search works on PDFs up to 50 pages. It\'s still saved; split it into smaller PDFs to make it searchable.',
+      );
+      expect(texts).toContain(
+        '"Payslip.pdf" is password-protected, so it can\'t be searched. It\'s still saved; remove the password (for example, print it to a new PDF) and send it again to make it searchable.',
+      );
+      // Every file is still saved, with a reply of its own about it.
+      expect((await t.liveItems()).map((item) => item.title).sort()).toEqual(
+        cases.map(([, , fileName]) => fileName).sort(),
+      );
+      for (const [, , fileName] of cases)
+        expect(
+          texts.filter(
+            (text) => text.startsWith(`"${fileName}"`) || text.includes(` "${fileName}"`),
+          ),
+        ).toHaveLength(1);
+      plainOnly(texts);
+    });
+
+    it('says when the library has no room to index, or to save, with the quota and how to free space', async () => {
+      const t = await setup();
+      await t.link();
+      const pdf = pdfBytes('Mess menu. ');
+      // Room for the first original, not for its index or anything more.
+      const quota = pdf.length + 100;
+      const small = t.makeBot(t.api, {
+        quotaBytes: quota,
+        onIndexJob: createTelegramIndexer({
+          store: t.store,
+          objects: t.objects,
+          engine: t.engine!,
+          quotaBytes: quota,
+        }),
+      });
+      t.tg.addFile('menu', pdf);
+      t.tg.addFile('second', pdf);
+      await runWith(
+        t,
+        small,
+        documentUpdate({
+          fileId: 'menu',
+          size: pdf.length,
+          mimeType: 'application/pdf',
+          fileName: 'Mess menu.pdf',
+        }),
+      );
+      await runWith(
+        t,
+        small,
+        documentUpdate({
+          fileId: 'second',
+          size: pdf.length,
+          mimeType: 'application/pdf',
+          fileName: 'Second.pdf',
+        }),
+        textUpdate(`note Bring the ID card. ${'Hostel rules for guests. '.repeat(10)}`),
+      );
+      expect((await t.liveItems()).map((item) => item.title)).toEqual(['Mess menu.pdf']);
+      const texts = t.tg.textsTo(USER_A.id);
+      expect(texts).toContain(
+        TELEGRAM_REPLIES.notSearchable(
+          { kind: 'library-full' },
+          { title: 'Mess menu.pdf', kind: 'pdf' },
+          quota,
+        ),
+      );
+      expect(texts).toContain(TELEGRAM_REPLIES.full('Second.pdf', quota));
+      expect(texts).toContain(TELEGRAM_REPLIES.full(undefined, quota));
+      expect(TELEGRAM_REPLIES.full('Second.pdf', 200_000_000)).toBe(
+        'Your AnyRecall cloud library has reached its 200 MB limit, so "Second.pdf" wasn\'t saved. Delete some items in the app to make room, then send it again.',
+      );
+      plainOnly(texts);
+    });
+
+    it('gives the general message when indexing keeps failing until the job gives up', async () => {
+      const t = await setup();
+      await t.link();
+      const once = t.makeBot(t.api, { maxAttempts: 1 });
+      t.engine!.failures.push(new Error('Engine host page crashed'));
+      const pdf = pdfBytes('Timetable. ');
+      t.tg.addFile('tt', pdf);
+      await runWith(
+        t,
+        once,
+        documentUpdate({
+          fileId: 'tt',
+          size: pdf.length,
+          mimeType: 'application/pdf',
+          fileName: 'Timetable.pdf',
+        }),
+      );
+      expect(t.tg.textsTo(USER_A.id)).toContain(
+        '"Timetable.pdf" is saved, but it couldn\'t be made searchable. You can still open it in the app.',
+      );
+      plainOnly(t.tg.textsTo(USER_A.id));
+    });
+
+    it('refuses what it cannot save, saying what was sent and what it can save', async () => {
+      const t = await setup();
+      await t.link();
+      const file = { file_id: 'x', file_unique_id: 'ux' };
+      await t.send(
+        messageUpdate({ video_note: { ...file, length: 240, duration: 5 } }),
+        messageUpdate({
+          animation: { ...file, mime_type: 'video/mp4' },
+          document: { ...file, mime_type: 'video/mp4', file_name: 'funny.gif.mp4' },
+        }),
+        messageUpdate({ contact: { phone_number: '+910000000000', first_name: 'Warden' } }),
+        messageUpdate({ poll: { id: '1', question: 'Lunch?', options: [] } }),
+        documentUpdate({
+          fileId: 'nb',
+          mimeType: 'application/x-ipynb+json',
+          fileName: 'analysis.ipynb',
+        }),
+        documentUpdate({ fileId: 'heic', mimeType: 'image/heic', fileName: 'IMG_1234.HEIC' }),
+        documentUpdate({
+          fileId: 'pptx',
+          mimeType: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+        }),
+        documentUpdate({ fileId: 'bin', mimeType: 'application/octet-stream' }),
+        textUpdate(`note ${'a'.repeat(LIMITS.maxTextCodePoints + 1)}`),
+        documentUpdate({
+          fileId: 'big',
+          size: 31_250_001,
+          mimeType: 'application/pdf',
+          fileName: 'Big notes.pdf',
+        }),
+        documentUpdate({
+          fileId: 'poster',
+          size: 23_400_000,
+          mimeType: 'image/png',
+          fileName: 'poster.png',
+        }),
+      );
+      expect(await t.liveItems()).toEqual([]);
+      expect(t.tg.state.getFileCalls).toEqual([]);
+      expect(t.tg.textsTo(USER_A.id).slice(-11)).toEqual([
+        TELEGRAM_REPLIES.videoNote,
+        TELEGRAM_REPLIES.gif,
+        TELEGRAM_REPLIES.contact,
+        TELEGRAM_REPLIES.other,
+        "Can't save .ipynb files. I can save photos, PDFs, text notes and links.",
+        "Can't save .heic images. Send it as a photo, or as a JPEG, PNG or WebP file.",
+        "Can't save .pptx files. Export it as a PDF and send that instead.",
+        "Can't save this kind of file. I can save photos, PDFs, text notes and links.",
+        TELEGRAM_REPLIES.longNote(LIMITS.maxTextCodePoints + 1),
+        '"Big notes.pdf" is 31.3 MB, over the 20 MB limit for PDFs, so it wasn\'t saved. Compress it or split it into smaller PDFs, then send them again.',
+        TELEGRAM_REPLIES.tooBig({ kind: 'image', name: 'poster.png', bytes: 23_400_000 }),
+      ]);
+      expect(TELEGRAM_REPLIES.longNote(20_001)).toBe(
+        "This note is 20,001 characters, over the 20,000-character limit for notes, so it wasn't saved. Split it into shorter notes and send them one by one.",
+      );
+      plainOnly(t.tg.textsTo(USER_A.id));
+    });
+
+    it('asks to send a file again when it cannot be got from Telegram', async () => {
+      const t = await setup();
+      await t.link();
+      const once = t.makeBot(t.api, { maxAttempts: 1 });
+      const pdf = pdfBytes('Short. ');
+      t.tg.addFile('short', pdf);
+      t.tg.state.truncateDownloads = 1;
+      await runWith(
+        t,
+        once,
+        // Telegram no longer has this one; the other arrives a byte short.
+        documentUpdate({ fileId: 'missing', size: 100, mimeType: 'application/pdf' }),
+        documentUpdate({ fileId: 'short', size: pdf.length, mimeType: 'application/pdf' }),
+      );
+      expect(await t.liveItems()).toEqual([]);
+      expect(t.tg.textsTo(USER_A.id).slice(-2)).toEqual([
+        "Couldn't get that file from Telegram. Please send it again.",
+        TELEGRAM_REPLIES.downloadFailed,
+      ]);
+    });
+
+    it('says a problem on our side is ours, and to try again in a minute', async () => {
+      const t = await setup();
+      await t.link();
+      const broken: PilotStore = Object.create(t.store, {
+        changesAfter: {
+          value: async () => {
+            throw new Error('database unavailable');
+          },
+        },
+      });
+      const once = t.makeBot(t.api, { maxAttempts: 1, store: broken });
+      await runWith(t, once, textUpdate('mess timings'));
+      expect(t.tg.textsTo(USER_A.id).at(-1)).toBe(
+        'Something went wrong on our side. Please try again in a minute.',
+      );
+      expect(TELEGRAM_REPLIES.serverError).toBe(t.tg.textsTo(USER_A.id).at(-1));
+    });
+
+    it('explains results matched only by title while their item is still being indexed', async () => {
+      const t = await setup();
+      await t.link();
+      const waiting = t.makeBot(t.api, { onIndexJob: undefined });
+      await runWith(t, waiting, textUpdate('note Badminton team signup'));
+      await runWith(t, waiting, textUpdate('badminton'));
+      const reply = t.tg.to(USER_A.id).at(-1)!;
+      expect(reply.text).toContain('Badminton team signup (Note · still indexing)');
+      expect(reply.text).toContain(TELEGRAM_REPLIES.stillIndexing);
+      expect(reply.text).not.toContain(TELEGRAM_REPLIES.keywordOnly);
+      await runWith(t, waiting, textUpdate('cricket'));
+      expect(t.tg.textsTo(USER_A.id).at(-1)).toBe(
+        'Nothing matched “cricket” in your AnyRecall library. Try other words.',
+      );
+    });
+  });
+
+  describe('Typing and slow searches', () => {
+    const pause = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+    /** An engine whose searches take `searchMs`, and wait for any index call still running. */
+    class SlowEngine extends FakeEngineHost {
+      searchMs = 0;
+      indexing: Promise<void> = Promise.resolve();
+      async search(query: string, items: Parameters<FakeEngineHost['search']>[1]) {
+        await this.indexing;
+        await pause(this.searchMs);
+        return super.search(query, items);
+      }
+    }
+    const QUERY = 'where is the confidential exam schedule';
+    const SEARCH_LINE = /^Telegram search took (\d+\.\d) s \(waited (\d+\.\d) s for the engine\)/;
+
+    it('shows typing during a slow search, stops before the reply, and logs only times', async () => {
+      const engine = new SlowEngine();
+      const t = await setup({ engine });
+      await t.link();
+      await t.send(textUpdate('note Exam schedule is on the notice board'));
+      const bot = t.makeBot(t.api, { typingEveryMs: 40, waitNoticeMs: 60_000 });
+      engine.searchMs = 300;
+      const before = t.tg.state.chatActions.length;
+      await t.deliver([textUpdate(QUERY)]);
+      await bot.drain();
+      const reply = t.tg.to(USER_A.id).at(-1)!;
+      expect(reply.text).toContain(`Best matches for “${QUERY}”`);
+      const typing = t.tg.state.chatActions.slice(before);
+      // Sent at once and about every 40 ms of the 300 ms search, all before the reply.
+      expect(typing.length).toBeGreaterThanOrEqual(4);
+      for (const action of typing) {
+        expect(action).toMatchObject({ chatId: USER_A.id, action: 'typing' });
+        expect(action.at).toBeLessThanOrEqual(reply.at);
+      }
+      await pause(200);
+      expect(t.tg.state.chatActions.length - before).toBe(typing.length);
+      // No file was being indexed, so no "still processing" message.
+      expect(t.tg.textsTo(USER_A.id)).not.toContain(TELEGRAM_REPLIES.searchWaiting);
+      const lines = t.errors.filter((line) => SEARCH_LINE.test(line));
+      const [, total, waited] = SEARCH_LINE.exec(lines.at(-1)!)!;
+      expect(Number(waited)).toBeGreaterThanOrEqual(0.3);
+      expect(Number(total)).toBeGreaterThanOrEqual(Number(waited));
+      expect(t.errors.some((line) => /^Telegram index job took \d+\.\d s/.test(line))).toBe(true);
+      for (const line of t.errors) {
+        expect(line).not.toContain('confidential');
+        expect(line).not.toContain(String(USER_A.id));
+        expect(line).not.toContain('student_a');
+        expect(line).not.toContain(BOT_TOKEN);
+      }
+    });
+
+    it('says once that a search is waiting for a file being indexed, before the results', async () => {
+      const engine = new SlowEngine();
+      const t = await setup({ engine });
+      await t.link();
+      // An item already searchable by meaning, so the search needs the (busy) engine.
+      await t.send(textUpdate('note Exam hall is B12'));
+      const bot = t.makeBot(t.api, { typingEveryMs: 30, waitNoticeMs: 100 });
+      const earlier = t.tg.textsTo(USER_A.id).length;
+      let release!: () => void;
+      engine.indexing = new Promise<void>((resolve) => (release = resolve));
+      engine.onIndex = () => engine.indexing;
+      const pdf = pdfBytes('Exam schedule. ');
+      t.tg.addFile('exam', pdf);
+      await t.deliver([
+        documentUpdate({
+          fileId: 'exam',
+          size: pdf.length,
+          mimeType: 'application/pdf',
+          fileName: 'Exam schedule.pdf',
+        }),
+      ]);
+      expect(await bot.runIngestOnce()).toBe(true);
+      // The file is being indexed (the engine is busy) when the student searches.
+      const indexing = bot.runIndexOnce!();
+      await t.deliver([textUpdate(QUERY)]);
+      const before = t.tg.state.chatActions.length;
+      const searching = bot.runIngestOnce();
+      await pause(400);
+      expect(t.tg.textsTo(USER_A.id).slice(earlier)).toEqual([TELEGRAM_REPLIES.searchWaiting]);
+      // "typing…" kept coming while the student waited.
+      expect(t.tg.state.chatActions.length - before).toBeGreaterThanOrEqual(5);
+      release();
+      await Promise.all([indexing, searching]);
+      await bot.flush();
+      const texts = t.tg.textsTo(USER_A.id).slice(earlier);
+      expect(texts.filter((text) => text === TELEGRAM_REPLIES.searchWaiting)).toHaveLength(1);
+      const results = texts.findIndex((text) => text.startsWith('Best matches for'));
+      expect(results).toBeGreaterThan(texts.indexOf(TELEGRAM_REPLIES.searchWaiting));
+      expect(TELEGRAM_REPLIES.searchWaiting).toBe(
+        'Searching… a file you just sent is still being processed, this can take a moment.',
+      );
+      const [, , waited] = SEARCH_LINE.exec(t.errors.find((line) => SEARCH_LINE.test(line))!)!;
+      expect(Number(waited)).toBeGreaterThanOrEqual(0.4);
+      for (const line of t.errors) expect(line).not.toContain('confidential');
+      // Nothing more once both are done.
+      const after = t.tg.state.chatActions.length;
+      await pause(100);
+      expect(t.tg.state.chatActions.length).toBe(after);
+    });
+
+    it("does not call another student's file being indexed “a file you just sent”", async () => {
+      const engine = new SlowEngine();
+      const t = await setup({ engine });
+      await t.link();
+      await t.link(USER_B, EMAIL_Y);
+      await t.send(textUpdate('note Exam hall is B12'));
+      const bot = t.makeBot(t.api, { typingEveryMs: 30, waitNoticeMs: 100 });
+      const earlier = t.tg.textsTo(USER_A.id).length;
+      let release!: () => void;
+      engine.indexing = new Promise<void>((resolve) => (release = resolve));
+      engine.onIndex = () => engine.indexing;
+      const pdf = pdfBytes('Lab manual. ');
+      t.tg.addFile('lab', pdf);
+      await t.deliver([
+        documentUpdate(
+          { fileId: 'lab', size: pdf.length, mimeType: 'application/pdf', fileName: 'Lab.pdf' },
+          USER_B,
+        ),
+      ]);
+      expect(await bot.runIngestOnce()).toBe(true);
+      // The other student's file keeps the engine busy while this student searches.
+      const indexing = bot.runIndexOnce!();
+      await t.deliver([textUpdate(QUERY)]);
+      const before = t.tg.state.chatActions.filter((action) => action.chatId === USER_A.id).length;
+      const searching = bot.runIngestOnce();
+      await pause(400);
+      // Still "typing…" for the student who is waiting, but no message about a file of theirs.
+      expect(t.tg.textsTo(USER_A.id).slice(earlier)).toEqual([]);
+      expect(
+        t.tg.state.chatActions.filter((action) => action.chatId === USER_A.id).length - before,
+      ).toBeGreaterThanOrEqual(5);
+      release();
+      await Promise.all([indexing, searching]);
+      await bot.flush();
+      const texts = t.tg.textsTo(USER_A.id).slice(earlier);
+      expect(texts).not.toContain(TELEGRAM_REPLIES.searchWaiting);
+      expect(texts.at(-1)).toContain('Best matches for');
+    });
+
+    it('answers a message at once while the running bot is still indexing a file', async () => {
+      const engine = new SlowEngine();
+      const t = await setup({ engine });
+      await t.link();
+      let release!: () => void;
+      engine.indexing = new Promise<void>((resolve) => (release = resolve));
+      engine.onIndex = () => engine.indexing;
+      const running = startTelegramBot({
+        ...t.botOptions(t.api, { typingEveryMs: 30 }),
+        idleMs: 20,
+      });
+      let stopped = false;
+      const stop = async () => {
+        if (stopped) return;
+        stopped = true;
+        release();
+        await running.stop();
+      };
+      cleanups.push(stop);
+      const waitFor = async (check: () => boolean | Promise<boolean>) => {
+        for (let tries = 0; tries < 200 && !(await check()); tries++) await pause(10);
+        expect(await check()).toBe(true);
+      };
+      const pdf = pdfBytes('Exam schedule. ');
+      t.tg.addFile('exam', pdf);
+      await t.deliver([
+        documentUpdate({
+          fileId: 'exam',
+          size: pdf.length,
+          mimeType: 'application/pdf',
+          fileName: 'Exam schedule.pdf',
+        }),
+      ]);
+      running.wake();
+      // The file is saved, and its index job is running (and held) with "typing…" in the chat.
+      await waitFor(async () => (await t.liveItems()).length === 1);
+      await waitFor(() => t.tg.state.chatActions.length >= 2);
+      const [item] = await t.liveItems();
+      expect(item.index).toBeUndefined();
+      await t.deliver([textUpdate('/help')]);
+      running.wake();
+      await waitFor(() => t.tg.textsTo(USER_A.id).includes(TELEGRAM_REPLIES.help(CONTACT)));
+      expect((await t.liveItems())[0].index).toBeUndefined();
+      // Once the engine is free the file becomes searchable, and stopping leaves nothing behind.
+      release();
+      await waitFor(async () => (await t.liveItems())[0].index !== undefined);
+      await stop();
+      const after = t.tg.state.chatActions.length;
+      await pause(100);
+      expect(t.tg.state.chatActions.length).toBe(after);
+    });
+
+    it('answers as usual when Telegram refuses every chat action', async () => {
+      const t = await setup();
+      await t.link();
+      await t.send(textUpdate('note Exam schedule is on the notice board'));
+      t.tg.state.failChatActions = 1000;
+      const before = t.tg.state.chatActions.length;
+      await t.send(textUpdate('exam schedule'));
+      expect(t.tg.textsTo(USER_A.id).at(-1)).toContain('Best matches for “exam schedule”');
+      expect(t.tg.state.chatActions).toHaveLength(before);
+      expect(t.errors.some((line) => line.startsWith('Telegram chat action failed'))).toBe(true);
+      expect(t.errors.some((line) => line.includes(BOT_TOKEN))).toBe(false);
+    });
+
+    it('answers as usual when chat actions get no answer at all, and logs that once', async () => {
+      const engine = new SlowEngine();
+      const t = await setup({ engine });
+      await t.link();
+      await t.send(textUpdate('note Exam schedule is on the notice board'));
+      let attempts = 0;
+      const broken: TelegramApi = {
+        ...t.api,
+        sendChatAction: async () => {
+          attempts++;
+          throw new Error('no answer');
+        },
+      };
+      const bot = t.makeBot(broken, { typingEveryMs: 20 });
+      engine.searchMs = 150;
+      const logged = () =>
+        t.errors.filter((line) => line.startsWith('Telegram chat action failed')).length;
+      const before = logged();
+      await t.deliver([textUpdate('exam schedule')]);
+      await bot.drain();
+      expect(t.tg.textsTo(USER_A.id).at(-1)).toContain('Best matches for “exam schedule”');
+      // Tried again and again during the search, logged once, and not after the reply.
+      expect(attempts).toBeGreaterThanOrEqual(3);
+      expect(logged() - before).toBe(1);
+      const after = attempts;
+      await pause(100);
+      expect(attempts).toBe(after);
+    });
+  });
+
   describe('Commands', () => {
     it('answers the menu commands once linked, and unknown commands with a pointer to /help', async () => {
       const t = await setup();
@@ -1669,7 +2243,7 @@ describe.each(backends)('Telegram bot: %s', (name, available, open) => {
         TELEGRAM_REPLIES.help(CONTACT),
         TELEGRAM_REPLIES.privacy(PRIVACY_URL),
         TELEGRAM_REPLIES.alreadyOn,
-        TELEGRAM_REPLIES.unknownCommand,
+        TELEGRAM_REPLIES.unknownCommand('/frobnicate'),
       ]);
       // /help lists the bot's menu (BotFather's /setcommands list in docs/pilot/telegram-setup.md).
       for (const command of [

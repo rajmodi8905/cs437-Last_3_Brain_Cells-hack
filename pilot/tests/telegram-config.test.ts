@@ -8,12 +8,12 @@ import { loadConfig } from '../server/config';
 const G = { PILOT_GOOGLE_CLIENT_ID: 'c', PILOT_GOOGLE_CLIENT_SECRET: 's' };
 const DURABLE = {
   PILOT_DATABASE_URL: 'postgres://pilot@db.internal:5432/pilot',
-  PILOT_BLOB_ACCOUNT_URL: 'https://campusrecallpilot.blob.core.windows.net',
+  PILOT_BLOB_ACCOUNT_URL: 'https://anyrecallpilot.blob.core.windows.net',
 };
 const PUBLIC = { ...G, ...DURABLE, PILOT_ORIGIN: 'https://recall.example.in' };
 
 // Stand-in secret files; the values are made up for these tests.
-const dir = mkdtempSync(join(tmpdir(), 'campus-recall-telegram-config-'));
+const dir = mkdtempSync(join(tmpdir(), 'anyrecall-telegram-config-'));
 afterAll(() => rmSync(dir, { recursive: true, force: true }));
 const secret = (name: string, value: string) => {
   const path = join(dir, name);
@@ -155,7 +155,7 @@ describe('Telegram local trial', () => {
     expect(config).toMatchObject({
       origin: 'http://127.0.0.1:4600',
       host: '127.0.0.1',
-      clientId: 'campus-recall-local-trial',
+      clientId: 'anyrecall-local-trial',
       storage: { kind: 'memory' },
       localTrial: true,
       telegram: { mode: 'polling' },
@@ -171,7 +171,7 @@ describe('Telegram local trial', () => {
   it('links Telegram users with development sign-in, also behind a tunnel, on memory storage', () => {
     const DEV = { PILOT_DEV_KEY_FILE: '/tmp/dev-private.pem' };
     expect(loadConfig({ ...TRIAL, ...DEV })).toMatchObject({
-      clientId: 'campus-recall-pilot-dev',
+      clientId: 'anyrecall-pilot-dev',
       devKeyFile: '/tmp/dev-private.pem',
       storage: { kind: 'memory' },
       localTrial: true,

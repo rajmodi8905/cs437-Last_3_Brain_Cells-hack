@@ -124,7 +124,7 @@ test('P05/P06: a second browser searches a synced real PDF index locally without
   expect(targetNetwork.external).toEqual([]);
   const stored = await second.evaluate(async () => {
     const db = await new Promise<IDBDatabase>((resolve, reject) => {
-      const opening = indexedDB.open('campus-recall');
+      const opening = indexedDB.open('anyrecall');
       opening.onsuccess = () => resolve(opening.result);
       opening.onerror = () => reject(opening.error);
     });

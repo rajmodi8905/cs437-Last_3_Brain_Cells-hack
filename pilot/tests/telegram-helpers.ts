@@ -54,6 +54,12 @@ export async function startFakeTelegram(token = BOT_TOKEN) {
     truncateDownloads: 0,
     /** getFile answers "file is too big", as Telegram does over 20 MB. */
     fileTooBig: false,
+    /** "typing…" and other chat actions, with the stand-in's clock in milliseconds. */
+    chatActions: [] as { chatId: number; action: string; at: number }[],
+    /** Chat actions answered with HTTP 500 before any succeeds. */
+    failChatActions: 0,
+    /** Chat actions answered with HTTP 429 and this retry_after before any succeeds. */
+    chatActionRateLimits: [] as number[],
     /** Every request path, to check none of them was unexpected. */
     paths: [] as string[],
   };
@@ -151,6 +157,23 @@ export async function startFakeTelegram(token = BOT_TOKEN) {
         const markup = body.reply_markup as { inline_keyboard?: unknown[] } | undefined;
         if (markup?.inline_keyboard?.length) return fail(res, 400, 'Bad Request: buttons left');
         state.removed.push({ chatId: Number(body.chat_id), messageId: Number(body.message_id) });
+        return ok(res, true);
+      }
+      case 'sendChatAction': {
+        const retryAfter = state.chatActionRateLimits.shift();
+        if (retryAfter !== undefined)
+          return fail(res, 429, `Too Many Requests: retry after ${retryAfter}`, {
+            retry_after: retryAfter,
+          });
+        if (state.failChatActions > 0) {
+          state.failChatActions--;
+          return fail(res, 500, 'Internal Server Error');
+        }
+        state.chatActions.push({
+          chatId: Number(body.chat_id),
+          action: String(body.action),
+          at: Date.now(),
+        });
         return ok(res, true);
       }
       case 'answerCallbackQuery':
@@ -367,3 +390,19 @@ export function signIdToken(
 export const subjectOf = (email: string) =>
   `dev-${createHash('sha256').update(email.toLowerCase()).digest('hex').slice(0, 24)}`;
 export const ownerOf = (email: string) => `google:${subjectOf(email)}`;
+
+/**
+ * The app's own reasons for refusing to index an original, exactly as src/engine/extract.ts and
+ * src/engine/index.ts word them (telegram-messages.test.ts checks they are still there). The
+ * engine host passes them on unchanged.
+ */
+export const ENGINE_MESSAGES = {
+  pageLimit: 'This PDF exceeds 50 pages. Split it into smaller documents.',
+  password:
+    'This PDF is password-protected. Remove the password (for example, print or export it to a new PDF) and add it again.',
+  unreadablePdf: 'This PDF could not be read. Re-export or print it to a new PDF and add it again.',
+  badImage:
+    'This image could not be decoded. Re-save it as a JPEG, PNG or WebP file and add it again.',
+  nothingSearchable:
+    'No searchable content was extracted. The original is still saved and can be opened.',
+};

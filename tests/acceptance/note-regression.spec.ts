@@ -9,7 +9,7 @@ test('consumed R4 regression: conversational note retrieval with a derived displ
   await prepare(page, context);
   const result = await page.evaluate(async () => {
     const h = (window as any).harness;
-    const r = new h.DexieLibraryRepository(new h.CampusRecallDatabase('r4-regression'));
+    const r = new h.DexieLibraryRepository(new h.AnyRecallDatabase('r4-regression'));
     await r.open();
     const engine = new h.LocalEngine(r);
     await engine.initialize();

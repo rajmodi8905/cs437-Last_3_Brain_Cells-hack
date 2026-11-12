@@ -23,6 +23,6 @@ if (!existsSync(key)) {
 }
 process.env.PILOT_DEV_KEY_FILE = key;
 process.env.PILOT_ORIGIN = origin;
-console.log(`Campus Recall checker: ${origin}`);
+console.log(`AnyRecall checker: ${origin}`);
 console.log('Local development sign-in: use a synthetic address such as checker@iitgn.ac.in.');
 await import('/app/server/main.mjs');

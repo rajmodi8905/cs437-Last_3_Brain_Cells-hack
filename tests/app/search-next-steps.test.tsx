@@ -7,7 +7,7 @@
 import { afterEach, expect, it, vi } from 'vitest';
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { App } from '../../src/ui/App';
-import type { CampusRecallServices } from '../../src/app/services';
+import type { AnyRecallServices } from '../../src/app/services';
 import type { ItemKind, LibraryItem, SearchResult } from '../../src/shared';
 
 afterEach(() => {
@@ -52,7 +52,7 @@ function stubServices(
     subscribeProgress: () => () => {},
     dispose: vi.fn(async () => {}),
   };
-  const services: CampusRecallServices = {
+  const services: AnyRecallServices = {
     initialize: vi.fn(async () => {}),
     subscribeLibrary(next) {
       next(items);
@@ -72,7 +72,7 @@ function stubServices(
       exportItems: vi.fn(),
       importArchive: vi.fn(),
     },
-    engine: engine as unknown as CampusRecallServices['engine'],
+    engine: engine as unknown as AnyRecallServices['engine'],
     capture: {
       captureWebpage: vi.fn(),
       extractHtml: vi.fn(),
@@ -82,7 +82,7 @@ function stubServices(
   };
   return { services, engine, preferences };
 }
-async function start(services: CampusRecallServices, hash = '/library') {
+async function start(services: AnyRecallServices, hash = '/library') {
   window.location.hash = hash;
   render(<App services={services} />);
   await waitFor(() => expect(services.initialize).toHaveBeenCalledOnce());

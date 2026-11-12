@@ -74,7 +74,7 @@ export function createWhatsAppIndexer(options: WhatsAppIndexerOptions) {
         });
       } catch (cause) {
         if (cause instanceof EngineIndexError)
-          throw new PermanentJobError(`${cause.code}: ${cause.message}`);
+          throw new PermanentJobError(`${cause.code}: ${cause.message}`, undefined, { cause });
         throw cause;
       }
       if (result.contentSha256 !== item.contentSha256)
@@ -113,9 +113,11 @@ export function createWhatsAppIndexer(options: WhatsAppIndexerOptions) {
         } catch (cause) {
           if (!(cause instanceof IndexPublishError)) throw cause;
           if (cause.code === 'QUOTA_EXCEEDED')
-            throw new PermanentJobError(cause.message, REPLIES.indexFull(current.title));
+            throw new PermanentJobError(cause.message, REPLIES.indexFull(current.title), {
+              cause,
+            });
           if (PERMANENT.has(cause.code))
-            throw new PermanentJobError(`${cause.code}: ${cause.message}`);
+            throw new PermanentJobError(`${cause.code}: ${cause.message}`, undefined, { cause });
           throw cause;
         }
         return 'published';

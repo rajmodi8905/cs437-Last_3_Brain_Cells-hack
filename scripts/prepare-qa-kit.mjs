@@ -83,7 +83,7 @@ async function makeLibrary(records, prefix) {
     });
     if (record.file) materials.set(`originals/${record.file}`, bytes);
   }
-  const manifest = { format: 'campus-recall', version: 1, exportedAt: fixedTime, items };
+  const manifest = { format: 'anyrecall', version: 1, exportedAt: fixedTime, items };
   return {
     manifest,
     files,
@@ -230,7 +230,7 @@ materials.set(
 materials.set(
   'START_HERE.md',
   strToU8(
-    `# Synthetic Campus Recall QA kit\n\nUse docs/implementation/nakshatra-quickstart.md in the repository. Nothing here is a real announcement, user library or test result.\n\n1. Open a disposable browser profile at the production app's stable localhost/HTTPS URL.\n2. Save individual supported files from originals/ to exercise Save. For note and webpage input use expected.json's exact text and URL in Add; .txt is not a supported file import.\n3. In Settings restore library-30.zip to prepare all thirty originals. No models or embeddings are included; setup/indexing happens locally. Restore-only checks do not prove manual Save works.\n4. same-title.zip contains two distinct notes with the same display title. Repeating restore should report content duplicates.\n5. Use expected.json for original hashes, queries, PDF pages and media intervals (seconds). Restored UUIDs are new.\n6. Test exploratory.zip separately; its three queries have no measured pass claim and are not part of the frozen corpus.\n7. In a disposable profile, each invalid/*.zip must be rejected without changing existing items. corrupt.png has only a PNG signature: a saved original may fail later decoding and must remain available with a reason. Paste over-limit-note.txt into Add Note to test the character limit. unsupported.txt is deliberately unsupported as a direct file.\n8. originals/scanned.pdf and ocr.webp exercise scanned/OCR paths; speech.wav exercises WAV. Record actual results in run-ledger.md and file distinct defects using the repository issue form.\n\nKeep the app open during processing. Wait for the actual Ready/Failed states; restored Queued does not prove indexing. Physical phone checks require a trusted HTTPS URL reachable from the device, not a Mac localhost URL. Browser/installed caches are separate until observed otherwise.\n`,
+    `# Synthetic AnyRecall QA kit\n\nUse docs/implementation/nakshatra-quickstart.md in the repository. Nothing here is a real announcement, user library or test result.\n\n1. Open a disposable browser profile at the production app's stable localhost/HTTPS URL.\n2. Save individual supported files from originals/ to exercise Save. For note and webpage input use expected.json's exact text and URL in Add; .txt is not a supported file import.\n3. In Settings restore library-30.zip to prepare all thirty originals. No models or embeddings are included; setup/indexing happens locally. Restore-only checks do not prove manual Save works.\n4. same-title.zip contains two distinct notes with the same display title. Repeating restore should report content duplicates.\n5. Use expected.json for original hashes, queries, PDF pages and media intervals (seconds). Restored UUIDs are new.\n6. Test exploratory.zip separately; its three queries have no measured pass claim and are not part of the frozen corpus.\n7. In a disposable profile, each invalid/*.zip must be rejected without changing existing items. corrupt.png has only a PNG signature: a saved original may fail later decoding and must remain available with a reason. Paste over-limit-note.txt into Add Note to test the character limit. unsupported.txt is deliberately unsupported as a direct file.\n8. originals/scanned.pdf and ocr.webp exercise scanned/OCR paths; speech.wav exercises WAV. Record actual results in run-ledger.md and file distinct defects using the repository issue form.\n\nKeep the app open during processing. Wait for the actual Ready/Failed states; restored Queued does not prove indexing. Physical phone checks require a trusted HTTPS URL reachable from the device, not a Mac localhost URL. Browser/installed caches are separate until observed otherwise.\n`,
   ),
 );
 const commit = execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).trim();
@@ -260,7 +260,7 @@ materials.set(
   ),
 );
 const inventory = {
-  format: 'campus-recall-qa-kit',
+  format: 'anyrecall-qa-kit',
   version: 1,
   evidenceStatus: 'Test materials only; no tester results recorded.',
   files: [...materials].map(([path, bytes]) => ({ path, bytes: bytes.length, sha256: sha(bytes) })),

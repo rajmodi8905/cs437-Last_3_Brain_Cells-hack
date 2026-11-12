@@ -5,7 +5,7 @@
   </head>
   <body>
     <script type="module">
-      import { CampusRecallDatabase, DexieLibraryRepository } from '/src/storage/index.ts';
+      import { AnyRecallDatabase, DexieLibraryRepository } from '/src/storage/index.ts';
       import { ModelClient } from '/src/app/model-client.ts';
       import { cosine } from '/src/engine/ranking.ts';
       import { LocalEngine, INDEX_VERSION } from '/src/engine/index.ts';
@@ -28,7 +28,7 @@
         ModelClient,
         cosine,
         INDEX_VERSION,
-        CampusRecallDatabase,
+        AnyRecallDatabase,
         DexieLibraryRepository,
         LocalEngine,
         setupAssets,

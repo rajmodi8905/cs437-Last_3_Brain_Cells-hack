@@ -11,8 +11,8 @@ This handoff extends [PR #8's shared kit](https://github.com/rajmodi8905/cs437-L
 Inspect status and preserve existing work. In a separate new folder if needed:
 
 ```bash
-git clone https://github.com/rajmodi8905/cs437-Last_3_Brain_Cells-hack.git campus-recall-chaitanya-qa
-cd campus-recall-chaitanya-qa
+git clone https://github.com/rajmodi8905/cs437-Last_3_Brain_Cells-hack.git anyrecall-chaitanya-qa
+cd anyrecall-chaitanya-qa
 git rev-parse HEAD
 node --version
 npm ci

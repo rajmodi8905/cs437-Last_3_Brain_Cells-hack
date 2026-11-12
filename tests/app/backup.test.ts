@@ -21,30 +21,30 @@ describe('Export all', () => {
 
   it('waits between part downloads and names each part', async () => {
     const events: string[] = [];
-    await downloadParts([new Blob(['a']), new Blob(['b']), new Blob(['c'])], 'campus-recall', {
+    await downloadParts([new Blob(['a']), new Blob(['b']), new Blob(['c'])], 'anyrecall', {
       download: (_blob, name) => events.push(name),
       pause: async (ms) => {
         events.push(`wait ${ms}`);
       },
     });
     expect(events).toEqual([
-      'campus-recall-part-1-of-3.zip',
+      'anyrecall-part-1-of-3.zip',
       `wait ${DOWNLOAD_GAP_MS}`,
-      'campus-recall-part-2-of-3.zip',
+      'anyrecall-part-2-of-3.zip',
       `wait ${DOWNLOAD_GAP_MS}`,
-      'campus-recall-part-3-of-3.zip',
+      'anyrecall-part-3-of-3.zip',
     ]);
   });
 
   it('downloads a small library as one ZIP without waiting', async () => {
     const events: string[] = [];
-    await downloadParts([new Blob(['a'])], 'campus-recall', {
+    await downloadParts([new Blob(['a'])], 'anyrecall', {
       download: (_blob, name) => events.push(name),
       pause: async () => {
         events.push('wait');
       },
     });
-    expect(events).toEqual(['campus-recall.zip']);
+    expect(events).toEqual(['anyrecall.zip']);
   });
 
   it('tells the user to check that every part arrived', () => {

@@ -80,7 +80,7 @@ describe('Sync state saved in the browser', () => {
   });
 
   it('refuses an account ID that could reach another database name', () => {
-    expect(() => new IndexedDbSyncStateStore('../campus-recall')).toThrow();
+    expect(() => new IndexedDbSyncStateStore('../anyrecall')).toThrow();
     expect(() => new IndexedDbSyncStateStore('')).toThrow();
   });
 });

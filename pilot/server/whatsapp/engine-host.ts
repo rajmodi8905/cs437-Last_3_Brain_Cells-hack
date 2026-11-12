@@ -54,12 +54,14 @@ export interface EngineSearchHit {
 
 /**
  * The engine refused the original (for example an unreadable or over-long PDF, an image it cannot
- * decode, nothing searchable): trying again gives the same answer.
+ * decode, nothing searchable): trying again gives the same answer. `message` is the app's own
+ * explanation; `pageCount` is a PDF's number of pages when the host could read it.
  */
 export class EngineIndexError extends Error {
   constructor(
     readonly code: string,
     message: string,
+    readonly pageCount?: number,
   ) {
     super(message);
     this.name = 'EngineIndexError';
@@ -175,7 +177,8 @@ type BrowserContext = import('@playwright/test').BrowserContext;
 type Page = import('@playwright/test').Page;
 type WireIndexInput = Omit<EngineIndexInput, 'bytes'> & { bytesBase64: string };
 type WireIndexOutcome =
-  (EngineIndexResult & { ok: true }) | { ok: false; error: { code: string; message: string } };
+  | (EngineIndexResult & { ok: true })
+  | { ok: false; error: { code: string; message: string; pageCount?: number } };
 type HostWindow = {
   engineHost: {
     ready(): Promise<{ indexVersion: string }>;
@@ -259,7 +262,7 @@ export class PlaywrightEngineHost implements EngineHost {
     if (!this.profileDir) {
       this.ownProfile = !this.options.profileDir;
       this.profileDir =
-        this.options.profileDir ?? (await mkdtemp(join(tmpdir(), 'campus-recall-engine-host-')));
+        this.options.profileDir ?? (await mkdtemp(join(tmpdir(), 'anyrecall-engine-host-')));
     }
     const { chromium } = (await import('@playwright/test')) as Playwright;
     const context = await chromium.launchPersistentContext(this.profileDir, {
@@ -384,7 +387,12 @@ export class PlaywrightEngineHost implements EngineHost {
         (value) => (window as unknown as HostWindow).engineHost.index(value),
         wire,
       );
-      if (!outcome.ok) throw new EngineIndexError(outcome.error.code, outcome.error.message);
+      if (!outcome.ok)
+        throw new EngineIndexError(
+          outcome.error.code,
+          outcome.error.message,
+          outcome.error.pageCount,
+        );
       const { ok: _ok, ...result } = outcome;
       return result;
     });
