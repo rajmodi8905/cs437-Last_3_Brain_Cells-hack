@@ -1,5 +1,4 @@
 
-https://github.com/user-attachments/assets/341df4a2-4a50-4d52-a05d-58924ae9cf13
 # AnyRecall
 
 **Find what you saved, from what you remember.**
