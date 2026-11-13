@@ -1,3 +1,5 @@
+
+https://github.com/user-attachments/assets/341df4a2-4a50-4d52-a05d-58924ae9cf13
 # AnyRecall
 
 **Find what you saved, from what you remember.**
@@ -6,7 +8,15 @@ AnyRecall turns your screenshots, PDFs, notes, saved webpages and short recordin
 
 AnyRecall was called Campus Recall until 12 November 2026; older records keep that name.
 
-https://github.com/user-attachments/assets/2947f113-1e72-4074-8d47-2b43daa21dfe
+
+
+
+
+https://github.com/user-attachments/assets/69bf0032-89fb-40a4-a01a-e86cb54648ef
+
+
+
+
 
 [Try AnyRecall](https://campusrecall.indiasouthcentral.cloudapp.azure.com) · [Telegram bot](#telegram-bot) · [Install on your phone](#use-on-your-phone) · [Run locally](#run-locally)
 
