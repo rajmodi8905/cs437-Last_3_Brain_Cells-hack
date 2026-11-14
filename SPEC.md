@@ -14,8 +14,7 @@
   - “not that often but it cost some time and i barely missed the registration.”
   - “i usually star the particular message or information on whatsapp and it’s convenient to look for it but when ur in a hurry..it kinda gets annoying to look for it.”
 - **Changed:** Our initial plan focused on PDFs. Her experience with a photographed banner led us to include photos and screenshots, using local OCR to extract their text and create searchable embeddings. The app should retrieve the original image without requiring her to remember its filename or WhatsApp chat.
-- **Evidence:** [U01: interview notes and responses](docs/user/U01.md). Suhani agreed to inclusion in the project documentation. Here is a selfie after the interview with Suhani
-![proof](docs/user/interview_proof/image.png)
+- **Evidence:** [U01: interview notes and responses](docs/user/U01.md). Suhani agreed to inclusion in the project documentation.
 
 
 ### Bhavya Shah
@@ -27,8 +26,7 @@
   - “it would help only when all the info is there in it already.”
   - “I would never know whether I really saved my work over there”
 - **Changed:** Add a clear “Saved locally” confirmation after successful storage and a recent-saves view. Keep storage confirmation separate from indexing status so she can see what was saved even while it is processing. These changes address uncertainty about saving; students still need to import the information they want to retrieve.
-- **Evidence:** [U02: WhatsApp interview responses](docs/user/U02.md). Bhavya agreed to inclusion in the project documentation. Here is the screenshot of her chat 
-![chat_proof](docs/user/interview_proof/IMG_6515.PNG)
+- **Evidence:** [U02: WhatsApp interview responses](docs/user/U02.md). Bhavya agreed to inclusion in the project documentation.
 
 ### 1. Who, exactly?
 
