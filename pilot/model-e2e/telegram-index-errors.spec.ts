@@ -2,7 +2,8 @@
 // The real reason reaches the chat, with the real engine: a 71-page PDF made here (the app indexes
 // PDFs of at most 50 pages) and a damaged PDF are refused by the app's own engine in the engine
 // host, which reports the page count, and the Telegram bot, linked to an account, says why and what
-// to do. Nothing calls Telegram or Google; the account is linked directly in the store.
+// to do. Nothing calls Telegram or Google; the account is linked directly in the store, with the
+// consent that confirming a link in the chat records.
 import { expect, test } from '@playwright/test';
 import { classifyIndexFailure } from '../server/chat/index-failure';
 import { MemoryObjectStore, MemoryPilotStore } from '../server/memory';
@@ -107,6 +108,7 @@ test('Telegram: a 71-page PDF and a damaged PDF get their real reason in the cha
       email: 'student.a@iitgn.ac.in',
       linkedAt: 1,
     });
+    await stores.bot.setConsent(String(USER_A.id), 1, '1');
     tg.addFile('long', long);
     tg.addFile('damaged', damaged);
     const updates = [
