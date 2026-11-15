@@ -19,7 +19,6 @@ AnyRecall has no hosted REST backend or inference endpoint. Its application API 
 | `src/engine/` | Asset verification, extraction, inference orchestration and ranking | Independent of the current views |
 | `src/app/model-client.ts`, `model-protocol.ts` | Typed worker transport and backend fallback | Preserve when redesigning screens |
 | `src/sw.ts` | App-shell precache and cached runtime reads | Preserve offline behavior; rebuild after changing assets |
-| `src/app/oldStorage.ts` | One-time removal of storage kept under the app's earlier name | Leave as it is; it names only the old storage |
 
 Views receive a `AnyRecallServices` instance through `<App services={services} />`. They do not instantiate a database, inspect Dexie tables, or import extraction/model implementations. Add receives a save contract and capture service; Viewer receives original/backup operations. The application layer never imports the current UI or CSS.
 
@@ -31,7 +30,7 @@ The stylesheet entry preserves import order because later responsive/readability
 
 The app was called Campus Recall until 12 November 2026, and its storage names changed with its name. On each device the library is the IndexedDB database `anyrecall`, the search models are in the Cache Storage cache `anyrecall-assets-v1`, a share waiting for Add is in `anyrecall-share`, and Auto-sync keeps one database per signed-in account, `anyrecall-pilot-sync-<account ID>`. Backups and exports carry `"format": "anyrecall"`; archives made before the rename are not accepted.
 
-A library saved under the old name is not carried over. At start, `removeOldStorage` (`src/app/oldStorage.ts`, called from `src/main.tsx`) deletes what an earlier version left on the device so it does not keep about 445 MB of unused data: the caches `campus-recall-assets-v1` and `campus-recall-share`, the database `campus-recall`, and the databases named `campus-recall-pilot-sync-<account ID>`. It deletes nothing else, never delays the app, and runs once: when everything is gone it sets `anyrecall:old-storage-removed` in localStorage. A database still open in another tab is tried again at the next start (`tests/app/old-storage.test.ts`, `tests/e2e/old-storage.spec.ts`).
+A library saved under the old name is not carried over, and the app does not delete it either: whatever an earlier version left on the device (the caches `campus-recall-assets-v1` and `campus-recall-share`, the database `campus-recall` and the databases named `campus-recall-pilot-sync-<account ID>`) stays where it is, unread. AnyRecall is built for its own students, not for users of the earlier version, so there is no migration (`tests/e2e/old-storage-kept.spec.ts`).
 
 ## Local API
 

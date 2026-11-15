@@ -5,15 +5,20 @@
 // remove it too, then its original and index objects).
 import { decideWrite } from '../../contract';
 import type { ObjectStore, PilotStore } from '../store';
+import { runAfterCommit } from '../vault-reset';
 import type { BotStore } from '../whatsapp/store';
 import { telegramUserLock, type TelegramLink, type TelegramStateStore } from './store';
 
-/** Deletes one item as `DELETE /items/{id}` does; false when it was already gone. */
+/**
+ * Deletes one item as `DELETE /items/{id}` does; false when it was already gone. With `later`,
+ * the object deletes are handed to it to run after the caller's lock transaction commits.
+ */
 export async function deleteItemAsOwner(
   store: PilotStore,
   objects: ObjectStore,
   ownerKey: string,
   globalId: string,
+  later?: (task: () => Promise<void>) => void,
 ) {
   const current = await store.getItem(ownerKey, globalId);
   if (!current || current.deleted) return false;
@@ -35,7 +40,10 @@ export async function deleteItemAsOwner(
   );
   // Objects go only after the tombstone is written, as for the API.
   for (const key of [current.objectKey, current.indexObjectKey])
-    if (key?.startsWith(`${ownerKey}/`)) await objects.delete(key);
+    if (key?.startsWith(`${ownerKey}/`)) {
+      if (later) later(() => objects.delete(key));
+      else await objects.delete(key);
+    }
   return true;
 }
 
@@ -75,18 +83,31 @@ export const unlinkTelegramUser = (input: UnlinkInput) =>
  */
 export async function eraseTelegramItems(input: UnlinkInput) {
   const { store, objects, state } = input;
-  return store.withOwnerLock(telegramUserLock(input.userId), async () => {
+  // Blobs go after the locks' transaction commits, so a failed delete cannot roll the erase back.
+  const later: Array<() => Promise<void>> = [];
+  const done = await store.withOwnerLock(telegramUserLock(input.userId), async () => {
     const { account, links } = await unlink(input);
     if (!account) return { account, links, erased: 0 };
     const erased = await store.withOwnerLock(account.ownerKey, async () => {
       const ids = await state.savedItems(account.ownerKey);
       let count = 0;
       for (const globalId of ids)
-        if (await deleteItemAsOwner(store, objects, account.ownerKey, globalId)) count++;
+        if (
+          await deleteItemAsOwner(
+            store,
+            objects,
+            account.ownerKey,
+            globalId,
+            (task) => void later.push(task),
+          )
+        )
+          count++;
       await state.forgetSaved(account.ownerKey, ids);
       await state.forgetOwner(account.ownerKey);
       return count;
     });
     return { account, links, erased };
   });
+  await runAfterCommit(later);
+  return done;
 }

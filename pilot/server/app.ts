@@ -22,7 +22,7 @@ import {
 } from './store';
 import { IndexPublishError, publishIndexBundle } from './index-publish';
 import { DEFAULT_LIMITS, RateLimiter, type RateLimits } from './limits';
-import { resetOwnerVault } from './vault-reset';
+import { resetOwnerVault, runAfterCommit } from './vault-reset';
 import type { KeySource } from './tokens';
 import { verifyIdToken } from './tokens';
 import {
@@ -231,11 +231,25 @@ const errorBody = (code: PilotErrorCode, message: string) => ({
 });
 
 // Mutating responses are held until the durable owner transaction has committed.
-const pendingResponses = new WeakMap<ServerResponse, { flush?: () => void }>();
+const pendingResponses = new WeakMap<
+  ServerResponse,
+  { flush?: () => void; afterCommit: Array<() => Promise<void>> }
+>();
 /** A session just opened, with the cookie value that only the browser keeps. */
 interface OpenedSession {
   session: Session;
   cookie: string;
+}
+
+/**
+ * Runs `task` once the request's owner transaction has committed, or at once when the request
+ * holds none. Blob deletes go here: inside the transaction, one that fails after removing the
+ * blob rolls the change back and leaves a live item without its original.
+ */
+function afterCommit(res: ServerResponse, task: () => Promise<void>): Promise<void> | void {
+  const pending = pendingResponses.get(res);
+  if (!pending) return task();
+  pending.afterCommit.push(task);
 }
 
 function send(
@@ -1074,11 +1088,13 @@ export function createPilotHandler(options: PilotServerOptions): RequestListener
               }
             : { ...current, revision: decision.nextRevision, title: write.title };
         await store.publish(session.ownerKey, next, epoch);
-        // Blobs go only after the tombstone is written: if publishing fails, the item and its
-        // original stay readable everywhere, and a retried delete finishes the job.
+        // Blobs go only after the tombstone has committed: if publishing or the commit fails,
+        // the item and its original stay readable everywhere, and a retried delete finishes
+        // the job.
         if (write.type === 'delete') {
           for (const key of [current.objectKey, current.indexObjectKey])
-            if (key?.startsWith(`${session.ownerKey}/`)) await objects.delete(key);
+            if (key?.startsWith(`${session.ownerKey}/`))
+              await afterCommit(res, () => objects.delete(key));
         }
         return { status: 200, body: { item: publicItem(next) } };
       });
@@ -1127,7 +1143,9 @@ export function createPilotHandler(options: PilotServerOptions): RequestListener
       if (body.confirm !== 'remove-cloud-library')
         throw new ApiError('INVALID_INPUT', 'Confirm removing the cloud library.');
       await requireEpoch(session.ownerKey, body);
-      const epoch = await resetOwnerVault(store, objects, session.ownerKey);
+      const epoch = await resetOwnerVault(store, objects, session.ownerKey, (task) =>
+        afterCommit(res, task),
+      );
       return send(res, 200, { vault: { epoch } });
     }
 
@@ -1213,13 +1231,18 @@ export function createPilotHandler(options: PilotServerOptions): RequestListener
     // connections (and the account's lock) until it finished, and a handful of slow uploads
     // would stall every account's requests (#66).
     await preloadBody(req, bodyLimitFor(method, req.url ?? '/'));
-    const pending: { flush?: () => void } = {};
+    const pending: { flush?: () => void; afterCommit: Array<() => Promise<void>> } = {
+      afterCommit: [],
+    };
     pendingResponses.set(res, pending);
     try {
       await store.withOwnerLock(session.ownerKey, () => route(req, res));
     } finally {
       pendingResponses.delete(res);
     }
+    // Work that must not run inside the transaction (see `afterCommit`). The change is already
+    // committed, so a failure here cannot undo it and does not change the answer.
+    await runAfterCommit(pending.afterCommit);
     pending.flush?.();
   }
 

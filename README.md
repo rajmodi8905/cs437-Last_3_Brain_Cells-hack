@@ -132,7 +132,7 @@ The home-screen label is **AnyRecall**. Open the installed icon before setup, th
 
 Saved originals and completed model downloads normally survive reopening the same installed app. Interrupted processing may restart; complete setup files are reused, while an incomplete file downloads again. Processing and sync make progress while the app is open. Browser storage is best-effort: keep important originals backed up and confirm uploads show as synced.
 
-A device that used the app under its earlier name starts with an empty library: the old library and search download are not carried over, the app deletes them from the device at its next start, and a backup made by the earlier version cannot be restored.
+A device that used the app under its earlier name starts with an empty library: the old library and search download are not carried over (the app does not touch them, and does not read them either), and a backup made by the earlier version cannot be restored.
 
 ## Run locally
 

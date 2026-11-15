@@ -34,6 +34,9 @@ import { embeddingTitle } from './documents';
 import { isSearchableQuery } from './text-guards';
 export const INDEX_VERSION =
   'gemma2-daa72c5-q4-768-ch256o48-img70-lowered1-notitledup1-asr2-ocrconf1-v8';
+/** A failure only another search model could avoid: the item is not damaged. */
+class ModelLimitError extends Error {}
+
 export class LocalEngine implements EngineClient {
   readonly models = new ModelClient();
   /** S16: the student's own model's worker. Speech and pictures always use `models`. */
@@ -195,7 +198,7 @@ export class LocalEngine implements EngineClient {
     this.model = next;
     saveSearchModel(next);
     this.ready = true;
-    await this.invalidateOldIndexes();
+    await this.invalidateOldIndexes(true);
     this.startWake();
     void this.drain();
   }
@@ -203,14 +206,29 @@ export class LocalEngine implements EngineClient {
     await this.repository.enqueueItem(itemId);
     if (this.ready) void this.drain();
   }
-  private async invalidateOldIndexes() {
+  /**
+   * Queues for re-indexing every ready item whose segments belong to another model. When the
+   * student has just switched models, items that failed because of the old model (`MODEL_LIMIT`:
+   * a picture with no text under a custom model) are queued too, since the new model may index
+   * them, and switching back must restore the default exactly. Items that failed for any other
+   * reason (a damaged or oversized file) stay failed until the student retries them.
+   */
+  private async invalidateOldIndexes(includeFailed = false) {
     const db = this.repository.database;
     await db.transaction('rw', db.items, db.segments, db.jobs, async () => {
-      for (const item of await db.items.where('status').equals('ready').toArray()) {
+      const stale = (await db.items.where('status').anyOf('ready', 'failed').toArray()).filter(
+        (item) => item.status === 'ready' || (includeFailed && item.error?.code === 'MODEL_LIMIT'),
+      );
+      for (const item of stale) {
         const segments = await db.segments.where('itemId').equals(item.id).toArray();
         if (!segments.length || segments.some((s) => s.indexVersion !== this.model.indexVersion)) {
           const generation = item.processingGeneration + 1;
-          await db.items.put({ ...item, status: 'queued', processingGeneration: generation });
+          await db.items.put({
+            ...item,
+            status: 'queued',
+            error: undefined,
+            processingGeneration: generation,
+          });
           await db.segments.where('itemId').equals(item.id).delete();
           await db.jobs.put({ itemId: item.id, generation, queuedAt: Date.now() });
         }
@@ -344,7 +362,7 @@ export class LocalEngine implements EngineClient {
               }
             }
             if (!segments.length && pictureOnly)
-              throw new Error(
+              throw new ModelLimitError(
                 `There is no text or speech to search here, and your own search model cannot search what is in a picture or video. Switch to ${GEMMA.label} in Settings to search it. The original is still saved and can be opened.`,
               );
             if (!segments.length)
@@ -367,7 +385,7 @@ export class LocalEngine implements EngineClient {
           } catch (cause) {
             const message = cause instanceof Error ? cause.message : String(cause);
             await this.repository.failJob(claim, {
-              code: 'EXTRACTION_FAILED',
+              code: cause instanceof ModelLimitError ? 'MODEL_LIMIT' : 'EXTRACTION_FAILED',
               message,
               retryable: true,
             });
