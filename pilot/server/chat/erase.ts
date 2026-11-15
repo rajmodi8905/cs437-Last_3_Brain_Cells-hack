@@ -4,7 +4,7 @@
 // student's own account instead, so its /delete erases only what was saved there
 // (../telegram/erase.ts).
 import type { ObjectStore, PilotStore } from '../store';
-import { resetOwnerVault } from '../vault-reset';
+import { resetOwnerVault, runAfterCommit } from '../vault-reset';
 import type { BotStore } from '../whatsapp/store';
 
 export async function eraseOwner(input: {
@@ -19,10 +19,14 @@ export async function eraseOwner(input: {
   const { store, objects, bot, userId, ownerKey } = input;
   // Under the owner's lock, so a save or a link being opened meanwhile waits and then finds
   // nothing to add to.
+  // Blobs go after the lock's transaction commits: one that fails inside it would roll the reset
+  // back after the original is already gone.
+  const later: Array<() => Promise<void>> = [];
   await store.withOwnerLock(ownerKey, async () => {
-    await resetOwnerVault(store, objects, ownerKey);
+    await resetOwnerVault(store, objects, ownerKey, (task) => void later.push(task));
     await store.deleteOwnerSessions(ownerKey);
     await bot.forgetSender(userId, ownerKey);
     await input.more?.();
   });
+  await runAfterCommit(later);
 }

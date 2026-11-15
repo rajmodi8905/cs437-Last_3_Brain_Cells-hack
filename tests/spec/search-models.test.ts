@@ -498,10 +498,10 @@ it('[S16] switching back to the default re-queues a picture that failed under th
   // The picture has no text, so the student's own model could not index it.
   expect(
     await repository.failJob(claim, {
-      code: 'NO_TEXT',
-      message: 'No text found.',
-      retryable: false,
-    } as never),
+      code: 'MODEL_LIMIT',
+      message: 'Your own search model cannot search what is in a picture.',
+      retryable: true,
+    }),
   ).toBe(true);
   expect((await repository.getItem(item.id))?.status).toBe('failed');
   stubCache();
@@ -520,4 +520,42 @@ it('[S16] switching back to the default re-queues a picture that failed under th
   await engine.setSearchModel(custom);
   await engine.setSearchModel(GEMMA);
   expect((await repository.getItem(item.id))?.status).toBe('queued');
+});
+
+it('[S16] a model switch re-queues only failures the model caused, and clears their error', async () => {
+  memoryStorage();
+  const { repository, item, claim } = await claimedNote();
+  const other = await repository.save({ kind: 'note', text: 'Damaged on arrival.' });
+  const second = (await repository.claimNextJob())!;
+  await repository.failJob(claim, {
+    code: 'MODEL_LIMIT',
+    message: 'Picture only.',
+    retryable: true,
+  });
+  await repository.failJob(second, {
+    code: 'EXTRACTION_FAILED',
+    message: 'Could not read it.',
+    retryable: true,
+  });
+  stubCache();
+  const list = await manifest();
+  const custom = customSearchModel(await config());
+  vi.stubGlobal('fetch', serve());
+  await setupAssets(list, () => {}, undefined, custom);
+  await setupAssets(list, () => {}, undefined, GEMMA);
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async () => Response.json(list)),
+  );
+  const engine = new LocalEngine(repository);
+  (engine as any).drain = vi.fn(async () => {});
+  await engine.initialize();
+  await engine.setSearchModel(custom);
+
+  const requeued = await repository.getItem(item.id);
+  expect(requeued?.status).toBe('queued');
+  expect(requeued?.error).toBeUndefined();
+  const damaged = await repository.getItem(other.id);
+  expect(damaged?.status).toBe('failed');
+  expect(damaged?.error?.code).toBe('EXTRACTION_FAILED');
 });

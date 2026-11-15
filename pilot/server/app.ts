@@ -22,7 +22,7 @@ import {
 } from './store';
 import { IndexPublishError, publishIndexBundle } from './index-publish';
 import { DEFAULT_LIMITS, RateLimiter, type RateLimits } from './limits';
-import { resetOwnerVault } from './vault-reset';
+import { resetOwnerVault, runAfterCommit } from './vault-reset';
 import type { KeySource } from './tokens';
 import { verifyIdToken } from './tokens';
 import {
@@ -1242,10 +1242,7 @@ export function createPilotHandler(options: PilotServerOptions): RequestListener
     }
     // Work that must not run inside the transaction (see `afterCommit`). The change is already
     // committed, so a failure here cannot undo it and does not change the answer.
-    for (const task of pending.afterCommit)
-      await task().catch((cause: unknown) =>
-        console.error('Cleanup after a committed change failed', cause),
-      );
+    await runAfterCommit(pending.afterCommit);
     pending.flush?.();
   }
 

@@ -27,3 +27,15 @@ export async function resetOwnerVault(
     for (const n of upload.chunks) await remove(stagingKey(upload.uploadId, n));
   return epoch;
 }
+
+/**
+ * Runs tasks that were held back until a lock's transaction committed (see `resetOwnerVault`).
+ * The change is already committed, so a failure cannot undo it: it is logged, and the
+ * remaining tasks still run.
+ */
+export async function runAfterCommit(tasks: Array<() => Promise<void>>) {
+  for (const task of tasks)
+    await task().catch((cause: unknown) =>
+      console.error('Cleanup after a committed change failed', cause),
+    );
+}
