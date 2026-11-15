@@ -187,6 +187,14 @@ export const forgottenMessage = (message: WaMessage): WaMessage => ({
   ...(message.type ? { type: message.type } : {}),
 });
 
+/**
+ * What the webhook stores of a message from a sender who has not agreed (or has sent STOP): its
+ * ID and type, plus the command word when the whole text is one, because the conversation needs
+ * that to answer AGREE, HELP and the rest. Free text, media and captions are never stored.
+ */
+export const minimalMessage = (message: WaMessage, command?: string): WaMessage =>
+  command ? { id: message.id, type: 'text', text: { body: command } } : forgottenMessage(message);
+
 /** In-memory BotStore for tests and local development. Not durable. */
 export class MemoryBotStore implements BotStore {
   private senders = new Map<string, WhatsAppSender & { lastSeen: number }>();

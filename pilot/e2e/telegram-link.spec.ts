@@ -13,7 +13,7 @@ import { createPilotHandler } from '../server/app';
 import { MemoryObjectStore, MemoryPilotStore } from '../server/memory';
 import { createStaticHandler } from '../server/static';
 import { createTelegramApi } from '../server/telegram/api';
-import { announceTelegramLink, createTelegramBot } from '../server/telegram/bot';
+import { announceTelegramLinkRequest, createTelegramBot } from '../server/telegram/bot';
 import { createTelegramIntake } from '../server/telegram/intake';
 import { MemoryTelegramStore } from '../server/telegram/store';
 import { staticKeySource } from '../server/tokens';
@@ -24,6 +24,7 @@ import {
   ID_KEY,
   ID_KEY_ID,
   USER_A,
+  callbackUpdate,
   signIdToken,
   startFakeTelegram,
   textUpdate,
@@ -59,11 +60,9 @@ test.beforeAll(async () => {
     devSigner: (email) => signIdToken(email),
     limits: { signInBurst: 1000 },
     telegram: {
-      bot,
       state,
-      noticeVersion: 'e2e',
       privacyUrl: `${site}/#/privacy`,
-      onLinked: (linked) => announceTelegramLink(api, linked),
+      onLinkRequested: (request) => announceTelegramLinkRequest(api, state, request),
     },
   });
   server.on('request', createStaticHandler(resolve('dist'), handler));
@@ -77,6 +76,7 @@ test.beforeAll(async () => {
     quotaBytes: 50_000_000,
     origin: site,
     privacyUrl: `${site}/#/privacy`,
+    noticeVersion: 'e2e',
     contactEmail: 'recall-team@example.test',
   });
   const intake = createTelegramIntake({ bot });
@@ -142,14 +142,19 @@ test('a signed-in student links Telegram, and what they send the bot is listed i
   await expect(page.getByText(`Link Telegram @${USER_A.username} to ${EMAIL}?`)).toBeVisible();
   await expect(page.getByText('not end-to-end encrypted')).toBeVisible();
   await page.getByRole('button', { name: 'Continue' }).click();
-  await expect(page.getByRole('heading', { name: 'Telegram is linked' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Now confirm in Telegram' })).toBeVisible();
+  // Nothing is linked until the Telegram user confirms in their own chat.
+  await expect.poll(() => tg.to(USER_A.id).at(-1)?.replyMarkup?.inline_keyboard[0]?.length).toBe(2);
+  await send(
+    callbackUpdate(tg.to(USER_A.id).at(-1)!.replyMarkup!.inline_keyboard[0][0].callback_data!),
+  );
   await expect
     .poll(() => tg.textsTo(USER_A.id).at(-1))
     .toBe(
       'Linked to s•••a@iitgn.ac.in. Forward or send files to save them; type anything to search.',
     );
   // The used login button is removed from the chat.
-  await expect.poll(() => tg.state.removed.length).toBe(1);
+  await expect.poll(() => tg.state.removed.length).toBeGreaterThanOrEqual(1);
 
   await send(textUpdate('note Hostel guest pass rules from Telegram'));
   expect(tg.textsTo(USER_A.id).at(-1)).toBe(

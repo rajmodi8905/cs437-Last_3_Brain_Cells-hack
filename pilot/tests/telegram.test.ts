@@ -21,7 +21,7 @@ import type { ObjectStore, PilotStore } from '../server/store';
 import { createTelegramApi, type TelegramApi } from '../server/telegram/api';
 import {
   TELEGRAM_REPLIES,
-  announceTelegramLink,
+  announceTelegramLinkRequest,
   createTelegramBot,
   createTelegramIndexer,
   refuseTelegramUser,
@@ -218,12 +218,10 @@ describe.each(backends)('Telegram bot: %s', (name, available, open) => {
             }
           : { devSigner: (email: string) => signIdToken(email, {}, clock.now) }),
         telegram: {
-          bot: stores.bot,
           state: stores.state,
-          noticeVersion: NOTICE_VERSION,
           privacyUrl: PRIVACY_URL,
-          onLinked: (linked) => {
-            notices.push(announceTelegramLink(api, linked, log));
+          onLinkRequested: (request) => {
+            notices.push(announceTelegramLinkRequest(api, stores.state, request, log));
           },
           webhook: { secretToken: WEBHOOK_SECRET, intake },
         },
@@ -249,6 +247,7 @@ describe.each(backends)('Telegram bot: %s', (name, available, open) => {
         : {}),
       origin: ORIGIN,
       privacyUrl: PRIVACY_URL,
+      noticeVersion: NOTICE_VERSION,
       contactEmail: CONTACT,
       batchMs: 60_000,
       schedule: (run) => {
@@ -346,13 +345,17 @@ describe.each(backends)('Telegram bot: %s', (name, available, open) => {
         },
         body: form,
       });
-    /** Links a Telegram user to an account: /start, sign in, Continue. */
+    /** The data of the Confirm (or Cancel) button on the last message to `from`. */
+    const confirmData = (from: TgFrom = USER_A, button = 0) =>
+      tg.to(from.id).at(-1)?.replyMarkup?.inline_keyboard[0]?.[button]?.callback_data;
+    /** Links a Telegram user to an account: /start, sign in, Continue, Confirm in the chat. */
     const link = async (from: TgFrom = USER_A, email = EMAIL_X) => {
       const token = await loginLink(from);
       const session = await signIn(email);
       const res = await post(`/telegram/link/${token}`, session.cookie);
       expect(res.status).toBe(200);
       await settle();
+      await send(callbackUpdate(confirmData(from)!, from));
       return { ...session, token };
     };
     /** Sends /open and returns the app link's token. */
@@ -488,6 +491,7 @@ describe.each(backends)('Telegram bot: %s', (name, available, open) => {
       get,
       post,
       lastButtonUrl,
+      confirmData,
       loginLink,
       signIn,
       link,
@@ -1024,6 +1028,7 @@ describe.each(backends)('Telegram bot: %s', (name, available, open) => {
       const own = await t.signIn(EMAIL_X);
       expect((await t.post(`/telegram/link/${token}`, own.cookie)).status).toBe(200);
       await t.settle();
+      await t.send(callbackUpdate(t.confirmData(USER_B)!, USER_B));
       await t.send(textUpdate('note From A', USER_A), textUpdate('note From B', USER_B));
       expect((await t.liveItems(OWNER_X)).map((item) => item.title).sort()).toEqual([
         'From A',
@@ -1075,8 +1080,11 @@ describe.each(backends)('Telegram bot: %s', (name, available, open) => {
 
       const res = await t.post(`/telegram/link/${token}`, session.cookie);
       expect(res.status).toBe(200);
-      expect(await res.text()).toContain('Telegram is linked');
+      expect(await res.text()).toContain('Now confirm in Telegram');
       await t.settle();
+      // Nothing is linked until the Telegram user confirms in their own chat.
+      expect(await t.state.getAccount(String(USER_A.id))).toBeUndefined();
+      await t.send(callbackUpdate(t.confirmData()!));
       expect(await t.state.getAccount(String(USER_A.id))).toMatchObject({
         ownerKey: OWNER_X,
         email: EMAIL_X,
@@ -1085,7 +1093,7 @@ describe.each(backends)('Telegram bot: %s', (name, available, open) => {
       expect(t.tg.textsTo(USER_A.id).at(-1)).toBe(
         'Linked to s•••a@iitgn.ac.in. Forward or send files to save them; type anything to search.',
       );
-      expect(t.tg.state.removed).toEqual([{ chatId: USER_A.id, messageId: stored!.messageId }]);
+      expect(t.tg.state.removed.map((r) => r.messageId)).toContain(stored!.messageId);
 
       // Used up.
       expect((await t.post(`/telegram/link/${token}`, session.cookie)).status).toBe(404);
@@ -1138,6 +1146,8 @@ describe.each(backends)('Telegram bot: %s', (name, available, open) => {
         `Link <strong>Telegram account C</strong> to <strong>${EMAIL_Y}</strong>?`,
       );
       expect((await t.post(`/telegram/link/${token}`, cookie)).status).toBe(200);
+      await t.settle();
+      await t.send(callbackUpdate(t.confirmData(USER_NO_NAME)!, USER_NO_NAME));
       expect((await t.state.getAccount(String(USER_NO_NAME.id)))?.ownerKey).toBe(OWNER_Y);
     });
 
@@ -1237,7 +1247,45 @@ describe.each(backends)('Telegram bot: %s', (name, available, open) => {
       await t.link();
       expect(await t.state.peekLink(hashLinkToken(token), 'login', t.clock.now)).toBeUndefined();
       expect(t.tg.state.removed.map((r) => r.messageId)).toContain(message!.messageId);
-      expect(t.tg.state.removed).toHaveLength(2);
+      // The login button, then the request's buttons once confirmed (and the tapped message).
+      expect(t.tg.state.removed).toHaveLength(3);
+    });
+
+    it('links nothing when another person completes a forwarded login link (#67)', async () => {
+      const t = await setup();
+      // C asks for a login link and forwards it; student B opens it signed in and presses Continue.
+      const token = await t.loginLink(USER_NO_NAME);
+      const student = await t.signIn(EMAIL_X);
+      expect((await t.post(`/telegram/link/${token}`, student.cookie)).status).toBe(200);
+      await t.settle();
+      expect(await t.state.getAccount(String(USER_NO_NAME.id))).toBeUndefined();
+      // C searches B's library: nothing, still logged out.
+      await t.appNote(student, OWNER_X, 'Private', 'secret thesis notes');
+      await t.send(textUpdate('thesis', USER_NO_NAME));
+      expect(t.tg.textsTo(USER_NO_NAME.id).at(-1)).toBe(TELEGRAM_REPLIES.loginFirst);
+      // The chat asks, naming the account masked, with Confirm and Cancel.
+      const ask = t.tg
+        .to(USER_NO_NAME.id)
+        .find((m) => m.replyMarkup?.inline_keyboard[0]?.length === 2);
+      expect(ask?.text).toContain('s•••a@iitgn.ac.in');
+    });
+
+    it('Cancel links nothing, and another Telegram user cannot confirm for this one', async () => {
+      const t = await setup();
+      const token = await t.loginLink();
+      const student = await t.signIn(EMAIL_X);
+      await t.post(`/telegram/link/${token}`, student.cookie);
+      await t.settle();
+      const confirm = t.confirmData()!;
+      const cancel = t.confirmData(USER_A, 1)!;
+      // Another user's tap with this user's token is not accepted and leaves the request usable.
+      await t.send(callbackUpdate(confirm, USER_B));
+      expect(await t.state.getAccount(String(USER_B.id))).toBeUndefined();
+      expect(await t.state.getAccount(String(USER_A.id))).toBeUndefined();
+      await t.send(callbackUpdate(cancel));
+      expect(t.tg.textsTo(USER_A.id).at(-1)).toBe(TELEGRAM_REPLIES.linkCancelled);
+      await t.send(callbackUpdate(confirm));
+      expect(await t.state.getAccount(String(USER_A.id))).toBeUndefined();
     });
 
     it('/logout before linking revokes unused login links and removes their buttons', async () => {
@@ -1329,6 +1377,7 @@ describe.each(backends)('Telegram bot: %s', (name, available, open) => {
       const linked = await t.post(`/telegram/link/${token}`, t.jar.recall_session);
       expect(linked.status).toBe(200);
       await t.settle();
+      await t.send(callbackUpdate(t.confirmData()!));
       expect((await t.state.getAccount(String(USER_A.id)))?.ownerKey).toBe(OWNER_X);
     });
 

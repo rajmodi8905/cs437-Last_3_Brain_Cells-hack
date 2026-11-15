@@ -58,6 +58,33 @@ export const createLoginLink = (
     now,
   );
 
+/** The callback data of the Confirm and Cancel buttons: `link:<token>` and `nolink:<token>`. */
+export const LINK_CONFIRM_DATA = /^(link|nolink):([A-Za-z0-9_-]{43})$/;
+
+/**
+ * A request, made when a login link was completed on the page, to link the Telegram user to the
+ * signed-in account. Nothing is linked until the Telegram user taps Confirm in their own chat; the
+ * returned token goes only into that chat's buttons, and only its SHA-256 is kept.
+ */
+export async function createConfirmRequest(
+  state: TelegramStateStore,
+  request: { userId: string; ownerKey: string; email: string },
+  now: number,
+) {
+  const token = randomBytes(32).toString('base64url');
+  const tokenHash = hashLinkToken(token);
+  await state.createLink({
+    tokenHash,
+    purpose: 'confirm',
+    userId: request.userId,
+    ownerKey: request.ownerKey,
+    label: request.email,
+    createdAt: now,
+    expiresAt: now + LINK_SECONDS,
+  });
+  return { token, tokenHash };
+}
+
 /** An app link that opens the user's linked account. */
 export const createOpenLink = async (
   state: TelegramStateStore,
@@ -141,16 +168,17 @@ export const linkConfirmPage = (name: string, email: string, privacyUrl?: string
     `<h1>Link Telegram to AnyRecall</h1>` +
       `<p>Link <strong>${escapeHtml(name)}</strong> to <strong>${escapeHtml(email)}</strong>?</p>` +
       consent(privacyUrl) +
+      `<p class="note">Continue only if you asked the bot for this link yourself, in your own Telegram. A link someone else sent you would let them use your library.</p>` +
       CONTINUE,
   );
 
-/** After linking. */
-export const linkedPage = (name: string, email: string) =>
+/** After Continue: the link is made only when the Telegram user confirms in their chat. */
+export const linkRequestedPage = (name: string, email: string) =>
   page(
-    'Telegram linked',
-    `<h1>Telegram is linked</h1>` +
-      `<p><strong>${escapeHtml(name)}</strong> is now linked to <strong>${escapeHtml(email)}</strong>.</p>` +
-      `<p>Go back to Telegram: forward or send files to save them, and type anything to search.</p>`,
+    'Confirm in Telegram',
+    `<h1>Now confirm in Telegram</h1>` +
+      `<p>We asked <strong>${escapeHtml(name)}</strong> to confirm in their chat with the bot that it may use <strong>${escapeHtml(email)}</strong>. Nothing is linked until they tap Confirm there.</p>` +
+      `<p>If this is not your own Telegram account, do not let them confirm: close this page, and sign out of AnyRecall if you are unsure.</p>`,
   );
 
 /** The Telegram user is linked to another account already. */

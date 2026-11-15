@@ -22,7 +22,7 @@ import { MemoryBotStore } from './whatsapp/store';
 import { WEBHOOK_PATH } from './whatsapp/webhook';
 import { createTelegramApi } from './telegram/api';
 import {
-  announceTelegramLink,
+  announceTelegramLinkRequest,
   createTelegramIndexer,
   refuseTelegramUser,
   startTelegramBot,
@@ -146,6 +146,7 @@ const api = createPilotHandler({
           appSecret: whatsapp.appSecret,
           bot,
           phoneNumberId: whatsapp.phoneNumberId,
+          consentRequired: true,
           onRecorded: () => botRunner?.wake(),
         },
       }
@@ -153,13 +154,11 @@ const api = createPilotHandler({
   ...(telegram && tgBot && tgState && telegramApi && telegramIntake
     ? {
         telegram: {
-          bot: tgBot,
           state: tgState,
-          noticeVersion: telegram.noticeVersion,
           privacyUrl: telegram.privacyUrl,
           // Sent straight away, even before the bot's worker starts.
-          onLinked: (linked: Parameters<typeof announceTelegramLink>[1]) =>
-            announceTelegramLink(telegramApi, linked, (message, detail) =>
+          onLinkRequested: (request: Parameters<typeof announceTelegramLinkRequest>[2]) =>
+            announceTelegramLinkRequest(telegramApi, tgState, request, (message, detail) =>
               console.error(message, detail instanceof Error ? describeFailure(detail) : detail),
             ),
           ...(telegram.mode === 'webhook' && telegram.webhookSecret
@@ -357,6 +356,7 @@ if (engineHostConfig && (bot || tgBot)) {
       // Telegram buttons and phones cannot open a loopback address, for login or app links.
       appLinks: origin.protocol === 'https:',
       privacyUrl: telegram.privacyUrl,
+      noticeVersion: telegram.noticeVersion,
       contactEmail: telegram.contactEmail,
       // Timing lines have no detail, so nothing is printed after them.
       log: (message, detail) =>
