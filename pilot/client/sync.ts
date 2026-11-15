@@ -410,8 +410,32 @@ export class SyncEngine {
         const local = (await this.library.listItems()).find((item) => item.id === op.localId);
         const bytes = local ? await this.library.getOriginal(op.localId) : undefined;
         if (!local || !bytes) {
+          // Deleted here after the upload began. The server may have finished it with the
+          // reply lost, so ask before dropping it; a finished one is deleted from the cloud too.
+          if (op.uploadId && this.paused) return;
+          const finished = op.uploadId ? await this.finishedUpload(op, epoch) : undefined;
           this.dropOps(snapshot, op.globalId);
-          if (mapping) mapping.state = 'deleted';
+          if (!finished) {
+            if (mapping) mapping.state = 'deleted';
+            return;
+          }
+          snapshot.catalogue[finished.globalId] = finished;
+          if (mapping)
+            Object.assign(mapping, {
+              state: 'synced',
+              syncedTitle: finished.title,
+              syncedRevision: finished.revision,
+            });
+          const remove: PendingOp = {
+            kind: 'delete',
+            opId: this.newId(),
+            localId: op.localId,
+            globalId: op.globalId,
+            expectedRevision: finished.revision,
+          };
+          snapshot.ops.push(remove);
+          await this.saveState(snapshot);
+          await this.send(remove, snapshot, result);
           return;
         }
         let item: CloudItem | undefined;
@@ -534,6 +558,23 @@ export class SyncEngine {
         mapping.state = cause.code === 'ITEM_DELETED' ? 'deleted' : 'failed';
         this.removeOp(snapshot, op);
       }
+      throw cause;
+    }
+  }
+
+  /**
+   * The item an upload created, if the server finished it. Completion is idempotent, so this
+   * returns the item when an earlier reply was lost, and nothing when the upload never finished.
+   */
+  private async finishedUpload(
+    op: Extract<PendingOp, { kind: 'upload' }>,
+    epoch: number,
+  ): Promise<CloudItem | undefined> {
+    try {
+      return (await this.api.completeUpload(op.uploadId!, { opId: op.completeOpId, epoch })).item;
+    } catch (cause) {
+      const neverFinished = ['NOT_FOUND', 'INVALID_INPUT', 'HASH_MISMATCH', 'ITEM_DELETED'];
+      if (cause instanceof ApiFailure && neverFinished.includes(cause.code)) return undefined;
       throw cause;
     }
   }
