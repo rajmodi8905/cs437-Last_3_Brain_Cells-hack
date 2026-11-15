@@ -960,6 +960,23 @@ describe.each(backends)('WhatsApp channel: %s', (name, available, open) => {
       expect(await itemsOf(OWNER_A)).toHaveLength(3);
     });
   });
+
+  describe('Message content is kept only while it is handled', () => {
+    it('keeps only the ID and type of a saved note, a refused location and an answered text', async () => {
+      const { send, bot, itemsOf } = await setup();
+      const handled = await send([
+        message('text', { body: 'note Mess timings 8 to 10' }),
+        message('location', { latitude: 23.2, longitude: 72.6, name: 'Hostel' }),
+        message('text', { body: 'mess timings' }),
+      ]);
+      expect((await itemsOf(OWNER_A)).map((item) => item.title)).toEqual(['Mess timings 8 to 10']);
+      for (const wamid of handled) {
+        const kept = (await bot.getInbound(wamid))!.message;
+        expect(kept).toEqual({ id: wamid, type: kept.type });
+        expect(JSON.stringify(kept)).not.toMatch(/Mess|mess|23\.2|Hostel/);
+      }
+    });
+  });
 });
 
 describe('WhatsApp worker parts', () => {

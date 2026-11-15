@@ -144,6 +144,12 @@ export interface BotStore {
    * and message IDs stay, so a repeated delivery is still recognised.
    */
   forgetSender(userId: string, ownerKey: string): Promise<void>;
+  /**
+   * Forgets the content of every message whose ingest job is done or has failed for good, as the
+   * worker does after each job; catches any it could not (a crash in between, or rows kept by
+   * versions before it did). Returns how many messages still had content.
+   */
+  forgetHandled(): Promise<number>;
   createLink(link: OpenLink): Promise<void>;
   /** The link if it exists and has not expired by `now`; does not use it up. */
   peekLink(tokenHash: string, now: number): Promise<OpenLink | undefined>;
@@ -319,6 +325,18 @@ export class MemoryBotStore implements BotStore {
     this.states.delete(userId);
     const sender = this.senders.get(userId);
     if (sender) delete sender.waId;
+  }
+  async forgetHandled() {
+    let forgotten = 0;
+    for (const found of this.inbound.values()) {
+      const state = this.jobs.get(jobId('ingest', found.wamid))?.state;
+      if (state !== 'done' && state !== 'failed') continue;
+      const kept = forgottenMessage(found.message);
+      if (JSON.stringify(kept) === JSON.stringify(found.message)) continue;
+      found.message = kept;
+      forgotten++;
+    }
+    return forgotten;
   }
   async createLink(link: OpenLink) {
     this.links.set(link.tokenHash, { ...link });

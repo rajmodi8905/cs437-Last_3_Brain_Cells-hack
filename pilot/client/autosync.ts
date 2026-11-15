@@ -6,6 +6,7 @@ import { plainMessage } from '../../src/app/plainError';
 import {
   ApiFailure,
   createApiClient,
+  isAccountChanged,
   type ApiClient,
   type ChangeItem,
   type SessionInfo,
@@ -48,6 +49,19 @@ export interface AutoSyncView {
 }
 
 const SYNC_EVERY_MS = 15_000;
+/** Nothing of an account left on screen. */
+const SIGNED_OUT_VIEW = {
+  email: undefined,
+  opened: undefined,
+  included: false,
+  syncedCount: 0,
+  cloudOnly: [],
+  conflicts: [],
+  blocked: false,
+  paused: false,
+  needsResync: false,
+  offlineIds: [],
+} satisfies Partial<AutoSyncView>;
 
 /** The engine hook search uses to include cloud items (see LocalEngine.extraSegments). */
 interface CloudSearchHook {
@@ -314,7 +328,10 @@ export class AutoSyncController {
     );
     this.state = new IndexedDbSyncStateStore(account);
     this.engine = new SyncEngine({
-      api: this.api,
+      // Bound to this account: every tab shares one session cookie, so after another tab signs
+      // in as someone else, the server refuses this engine's requests instead of answering them
+      // with that account's library, which would land in this account's state (#65).
+      api: this.api.forAccount(account),
       // A rename from another device changes what search embeds, so re-index it.
       library: {
         ...library,
@@ -353,6 +370,7 @@ export class AutoSyncController {
    */
   syncNow(): Promise<SyncResult | undefined> {
     if (this.running) return this.running;
+    let changed = false;
     this.running = (async () => {
       if (!this.engine || !this.state) return undefined;
       this.set({ syncing: true });
@@ -375,21 +393,57 @@ export class AutoSyncController {
         });
         return result;
       } catch (cause) {
-        this.set({ error: messageFor(cause) });
+        if (isAccountChanged(cause)) changed = true;
+        else this.set({ error: messageFor(cause) });
         return undefined;
       } finally {
         await this.refresh(await this.state.load());
         this.set({ syncing: false });
         this.running = undefined;
+        if (changed) await this.followAccountChange();
       }
     })();
     return this.running;
   }
 
+  /**
+   * Another tab signed in as a different account, and this browser's one session cookie is now
+   * theirs: this tab stops using the old account's state and shows the account signed in now,
+   * as every other tab does. Nothing of the new account was written to the old one's state,
+   * because the server refused the old engine's requests.
+   */
+  private async followAccountChange() {
+    let session: SessionInfo | undefined;
+    try {
+      session = await this.api.restoreSession();
+    } catch {
+      return;
+    }
+    if (session?.account === this.session?.account) return;
+    if (session) {
+      await this.attach(session);
+      return;
+    }
+    this.detach();
+    await this.services.preferences.set(LAST_ACCOUNT_KEY, undefined);
+    this.set({ ...SIGNED_OUT_VIEW, status: 'signed-out' });
+  }
+
+  /** Runs an action on the engine; a refusal because the account changed follows the change. */
+  private async onAccount<T>(work: () => Promise<T>): Promise<T> {
+    try {
+      return await work();
+    } catch (cause) {
+      if (isAccountChanged(cause)) await this.followAccountChange();
+      throw cause;
+    }
+  }
+
   async download(globalId: string): Promise<{ blob: Blob; name: string }> {
     if (!this.engine) throw new Error('Sign in first.');
     const item = this.view.cloudOnly.find((candidate) => candidate.globalId === globalId);
-    const bytes = await this.engine.download(globalId);
+    const engine = this.engine;
+    const bytes = await this.onAccount(() => engine.download(globalId));
     return {
       blob: new Blob([bytes as BlobPart], { type: item?.mimeType }),
       name: fileNameFor(item),
@@ -402,7 +456,7 @@ export class AutoSyncController {
     if (!session) throw new Error('Sign in first.');
     const { exportCloudVault } = await import('./export');
     return exportCloudVault({
-      api: this.api,
+      api: this.api.forAccount(session.account),
       epoch: session.vault.epoch,
       assertAccount: () => {
         if (this.session !== session)
@@ -427,7 +481,8 @@ export class AutoSyncController {
   }
 
   async keepOffline(globalId: string) {
-    await this.engine?.keepOffline(globalId);
+    const engine = this.engine;
+    if (engine) await this.onAccount(() => engine.keepOffline(globalId));
     if (this.state) await this.refresh(await this.state.load());
   }
 
@@ -437,13 +492,15 @@ export class AutoSyncController {
   }
 
   async deleteCloudItem(globalId: string) {
-    await this.engine?.deleteCloudItem(globalId);
+    const engine = this.engine;
+    if (engine) await this.onAccount(() => engine.deleteCloudItem(globalId));
     if (this.state) await this.refresh(await this.state.load());
   }
 
   async removeCloudLibrary() {
-    if (!this.engine || !this.session) return;
-    const { vault } = await this.engine.removeCloudLibrary();
+    const engine = this.engine;
+    if (!engine || !this.session) return;
+    const { vault } = await this.onAccount(() => engine.removeCloudLibrary());
     this.session = { ...this.session, vault };
     this.stopLoop();
     if (this.state) await this.refresh(await this.state.load());
@@ -453,6 +510,11 @@ export class AutoSyncController {
   async startAgain() {
     const session = await this.api.restoreSession();
     if (!session || !this.engine) return;
+    // Another tab signed in as someone else meanwhile: show that account, reset nothing.
+    if (session.account !== this.session?.account) {
+      await this.attach(session);
+      return;
+    }
     this.session = session;
     await this.engine.startAgain(session.vault.epoch);
     this.stopLoop();
@@ -466,17 +528,23 @@ export class AutoSyncController {
     // Recorded first, so a closed tab or failed request never leaves the session restorable.
     await this.services.preferences.set(SIGN_OUT_PENDING_KEY, true);
     let ended = true;
+    const account = this.session?.account;
     try {
-      await this.api.signOut();
+      await (account ? this.api.forAccount(account) : this.api).signOut();
     } catch (cause) {
-      // No session left on the server is a finished sign-out too.
-      ended = cause instanceof ApiFailure && cause.code === 'UNAUTHENTICATED';
+      // No session left on the server is a finished sign-out too, and so is a browser whose
+      // session another tab already replaced with a different account's: this account's
+      // session is gone, and the other account's is not this tab's to end.
+      ended =
+        cause instanceof ApiFailure &&
+        (cause.code === 'UNAUTHENTICATED' || cause.code === 'ACCOUNT_CHANGED');
     }
     if (ended) await this.services.preferences.set(SIGN_OUT_PENDING_KEY, false);
     const state = this.state;
     this.detach();
     if (removeLocalCopies) await state?.destroy();
     this.set({
+      ...SIGNED_OUT_VIEW,
       signOutPending: !ended,
       error: ended
         ? undefined
@@ -484,16 +552,6 @@ export class AutoSyncController {
           ? SIGN_OUT_PENDING_REMOVED_MESSAGE
           : SIGN_OUT_PENDING_MESSAGE,
       status: 'local-only',
-      email: undefined,
-      opened: undefined,
-      included: false,
-      syncedCount: 0,
-      cloudOnly: [],
-      conflicts: [],
-      blocked: false,
-      paused: false,
-      needsResync: false,
-      offlineIds: [],
     });
   }
 

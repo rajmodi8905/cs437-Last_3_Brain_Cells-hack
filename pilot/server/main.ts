@@ -202,11 +202,28 @@ server.listen(config.port, config.host, () => {
     );
 });
 
-// Clean up expired sessions, sign-in attempts and abandoned uploads now and every 10 minutes.
-const cleanUp = () =>
-  cleanUpPilot({ store, objects }).catch((cause: unknown) =>
+/**
+ * Bot messages keep their content only while they are handled; the workers forget it when a job
+ * ends, and this catches any they could not (a crash in between, or rows kept before they did).
+ * With PostgreSQL both channels' tables are swept even when a channel is off, as on the live
+ * site after WhatsApp was switched off (#64).
+ */
+const sweptBots =
+  store instanceof PostgresPilotStore
+    ? [bot ?? new PostgresBotStore(store), tgBot ?? new PostgresBotStore(store, TELEGRAM_TABLES)]
+    : [bot, tgBot].filter((each) => each !== undefined);
+
+// Clean up expired sessions, sign-in attempts, abandoned uploads and handled bot messages' content
+// now and every 10 minutes.
+const cleanUp = async () => {
+  await cleanUpPilot({ store, objects }).catch((cause: unknown) =>
     console.error('Pilot clean-up failed', cause),
   );
+  for (const each of sweptBots)
+    await each
+      .forgetHandled()
+      .catch((cause: unknown) => console.error('Forgetting handled bot messages failed', cause));
+};
 void cleanUp();
 setInterval(cleanUp, 10 * 60_000).unref();
 

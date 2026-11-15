@@ -238,7 +238,7 @@ On 12 November 2026 the bot was deployed on the Azure pilot, and the owner check
 
 ## Limits
 
-- Old `tg_inbound` rows, finished jobs and expired `tg_links` rows are kept; an expired link cannot be used. Expired `tg_picks` rows are removed when new buttons are made.
+- Old `tg_inbound` rows, finished jobs and expired `tg_links` rows are kept; an expired link cannot be used. A `tg_inbound` row keeps only the message's key and type once its job is done or has failed for good; the server's 10-minute clean-up also forgets the content of any handled message that still has it. Expired `tg_picks` rows are removed when new buttons are made.
 - A user removed from `PILOT_TELEGRAM_ALLOWED_USERS` keeps their link and what they saved, but cannot reach the bot to send `/logout` or `/delete`; they can still delete items in the app, and the team can unlink them by hand.
 - If the "Linked" message cannot be sent (for example Telegram is down), the link still holds and the login button stays; the next message works as linked.
 - Waiting confirmations live in the worker's memory, as on WhatsApp: a crash or restart can lose one, and never sends one twice.

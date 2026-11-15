@@ -158,6 +158,7 @@ const STATUS: Record<PilotErrorCode, number> = {
   FORBIDDEN: 403,
   NOT_ELIGIBLE: 403,
   NOT_FOUND: 404,
+  ACCOUNT_CHANGED: 409,
   VAULT_RESET: 409,
   REVISION_CONFLICT: 409,
   RESYNC_REQUIRED: 409,
@@ -185,6 +186,15 @@ const random = () => randomBytes(32).toString('base64url');
  * of the database cannot be turned back into a working cookie.
  */
 const storedId = (cookie: string) => createHash('sha256').update(cookie).digest('hex');
+/** The opaque per-account ID devices keep their state under (a SHA-256 prefix of the owner). */
+const accountOf = (ownerKey: string) =>
+  createHash('sha256').update(ownerKey).digest('hex').slice(0, 32);
+/**
+ * Sent by the app with the account its sync state belongs to. Every tab shares one session
+ * cookie, so after another tab signs in as someone else this tab's requests would otherwise act
+ * on that other account (#65).
+ */
+const ACCOUNT_HEADER = 'x-recall-account';
 const sameText = (a: string, b: string) =>
   a.length === b.length && timingSafeEqual(Buffer.from(a), Buffer.from(b));
 const MAX_JSON_BYTES = 64 * 1024;
@@ -247,7 +257,13 @@ function send(
   res.writeHead(status, { 'content-type': 'application/json' }).end(JSON.stringify(body));
 }
 
-async function readBody(req: IncomingMessage, limit: number): Promise<Uint8Array> {
+/**
+ * Bodies read before the account's lock was taken (see `dispatch`): the bytes, or the error that
+ * reading them ended with, which the route reports in its own order.
+ */
+const preloadedBodies = new WeakMap<IncomingMessage, { bytes: Uint8Array } | { error: unknown }>();
+
+async function receiveBody(req: IncomingMessage, limit: number): Promise<Uint8Array> {
   const parts: Buffer[] = [];
   let size = 0;
   for await (const chunk of req) {
@@ -258,6 +274,28 @@ async function readBody(req: IncomingMessage, limit: number): Promise<Uint8Array
   const all = Buffer.concat(parts);
   // A view of the joined buffer rather than another copy of it.
   return new Uint8Array(all.buffer, all.byteOffset, all.length);
+}
+
+/**
+ * Reads the whole body now, up to `limit`, and keeps it (or the error) for `readBody`. Used
+ * before taking the account's lock, so a slow client never holds the lock or a database
+ * connection while it sends.
+ */
+async function preloadBody(req: IncomingMessage, limit: number) {
+  try {
+    preloadedBodies.set(req, { bytes: await receiveBody(req, limit) });
+  } catch (error) {
+    preloadedBodies.set(req, { error });
+  }
+}
+
+async function readBody(req: IncomingMessage, limit: number): Promise<Uint8Array> {
+  const preloaded = preloadedBodies.get(req);
+  if (!preloaded) return receiveBody(req, limit);
+  if ('error' in preloaded) throw preloaded.error;
+  if (preloaded.bytes.length > limit)
+    throw new ApiError('LIMIT_EXCEEDED', 'Request body is too large.');
+  return preloaded.bytes;
 }
 const UTF8 = new TextDecoder('utf-8', { fatal: true, ignoreBOM: true });
 /** The body as a JSON object, plus the bytes it was parsed from. */
@@ -395,7 +433,7 @@ export function createPilotHandler(options: PilotServerOptions): RequestListener
     csrf: session.csrf,
     email: session.email,
     // Opaque per-account ID so devices can keep each account's state apart.
-    account: createHash('sha256').update(session.ownerKey).digest('hex').slice(0, 32),
+    account: accountOf(session.ownerKey),
     vault: await store.vault(session.ownerKey),
     // A WhatsApp vault (opened from a bot link) says so; other sessions are unchanged.
     ...(session.ownerKey.startsWith('wa:') ? { kind: 'whatsapp' } : {}),
@@ -506,6 +544,12 @@ export function createPilotHandler(options: PilotServerOptions): RequestListener
       if (session) await store.deleteSession(session.id);
       throw new ApiError('UNAUTHENTICATED', 'Sign in again.');
     }
+    const expected = req.headers[ACCOUNT_HEADER];
+    if (typeof expected === 'string' && expected !== accountOf(session.ownerKey))
+      throw new ApiError(
+        'ACCOUNT_CHANGED',
+        'This browser is now signed in to a different account. Reload to continue.',
+      );
     const wait = byAccount.take(session.ownerKey);
     if (wait) throw limited(wait);
     if (
@@ -1121,6 +1165,14 @@ export function createPilotHandler(options: PilotServerOptions): RequestListener
     throw new ApiError('NOT_FOUND', 'No such endpoint.');
   }
 
+  /** The largest body any route on this path accepts; each route still applies its own limit. */
+  function bodyLimitFor(method: string, rawUrl: string) {
+    const path = new URL(rawUrl, 'http://pilot.local').pathname.replace(/^\/api\/v1/, '');
+    if (method === 'PUT' && /^\/uploads\/[^/]+\/chunks\/\d{1,5}$/.test(path)) return chunkBytes;
+    if (method === 'PUT' && /^\/items\/[^/]+\/index$/.test(path)) return MAX_INDEX_BYTES;
+    return MAX_JSON_BYTES;
+  }
+
   const whatsapp = options.whatsapp && createWhatsAppWebhook(options.whatsapp, now);
   const telegram = options.telegram?.webhook && createTelegramWebhook(options.telegram.webhook);
 
@@ -1146,6 +1198,11 @@ export function createPilotHandler(options: PilotServerOptions): RequestListener
       return route(req, res);
     const session = await sessionFromCookie(req);
     if (!session || session.expiresAt <= now()) return route(req, res);
+    // The body is read before the lock is taken: the lock holds a database connection for the
+    // whole request, so a client sending slowly would otherwise keep one of the pool's few
+    // connections (and the account's lock) until it finished, and a handful of slow uploads
+    // would stall every account's requests (#66).
+    await preloadBody(req, bodyLimitFor(method, req.url ?? '/'));
     const pending: { flush?: () => void } = {};
     pendingResponses.set(res, pending);
     try {
