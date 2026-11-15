@@ -60,9 +60,9 @@ The wire format, states and limits referred to below are defined in [protocol.md
 
 ### P10 — Pause, vault removal and account switch
 
-**Statement:** Pause stops new transfers and polling on that device only. Remove cloud vault deletes all of the account's cloud objects and moves the vault to a new epoch that old devices cannot write to. Switching accounts never mixes two libraries.
+**Statement:** Pause stops new transfers and polling on that device only. Remove cloud vault deletes all of the account's cloud objects and moves the vault to a new epoch that old devices cannot write to. Switching accounts never mixes two libraries, also when another tab of the same browser (which shares the session cookie) signs in as someone else.
 
-**Test:** Pause and assert no further sync requests; remove the vault and assert an old device's writes are rejected; sign in as another user and assert the first user's items are not visible.
+**Test:** Pause and assert no further sync requests; remove the vault and assert an old device's writes are rejected; sign in as another user and assert the first user's items are not visible. Two tabs share one cookie jar: after tab 2 switches to account B, tab 1's engine for A is refused with `ACCOUNT_CHANGED`, nothing of B's reaches A's catalogue or offline copies, tab 1 then shows B, and signing out in tab 1 leaves B signed in (`pilot/tests/account-switch.test.ts`).
 
 ### P11 — All six formats within limits
 
@@ -211,6 +211,9 @@ These statements cover the optional Telegram channel ([telegram.md](telegram.md)
 **Test:** The button without `/delete`, or 601 seconds after it, erases nothing (and its button is removed). Within 10 minutes: the Telegram-saved PDF and note are tombstones at the next revision in the account's change feed, their objects are gone, the note synced from the app and its object stay, the epoch is unchanged, the account's own and app-link sessions still work, the user is unlinked, an unused app link and the result buttons no longer work, the stored message keeps only its key and type, the username and consent are cleared, a redelivered update does not bring the item back and the next message gets "Log in first with /login."; the other user's items, link and consent are unchanged. After `/logout` the saved note stays, unused app and login links no longer open and their buttons are removed, another user's links still work, and messages get "Log in first with /login."
 
 ### Telegram transport and safety checks
+
+A message's content is kept only while it is handled, on Telegram and WhatsApp alike: once its job is done or has failed for good (a saved note, a search, a refused contact or location, a result tap), only its key and type stay, also after the item is deleted in the app or the cloud library is removed; a sweep in the server's clean-up forgets the content of any handled message that still has it (`pilot/tests/telegram.test.ts`, "Message content is kept only while it is handled"; `whatsapp.test.ts`).
+
 
 Beyond T1 to T9: replies to one chat are spaced at least a second apart (Telegram allows about one message a second per chat) and HTTP 429 is waited out for Telegram's `retry_after`; downloads stop as soon as they pass the limit; the bot token appears in no error, log line or description, whether Telegram refuses a call, the server cannot be reached or the token is wrong; with `PILOT_TELEGRAM_ALLOWED_USERS` set, anyone else gets a "not open yet" reply and nothing of theirs is stored; settings are all or none and errors name the setting, never a value; a local trial may use development sign-in for linking only while listening on loopback, and behind a tunnel only with memory storage; linked accounts, links, Telegram-saved items and sessions opened from a Telegram link are kept on memory and PostgreSQL alike and survive a backup and restore (`pilot/tests/telegram-transport.test.ts`, `telegram-config.test.ts`, `telegram-store.test.ts`, `telegram-entry.test.ts`).
 

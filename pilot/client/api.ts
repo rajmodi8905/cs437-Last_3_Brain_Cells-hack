@@ -17,6 +17,13 @@ export class ApiFailure extends Error {
   }
 }
 
+/**
+ * The browser's session now belongs to another account than the one this client was bound to
+ * (another tab signed in as someone else). Nothing was read or changed.
+ */
+export const isAccountChanged = (cause: unknown) =>
+  cause instanceof ApiFailure && cause.code === 'ACCOUNT_CHANGED';
+
 export interface SessionInfo {
   csrf: string;
   email: string;
@@ -68,14 +75,26 @@ export interface ApiClient {
   ): Promise<{ item: CloudItem }>;
   index(globalId: string): Promise<IndexBundle>;
   removeVault(body: { epoch: number; confirm: string }): Promise<{ vault: { epoch: number } }>;
+  /**
+   * The same client, whose requests are refused with `ACCOUNT_CHANGED` unless the browser's
+   * session still belongs to `account`. Every tab shares one session cookie, so whatever keeps
+   * one account's state (the sync engine, an export) must use this, never the unbound client.
+   */
+  forAccount(account: string): ApiClient;
 }
 
 export function createApiClient(options: { base: string; fetch?: typeof fetch }): ApiClient {
   const fetchImpl = options.fetch ?? fetch.bind(globalThis);
   let csrf = '';
-  async function request(path: string, init: RequestInit = {}, json?: unknown) {
+  async function send(
+    account: string | undefined,
+    path: string,
+    init: RequestInit = {},
+    json?: unknown,
+  ) {
     const headers = new Headers(init.headers);
     if (csrf) headers.set('x-recall-csrf', csrf);
+    if (account) headers.set('x-recall-account', account);
     if (json !== undefined) headers.set('content-type', 'application/json');
     const res = await fetchImpl(`${options.base}${path}`, {
       credentials: 'include',
@@ -101,76 +120,86 @@ export function createApiClient(options: { base: string; fetch?: typeof fetch })
   const json = async <T>(res: Response) => (await res.json()) as T;
   const enc = encodeURIComponent;
 
-  return {
-    async config() {
-      return json(await request('/config'));
-    },
-    async devToken(email) {
-      return (
-        await json<{ idToken: string }>(await request('/dev/token', { method: 'POST' }, { email }))
-      ).idToken;
-    },
-    async restoreSession() {
-      try {
-        const body = await json<SessionInfo>(await request('/session'));
+  /** The client's calls; with `account`, each is refused once the session is someone else's. */
+  const client = (account?: string): ApiClient => {
+    const request = (path: string, init?: RequestInit, body?: unknown) =>
+      send(account, path, init, body);
+    return {
+      forAccount: (other) => client(other),
+      async config() {
+        return json(await request('/config'));
+      },
+      async devToken(email) {
+        return (
+          await json<{ idToken: string }>(
+            await request('/dev/token', { method: 'POST' }, { email }),
+          )
+        ).idToken;
+      },
+      async restoreSession() {
+        try {
+          // Never bound: this is how a tab learns whose session the browser has now.
+          const body = await json<SessionInfo>(await send(undefined, '/session'));
+          csrf = body.csrf;
+          return body;
+        } catch (cause) {
+          if (cause instanceof ApiFailure && cause.code === 'UNAUTHENTICATED') return undefined;
+          throw cause;
+        }
+      },
+      async signIn(idToken) {
+        const body = await json<SessionInfo>(
+          await request('/session', { method: 'POST' }, { idToken }),
+        );
         csrf = body.csrf;
         return body;
-      } catch (cause) {
-        if (cause instanceof ApiFailure && cause.code === 'UNAUTHENTICATED') return undefined;
-        throw cause;
-      }
-    },
-    async signIn(idToken) {
-      const body = await json<SessionInfo>(
-        await request('/session', { method: 'POST' }, { idToken }),
-      );
-      csrf = body.csrf;
-      return body;
-    },
-    async signOut() {
-      await request('/session', { method: 'DELETE' });
-      csrf = '';
-    },
-    async changes(epoch, after) {
-      return json(await request(`/changes?epoch=${epoch}&after=${after}`));
-    },
-    async beginUpload(globalId, body) {
-      return json(await request(`/items/${enc(globalId)}/upload`, { method: 'POST' }, body));
-    },
-    async putChunk(uploadId, index, bytes) {
-      await request(`/uploads/${enc(uploadId)}/chunks/${index}`, {
-        method: 'PUT',
-        headers: { 'content-type': 'application/octet-stream' },
-        body: bytes as BodyInit,
-      });
-    },
-    async completeUpload(uploadId, body) {
-      return json(await request(`/uploads/${enc(uploadId)}/complete`, { method: 'POST' }, body));
-    },
-    async rename(globalId, body) {
-      return json(await request(`/items/${enc(globalId)}`, { method: 'PATCH' }, body));
-    },
-    async remove(globalId, body) {
-      return json(await request(`/items/${enc(globalId)}`, { method: 'DELETE' }, body));
-    },
-    async publishIndex(globalId, body) {
-      return json(await request(`/items/${enc(globalId)}/index`, { method: 'PUT' }, body));
-    },
-    async removeVault(body) {
-      return json(await request('/vault', { method: 'DELETE' }, body));
-    },
-    async index(globalId) {
-      return json(await request(`/items/${enc(globalId)}/index`));
-    },
-    async original(globalId, range) {
-      const res = await request(
-        `/items/${enc(globalId)}/original`,
-        range ? { headers: { range: `bytes=${range.start}-${range.end}` } } : {},
-      );
-      const bytes = new Uint8Array(await res.arrayBuffer());
-      if (range && (res.status !== 206 || bytes.length !== range.end - range.start + 1))
-        throw new Error('The server did not return the requested part of the original.');
-      return bytes;
-    },
+      },
+      async signOut() {
+        await request('/session', { method: 'DELETE' });
+        csrf = '';
+      },
+      async changes(epoch, after) {
+        return json(await request(`/changes?epoch=${epoch}&after=${after}`));
+      },
+      async beginUpload(globalId, body) {
+        return json(await request(`/items/${enc(globalId)}/upload`, { method: 'POST' }, body));
+      },
+      async putChunk(uploadId, index, bytes) {
+        await request(`/uploads/${enc(uploadId)}/chunks/${index}`, {
+          method: 'PUT',
+          headers: { 'content-type': 'application/octet-stream' },
+          body: bytes as BodyInit,
+        });
+      },
+      async completeUpload(uploadId, body) {
+        return json(await request(`/uploads/${enc(uploadId)}/complete`, { method: 'POST' }, body));
+      },
+      async rename(globalId, body) {
+        return json(await request(`/items/${enc(globalId)}`, { method: 'PATCH' }, body));
+      },
+      async remove(globalId, body) {
+        return json(await request(`/items/${enc(globalId)}`, { method: 'DELETE' }, body));
+      },
+      async publishIndex(globalId, body) {
+        return json(await request(`/items/${enc(globalId)}/index`, { method: 'PUT' }, body));
+      },
+      async removeVault(body) {
+        return json(await request('/vault', { method: 'DELETE' }, body));
+      },
+      async index(globalId) {
+        return json(await request(`/items/${enc(globalId)}/index`));
+      },
+      async original(globalId, range) {
+        const res = await request(
+          `/items/${enc(globalId)}/original`,
+          range ? { headers: { range: `bytes=${range.start}-${range.end}` } } : {},
+        );
+        const bytes = new Uint8Array(await res.arrayBuffer());
+        if (range && (res.status !== 206 || bytes.length !== range.end - range.start + 1))
+          throw new Error('The server did not return the requested part of the original.');
+        return bytes;
+      },
+    };
   };
+  return client();
 }

@@ -7,7 +7,7 @@ import {
   validateIndexBundle,
   type CloudItem,
 } from '../contract';
-import { ApiFailure, type ApiClient, type ChangeItem } from './api';
+import { ApiFailure, isAccountChanged, type ApiClient, type ChangeItem } from './api';
 import { emptySnapshot } from './types';
 import type {
   CloudSegment,
@@ -119,6 +119,8 @@ export class SyncEngine {
       await this.syncRemoteIndexes(snapshot, result);
       await this.cleanOffline(snapshot);
     } catch (cause) {
+      // The browser now has another account's session: keep nothing, let the app follow it.
+      if (isAccountChanged(cause)) throw cause;
       result.failed++;
       // Nothing of this device is mapped yet, so a reset library is simply listed again.
       if (cause instanceof ApiFailure && cause.code === 'RESYNC_REQUIRED') restart();
@@ -198,6 +200,8 @@ export class SyncEngine {
       await this.syncRemoteIndexes(snapshot, result);
       await this.cleanOffline(snapshot);
     } catch (cause) {
+      // Another account's session: stop without changing this account's state.
+      if (isAccountChanged(cause)) throw cause;
       result.failed++;
       if (cause instanceof ApiFailure && cause.code === 'RESYNC_REQUIRED') {
         snapshot.needsResync = true;
@@ -213,6 +217,11 @@ export class SyncEngine {
       try {
         await this.send(op, snapshot, result);
       } catch (cause) {
+        if (isAccountChanged(cause)) {
+          // Progress already made (an upload's ID and chunks) is kept for when it is back.
+          await this.saveState(snapshot);
+          throw cause;
+        }
         result.failed++;
         if (cause instanceof ApiFailure && cause.code === 'VAULT_RESET') {
           snapshot.needsResync = true;
@@ -525,7 +534,8 @@ export class SyncEngine {
       this.removeOp(snapshot, op);
     } catch (cause) {
       if (!(cause instanceof ApiFailure)) throw cause;
-      if (cause.code === 'VAULT_RESET') throw cause;
+      // Neither says anything about this item: the operation stays queued as it is.
+      if (cause.code === 'VAULT_RESET' || cause.code === 'ACCOUNT_CHANGED') throw cause;
       if (cause.code === 'QUOTA_EXCEEDED' && op.kind === 'upload') {
         // Not the item's fault: keep it waiting until space is freed.
         result.quotaExceeded = true;
@@ -787,7 +797,8 @@ export class SyncEngine {
           kind: item.kind!,
           segments: bundle.segments,
         });
-      } catch {
+      } catch (cause) {
+        if (isAccountChanged(cause)) throw cause;
         result.failed++;
       }
     }

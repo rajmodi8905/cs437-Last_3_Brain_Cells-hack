@@ -246,7 +246,7 @@ Tests: `pilot/tests/whatsapp-conversation.test.ts` (W1, commands, W9, batching, 
 
 ## Limits
 
-- Old `wa_inbound` rows, finished jobs and expired `wa_links` rows are kept; an expired link cannot be used.
+- Old `wa_inbound` rows, finished jobs and expired `wa_links` rows are kept; an expired link cannot be used. A `wa_inbound` row keeps only the message's ID and type once its job is done or has failed for good; the server's 10-minute clean-up also forgets the content of any handled message that still has it, even while the channel is switched off.
 - A new notice version does not ask senders who agreed to an older one to agree again; the version is only stored.
 - Waiting confirmations live in the worker's memory: a crash or restart can lose one, and never sends one twice.
 - After a WhatsApp session includes a device library, the bot searches those items too; its "only things you sent here are searched" then means this vault.

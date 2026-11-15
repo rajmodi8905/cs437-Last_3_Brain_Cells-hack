@@ -2259,6 +2259,117 @@ describe.each(backends)('Telegram bot: %s', (name, available, open) => {
     });
   });
 
+  describe('Message content is kept only while it is handled', () => {
+    /** What a stored message may hold once handled: its key and type, nothing it said. */
+    const onlyIdAndType = async (t: Awaited<ReturnType<typeof setup>>, update: object) => {
+      const key = t.keyOf(update as Record<string, unknown>);
+      const kept = await t.bot.getInbound(key);
+      expect(kept?.message).toEqual({
+        id: key,
+        type: 'callback_query' in update ? 'callback_query' : 'message',
+      });
+    };
+
+    it('keeps only the ID and type of a linked user’s search and note, also after the note is deleted in the app and the cloud library removed', async () => {
+      const t = await setup();
+      const session = await t.link();
+      const [note, search] = await t.send(
+        textUpdate('note Mess timings 8 to 10'),
+        textUpdate('mess timings'),
+      );
+      const [saved] = await t.liveItems();
+      expect(saved.title).toBe('Mess timings 8 to 10');
+      for (const update of [note, search]) await onlyIdAndType(t, update);
+
+      // Deleting the note in the app, then the whole cloud library, leaves nothing of either.
+      const write = (method: string, path: string, body: unknown) =>
+        fetch(`${t.base}${path}`, {
+          method,
+          headers: {
+            origin: ORIGIN,
+            cookie: `recall_session=${session.cookie}`,
+            'x-recall-csrf': session.csrf,
+            'content-type': 'application/json',
+          },
+          body: JSON.stringify(body),
+        });
+      const deleted = await write('DELETE', `/items/${saved.globalId}`, {
+        opId: randomUUID(),
+        epoch: 1,
+        expectedRevision: saved.revision,
+      });
+      expect(deleted.status).toBe(200);
+      const removed = await write('DELETE', '/vault', {
+        epoch: 1,
+        confirm: 'remove-cloud-library',
+      });
+      expect(removed.status).toBe(200);
+      for (const update of [note, search]) {
+        await onlyIdAndType(t, update);
+        const stored = JSON.stringify(await t.bot.getInbound(t.keyOf(update)));
+        expect(stored).not.toMatch(/Mess|mess timings/);
+      }
+    });
+
+    it('keeps only the ID and type of a contact, a location and a result tap it handled', async () => {
+      const t = await setup();
+      await t.link();
+      await t.send(textUpdate('note Library closes at midnight'));
+      const pick = callbackUpdate(await t.buttonFor('library', 'Library closes at midnight'));
+      const handled = await t.send(
+        messageUpdate({ contact: { phone_number: '+910000000000', first_name: 'Warden' } }),
+        messageUpdate({ location: { latitude: 23.2, longitude: 72.6 } }),
+        pick,
+      );
+      expect(t.tg.textsTo(USER_A.id)).toEqual(
+        expect.arrayContaining([TELEGRAM_REPLIES.contact, TELEGRAM_REPLIES.location]),
+      );
+      for (const update of handled) await onlyIdAndType(t, update);
+      for (const update of handled)
+        expect(JSON.stringify(await t.bot.getInbound(t.keyOf(update)))).not.toMatch(
+          /910000000000|Warden|23\.2|72\.6|p:/,
+        );
+    });
+
+    it('forgets a message’s content when its job gives up', async () => {
+      const t = await setup();
+      await t.link();
+      const once = t.makeBot(t.api, { maxAttempts: 1 });
+      const missing = documentUpdate({
+        fileId: 'missing',
+        size: 100,
+        mimeType: 'application/pdf',
+        fileName: 'Hostel rules.pdf',
+      });
+      await t.deliver([missing]);
+      await once.drain();
+      expect(t.tg.textsTo(USER_A.id).at(-1)).toBe(TELEGRAM_REPLIES.downloadFailed);
+      await onlyIdAndType(t, missing);
+    });
+
+    it('a sweep forgets the content of messages handled before, and keeps those still waiting', async () => {
+      const t = await setup();
+      const sender = { userId: String(USER_A.id), ownerKey: `tg:${USER_A.id}` };
+      const record = (key: string, text: string) =>
+        t.bot.recordInbound(sender, {
+          wamid: key,
+          senderId: sender.userId,
+          ownerKey: sender.ownerKey,
+          receivedAt: t.clock.now,
+          message: { id: key, type: 'message', message: { text } },
+        });
+      // Handled by a version that kept the content, and one not handled yet.
+      await record('m:1:1', 'note kept by an older version');
+      const job = await t.bot.claimJob(['ingest'], t.clock.now, 60);
+      await t.bot.finishJob(job!);
+      await record('m:1:2', 'note still waiting');
+      expect(await t.bot.forgetHandled()).toBe(1);
+      expect((await t.bot.getInbound('m:1:1'))?.message).toEqual({ id: 'm:1:1', type: 'message' });
+      expect(JSON.stringify(await t.bot.getInbound('m:1:2'))).toContain('note still waiting');
+      expect(await t.bot.forgetHandled()).toBe(0);
+    });
+  });
+
   describe('Allowed users', () => {
     it('stores nothing from other users and tells them once that the bot is not open yet', async () => {
       const t = await setup({

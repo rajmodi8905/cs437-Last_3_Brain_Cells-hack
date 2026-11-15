@@ -325,6 +325,18 @@ export class PostgresBotStore implements BotStore {
       );
     });
   }
+  async forgetHandled() {
+    const { rowCount } = await this.run((db) =>
+      db.query(
+        `UPDATE ${this.t.inbound} AS inbound SET message = jsonb_strip_nulls(jsonb_build_object(
+           'id', inbound.message->'id', 'type', inbound.message->'type'))
+          FROM ${this.t.jobs} AS jobs
+         WHERE jobs.id = 'ingest:' || inbound.wamid AND jobs.state IN ('done', 'failed')
+           AND inbound.message - 'id' - 'type' <> '{}'::jsonb`,
+      ),
+    );
+    return rowCount ?? 0;
+  }
   async createLink(link: OpenLink) {
     await this.run((db) =>
       db.query(

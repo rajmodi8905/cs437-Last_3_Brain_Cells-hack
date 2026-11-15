@@ -15,6 +15,7 @@ export type PilotErrorCode =
   | 'FORBIDDEN'
   | 'NOT_FOUND'
   | 'NOT_ELIGIBLE'
+  | 'ACCOUNT_CHANGED'
   | 'VAULT_RESET'
   | 'REVISION_CONFLICT'
   | 'ITEM_DELETED'

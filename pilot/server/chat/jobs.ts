@@ -48,6 +48,7 @@ export function createJobRunner(options: JobRunnerOptions) {
     if (!job) return false;
     try {
       await options.run(job);
+      await forgetIfHandled(job);
     } catch (cause) {
       const error = cause instanceof Error ? cause.message : String(cause);
       options.log(`${options.label} ${job.kind} job failed (attempt ${job.attempts})`, error);
@@ -57,9 +58,23 @@ export function createJobRunner(options: JobRunnerOptions) {
       else {
         await bot.failJob(job, error);
         await options.gaveUp(job, cause);
+        await forgetIfHandled(job);
       }
     }
     return true;
+  }
+
+  /**
+   * A message's content is kept only while it is being handled (the privacy pages say so): once
+   * its ingest job is done or has failed for good, only its ID and type stay, for dedupe. A job
+   * that was deferred or will be retried still needs it. Index jobs read the saved item, never
+   * the message.
+   */
+  async function forgetIfHandled(job: BotJob) {
+    if (job.kind !== 'ingest') return;
+    const current = await bot.getJob(job.id);
+    if (current?.state === 'done' || current?.state === 'failed')
+      await bot.forgetMessage(job.wamid);
   }
 
   /** Runs due jobs until none is left; for tests and one-off runs. */
