@@ -121,6 +121,46 @@ describe('P08 no duplicates after crashes or lost responses', () => {
     expect(await laptop.engine.catalogue()).toHaveLength(1);
   });
 
+  it('removes the cloud copy when the item is deleted here after a completion reply was lost', async () => {
+    const phone = await device();
+    const id = phone.library.add(
+      { kind: 'pdf', title: 'Hostel mess rules', mimeType: 'application/pdf' },
+      pdf,
+    );
+    await phone.engine.include(phone.epoch);
+    phone.net.controls.loseResponse = /^POST \/uploads\/[^/]+\/complete$/;
+    expect((await phone.engine.runOnce()).failed).toBe(1);
+    await phone.library.deleteItem(id);
+    expect((await phone.engine.runOnce()).failed).toBe(0);
+    expect((await phone.engine.runOnce()).failed).toBe(0);
+    expect((await phone.state.load()).ops).toHaveLength(0);
+
+    const laptop = await device();
+    await laptop.engine.include(laptop.epoch);
+    await laptop.engine.runOnce();
+    expect(await laptop.engine.catalogue()).toHaveLength(0);
+  });
+
+  it('drops an unfinished upload without error when the item is deleted here', async () => {
+    const phone = await device();
+    const id = phone.library.add(
+      { kind: 'pdf', title: 'Hostel mess rules', mimeType: 'application/pdf' },
+      pdf,
+    );
+    await phone.engine.include(phone.epoch);
+    // The upload begins and its first chunk is sent, but it never completes.
+    phone.net.controls.loseResponse = /^PUT \/uploads\/[^/]+\/chunks\/\d+$/;
+    expect((await phone.engine.runOnce()).failed).toBe(1);
+    await phone.library.deleteItem(id);
+    expect(await phone.engine.runOnce()).toMatchObject({ failed: 0, deleted: 0 });
+    expect((await phone.state.load()).ops).toHaveLength(0);
+
+    const laptop = await device();
+    await laptop.engine.include(laptop.epoch);
+    await laptop.engine.runOnce();
+    expect(await laptop.engine.catalogue()).toHaveLength(0);
+  });
+
   it('reuses the same upload when the reply to starting it was lost', async () => {
     const phone = await device();
     phone.library.add(
