@@ -236,6 +236,11 @@
           "suite": "browser",
           "file": "tests/e2e/chaitanya-fixes.spec.ts",
           "title": "#14 a PDF snapshot fills the webpage text and keeps its URL"
+        },
+        {
+          "suite": "browser",
+          "file": "tests/e2e/production-csp.spec.ts",
+          "title": "captures a permitted public HTTPS page under the production Content-Security-Policy"
         }
       ],
       "remaining": []
