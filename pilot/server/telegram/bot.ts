@@ -22,6 +22,7 @@ import type { EngineHost } from '../whatsapp/engine-host';
 import { MediaTooLargeError } from '../whatsapp/graph';
 import { createWhatsAppIndexer, type WhatsAppIndexerOptions } from '../whatsapp/indexer';
 import { REPLIES } from '../whatsapp/ingest';
+import { hashLinkToken } from '../whatsapp/links';
 import type { BotJob, BotStore, JobKind } from '../whatsapp/store';
 import {
   TelegramError,
@@ -32,12 +33,14 @@ import {
   type TgUser,
 } from './api';
 import { eraseTelegramItems, unlinkTelegramUser } from './erase';
-import { createLoginLink, createOpenLink, telegramName } from './links';
+import { LINK_CONFIRM_DATA, createLoginLink, createOpenLink, telegramName } from './links';
 import { createdAtOf, planTelegramMessage, commandOf, type TelegramPlan } from './plan';
 import { describeFailure } from './poller';
 import { TELEGRAM_REPLIES } from './replies';
 import {
+  DELETE_DATA,
   telegramGlobalId,
+  telegramUserLock,
   type TelegramAccount,
   type TelegramInbound,
   type TelegramLink,
@@ -56,7 +59,7 @@ const SEND_AS_PHOTO = new Set(['image/jpeg', 'image/png']);
 export { TELEGRAM_REPLIES } from './replies';
 
 /** Button data: the delete confirmation and a search result (`p:<token>`). */
-const DELETE = 'delete';
+const DELETE = DELETE_DATA;
 const PICK = /^p:([A-Za-z0-9_-]{12})$/;
 
 /** Cut to `max` UTF-16 code units (how Telegram counts) between whole code points. */
@@ -155,29 +158,45 @@ async function removeButtons(
         .catch((cause: unknown) => log('Telegram button removal failed', describeFailure(cause)));
 }
 
-/** A Telegram user just linked an account on the link page (`/api/v1/telegram/link/…`). */
-export interface TelegramLinked {
+/** Someone completed a login link on the page (`/api/v1/telegram/link/…`) as this account. */
+export interface TelegramLinkRequest {
   userId: string;
   email: string;
-  /** Messages whose login buttons are now used up. */
+  /** Goes only into the Confirm and Cancel buttons of the chat. */
+  token: string;
+  tokenHash: string;
+  /** Messages whose buttons are now used up. */
   messageIds: number[];
 }
 
 /**
- * Tells the user in the chat that the link worked, and removes the login buttons it used up.
- * Called by the server after the link page, outside the bot's queue.
+ * Asks in the Telegram chat whether to link the account that completed the login link, and
+ * removes the buttons that request used up. Nothing is linked until the chat's user taps Confirm
+ * (the bot's `confirmLink`), which a person holding only a forwarded link cannot do. Called by
+ * the server after the link page, outside the bot's queue.
  */
-export async function announceTelegramLink(
+export async function announceTelegramLinkRequest(
   api: TelegramApi,
-  linked: TelegramLinked,
+  state: TelegramStateStore,
+  request: TelegramLinkRequest,
   log: (message: string, detail?: unknown) => void = (message, detail) =>
     console.error(message, detail),
 ) {
-  const chatId = Number(linked.userId);
-  await removeButtons(api, chatId, linked.messageIds, log);
-  await api
-    .sendMessage(chatId, TELEGRAM_REPLIES.linked(linked.email))
-    .catch((cause: unknown) => log('Telegram reply failed', describeFailure(cause)));
+  const chatId = Number(request.userId);
+  await removeButtons(api, chatId, request.messageIds, log);
+  try {
+    const messageId = await api.sendMessage(chatId, TELEGRAM_REPLIES.confirmLink(request.email), {
+      inline_keyboard: [
+        [
+          { text: TELEGRAM_REPLIES.confirmButton, callback_data: `link:${request.token}` },
+          { text: TELEGRAM_REPLIES.cancelButton, callback_data: `nolink:${request.token}` },
+        ],
+      ],
+    });
+    if (messageId !== undefined) await state.setLinkMessage(request.tokenHash, messageId);
+  } catch (cause) {
+    log('Telegram reply failed', describeFailure(cause));
+  }
 }
 
 export interface TelegramBotOptions {
@@ -201,6 +220,8 @@ export interface TelegramBotOptions {
    */
   appLinks?: boolean;
   privacyUrl: string;
+  /** Stored as the notice version the user consented to when they confirm a link; `1`. */
+  noticeVersion?: string;
   contactEmail: string;
   batchMs?: number;
   batchMax?: number;
@@ -399,7 +420,62 @@ export function createTelegramBot(options: TelegramBotOptions) {
     );
   }
   const loginMessages = (links: TelegramLink[]) =>
-    links.filter((link) => link.purpose === 'login').map((link) => link.messageId);
+    links.filter((link) => link.purpose !== 'open').map((link) => link.messageId);
+
+  /**
+   * Confirm or Cancel on a link request. Only the Telegram user the request is for can tap it in
+   * their chat, so only they decide whether the account that completed the login link is linked.
+   */
+  async function confirmLink(
+    sender: TelegramSender,
+    key: string,
+    callback: TgCallbackQuery,
+    confirmed: boolean,
+    token: string,
+  ) {
+    const outcome = await store.withOwnerLock(telegramUserLock(sender.userId), async () => {
+      const hash = hashLinkToken(token);
+      // Someone else's tap neither uses the request up nor learns anything about it.
+      const pending = await state.peekLink(hash, 'confirm', now());
+      if (pending?.userId !== sender.userId) return { kind: 'expired' as const };
+      const request = await state.takeLink(hash, 'confirm', now());
+      if (!request) return { kind: 'expired' as const };
+      if (!confirmed) return { kind: 'cancelled' as const };
+      const account = await state.getAccount(sender.userId);
+      if (account && account.ownerKey !== request.ownerKey)
+        return { kind: 'elsewhere' as const, email: account.email };
+      await state.linkAccount({
+        userId: sender.userId,
+        ownerKey: request.ownerKey,
+        email: request.label,
+        linkedAt: now(),
+      });
+      await bot.setConsent(sender.userId, now(), options.noticeVersion ?? '1');
+      // Any other login link or request of this user is used up too.
+      const others = await state.revokeLinks(sender.userId);
+      return { kind: 'linked' as const, email: request.label, others };
+    });
+    await removeButtons(
+      api,
+      Number(sender.userId),
+      [
+        callback.message?.message_id,
+        ...(outcome.kind === 'linked' ? loginMessages(outcome.others) : []),
+      ],
+      log,
+    );
+    await acknowledge(callback);
+    switch (outcome.kind) {
+      case 'linked':
+        return answer(key, say(sender, TELEGRAM_REPLIES.linked(outcome.email)));
+      case 'cancelled':
+        return answer(key, say(sender, TELEGRAM_REPLIES.linkCancelled));
+      case 'elsewhere':
+        return answer(key, say(sender, TELEGRAM_REPLIES.loginWhileLinked(outcome.email)));
+      case 'expired':
+        return answer(key, say(sender, TELEGRAM_REPLIES.linkExpired));
+    }
+  }
 
   /**
    * /stop, the login gate, commands and buttons. Returns the linked account when the message is
@@ -433,6 +509,13 @@ export function createTelegramBot(options: TelegramBotOptions) {
         await bot.forgetMessage(key);
         await acknowledge(callback, TELEGRAM_REPLIES.resumeFirst);
       }
+      return undefined;
+    }
+
+    const confirm = data && LINK_CONFIRM_DATA.exec(data);
+    if (callback && confirm) {
+      await bot.forgetMessage(key);
+      await confirmLink(sender, key, callback, confirm[1] === 'link', confirm[2]);
       return undefined;
     }
 

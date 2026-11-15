@@ -93,6 +93,12 @@ export const TELEGRAM_REPLIES = {
   loginFirst: 'Log in first with /login.',
   linked: (email: string) =>
     `Linked to ${maskEmail(email)}. Forward or send files to save them; type anything to search.`,
+  confirmLink: (email: string) =>
+    `Someone signed in as ${maskEmail(email)} and asked to link that account to this chat. If that is you, tap Confirm: this chat can then save to, search and open that account's library. If it is not you, tap Cancel. This works for 10 minutes.`,
+  confirmButton: 'Confirm link',
+  cancelButton: 'Cancel',
+  linkCancelled: 'Cancelled. Nothing was linked.',
+  linkExpired: 'That request has expired. Send /login for a new link.',
   alreadyLinked: (email: string) =>
     `You're logged in as ${maskEmail(email)}. Send /help to see what I can do.`,
   loginWhileLinked: (email: string) =>

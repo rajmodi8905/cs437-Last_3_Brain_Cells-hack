@@ -3,7 +3,10 @@
 // people are taken, and while the bot is limited to some users, nothing from anyone else is kept.
 import type { BotStore } from '../whatsapp/store';
 import type { TgUpdate, TgUser } from './api';
+import { LINK_CONFIRM_DATA } from './links';
+import { commandOf } from './plan';
 import {
+  DELETE_DATA,
   callbackKey,
   messageKey,
   telegramSender,
@@ -64,6 +67,41 @@ export function readUpdate(
   return undefined;
 }
 
+/**
+ * What is stored of an update from someone who has not linked an account (or has sent /stop):
+ * its key and type, plus what the login gate answers with. That is the command name when the
+ * message is one (its arguments are dropped), the sender's first name for the login page, and for
+ * a button tap its ID, the message it sits under and its data only when it is the delete button
+ * or a link Confirm or Cancel. Texts,
+ * files and captions are never stored.
+ */
+export function minimalInbound(inbound: TelegramInbound): TelegramInbound {
+  const { message, callback_query: callback } = inbound;
+  const kept: TelegramInbound = { id: inbound.id, type: inbound.type };
+  if (message) {
+    const command = commandOf(message);
+    if (command && message.from)
+      kept.message = {
+        message_id: message.message_id,
+        chat: message.chat,
+        from: { id: message.from.id, is_bot: false, first_name: message.from.first_name },
+        date: message.date,
+        text: `/${command.name}`,
+      };
+  }
+  if (callback)
+    kept.callback_query = {
+      id: callback.id,
+      from: { id: callback.from.id, is_bot: false, first_name: callback.from.first_name },
+      ...(callback.message ? { message: { message_id: callback.message.message_id } } : {}),
+      ...(callback.data === DELETE_DATA ||
+      (callback.data !== undefined && LINK_CONFIRM_DATA.test(callback.data))
+        ? { data: callback.data }
+        : {}),
+    };
+  return kept;
+}
+
 export interface TelegramIntakeOptions {
   bot: BotStore;
   allowed?: AllowedUsers;
@@ -94,12 +132,15 @@ export function createTelegramIntake(options: TelegramIntakeOptions) {
       });
       return false;
     }
+    // Linking records consent, so only a linked sender who has not stopped is stored in full.
+    const state = await options.bot.senderState(sender.userId);
+    const keep = state.consentedAt !== undefined && state.stoppedAt === undefined;
     return options.bot.recordInbound(sender, {
       wamid: inbound.id,
       senderId: sender.userId,
       ownerKey: sender.ownerKey,
       receivedAt: now(),
-      message: inbound,
+      message: keep ? inbound : minimalInbound(inbound),
     });
   };
 }

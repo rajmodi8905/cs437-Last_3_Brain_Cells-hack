@@ -16,7 +16,7 @@ import { MemoryObjectStore, MemoryPilotStore } from '../server/memory';
 import { createStaticHandler } from '../server/static';
 import { createTelegramApi } from '../server/telegram/api';
 import {
-  announceTelegramLink,
+  announceTelegramLinkRequest,
   createTelegramBot,
   createTelegramIndexer,
 } from '../server/telegram/bot';
@@ -35,6 +35,7 @@ import {
   ownerOf,
   signIdToken,
   startFakeTelegram,
+  callbackUpdate,
   textUpdate,
 } from '../tests/telegram-helpers';
 
@@ -122,10 +123,9 @@ test("T8: the Telegram bot's top result is the item and location the app's own s
           quotaBytes: QUOTA,
           devSigner: (email) => signIdToken(email),
           telegram: {
-            bot,
             state,
-            noticeVersion: 'model-e2e',
-            onLinked: (linked) => notices.push(announceTelegramLink(api, linked)),
+            onLinkRequested: (request) =>
+              notices.push(announceTelegramLinkRequest(api, state, request)),
           },
         }),
       ),
@@ -175,6 +175,9 @@ test("T8: the Telegram bot's top result is the item and location the app's own s
     });
     expect(linked.status).toBe(200);
     await Promise.all(notices);
+    await send(
+      callbackUpdate(tg.to(USER_A.id).at(-1)!.replyMarkup!.inline_keyboard[0][0].callback_data!),
+    );
     tg.addFile('t8-pdf', pdf);
     tg.addFile('t8-image', image);
     // The PDF as a file and the photo as a file, which keeps the original bytes.

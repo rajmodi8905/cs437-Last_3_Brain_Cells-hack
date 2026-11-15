@@ -4,7 +4,14 @@
 // crash never loses one; the worker (ingest.ts) does the rest.
 import { createHash, createHmac, timingSafeEqual } from 'node:crypto';
 import type { IncomingMessage, ServerResponse } from 'node:http';
-import { senderIdentity, type BotStore, type WaMessage, type WhatsAppSender } from './store';
+import { commandOf } from './conversation';
+import {
+  minimalMessage,
+  senderIdentity,
+  type BotStore,
+  type WaMessage,
+  type WhatsAppSender,
+} from './store';
 
 export const WEBHOOK_PATH = '/api/v1/whatsapp/webhook';
 /** Meta's largest webhook payload. */
@@ -20,6 +27,12 @@ export interface WhatsAppWebhookOptions {
   phoneNumberId?: string;
   /** Called after new messages were recorded, so a worker can start on them. */
   onRecorded?: () => void;
+  /**
+   * Set when the conversation's consent gate runs: only a sender who agreed (and has not stopped)
+   * has a message's content stored; for anyone else just its ID, type and command word. Without
+   * it, as in a bare ingest worker, every message is stored in full.
+   */
+  consentRequired?: boolean;
 }
 
 /** Equal strings, in time that depends on neither their contents nor their lengths. */
@@ -130,13 +143,16 @@ export function createWhatsAppWebhook(
     let recorded = 0;
     for (const { sender, message } of extractMessages(payload, options.phoneNumberId)) {
       const wamid = message.id;
+      // Nobody who has not agreed has content in the database, whether or not the worker runs.
+      const state = options.consentRequired && (await options.bot.senderState(sender.userId));
+      const keep = !state || (state.consentedAt !== undefined && state.stoppedAt === undefined);
       if (
         await options.bot.recordInbound(sender, {
           wamid,
           senderId: sender.userId,
           ownerKey: sender.ownerKey,
           receivedAt,
-          message,
+          message: keep ? message : minimalMessage(message, commandOf(message)),
         })
       )
         recorded++;

@@ -38,7 +38,6 @@ import {
   createWhatsAppWebhook,
   type WhatsAppWebhookOptions,
 } from './whatsapp/webhook';
-import type { BotStore } from './whatsapp/store';
 import {
   TELEGRAM_LINK_PREFIX,
   TELEGRAM_LINK_RETURN,
@@ -47,10 +46,11 @@ import {
   devSignInPage,
   linkConfirmPage,
   linkedElsewherePage,
-  linkedPage,
+  linkRequestedPage,
   openConfirmPage,
   signInUnavailablePage,
   telegramLinkErrorPage,
+  createConfirmRequest,
 } from './telegram/links';
 import { telegramUserLock, type TelegramStateStore } from './telegram/store';
 import {
@@ -117,16 +117,22 @@ export interface PilotServerOptions {
 }
 
 export interface TelegramLinkOptions {
-  /** The bot's own records; linking stores the consent time and notice version there. */
-  bot: BotStore;
   /** Linked accounts and the one-time links. */
   state: TelegramStateStore;
-  /** Stored with the consent given by linking. */
-  noticeVersion: string;
   /** Shown on the link page. */
   privacyUrl?: string;
-  /** Called (without waiting) after a link, so the bot can say so in the chat. */
-  onLinked?: (linked: { userId: string; email: string; messageIds: number[] }) => unknown;
+  /**
+   * Called (without waiting) when a login link was completed on the page, so the bot can ask in
+   * the Telegram chat for confirmation. Nothing is linked until the user confirms there.
+   */
+  onLinkRequested?: (request: {
+    userId: string;
+    email: string;
+    token: string;
+    tokenHash: string;
+    /** Messages whose buttons are now used up (login links, an earlier request). */
+    messageIds: number[];
+  }) => unknown;
   webhook?: TelegramWebhookOptions;
 }
 
@@ -629,31 +635,35 @@ export function createPilotHandler(options: PilotServerOptions): RequestListener
       if (account && account.ownerKey !== session.ownerKey) return 'elsewhere' as const;
       const link = await state.takeLink(hash!, 'login', now());
       if (!link || link.userId !== found.userId) return undefined;
-      await state.linkAccount({
-        userId: link.userId,
-        ownerKey: session.ownerKey,
-        email: session.email,
-        linkedAt: now(),
-      });
-      await telegram.bot.setConsent(link.userId, now(), telegram.noticeVersion);
-      // Other login links of this user are used up too.
-      const others = await state.revokeLinks(link.userId, 'login');
+      // Whoever opens a login link can be someone else than the Telegram user it was made for
+      // (it may have been forwarded), so nothing is linked here. The Telegram user must confirm
+      // in their own chat, which only they can do.
+      const others = [
+        ...(await state.revokeLinks(link.userId, 'login')),
+        ...(await state.revokeLinks(link.userId, 'confirm')),
+      ];
+      const request = await createConfirmRequest(
+        state,
+        { userId: link.userId, ownerKey: session.ownerKey, email: session.email },
+        now(),
+      );
       const messageIds = [link, ...others]
         .map((each) => each.messageId)
         .filter((id): id is number => id !== undefined);
-      return { link, messageIds };
+      return { link, messageIds, request };
     });
     if (result === 'elsewhere') return page(res, 409, linkedElsewherePage());
     if (!result) return gone();
-    const linked = {
+    const requested = {
       userId: result.link.userId,
       email: session.email,
+      ...result.request,
       messageIds: result.messageIds,
     };
     void Promise.resolve()
-      .then(() => telegram.onLinked?.(linked))
-      .catch((cause: unknown) => console.error('Telegram link notice failed', cause));
-    return page(res, 200, linkedPage(result.link.label, session.email));
+      .then(() => telegram.onLinkRequested?.(requested))
+      .catch((cause: unknown) => console.error('Telegram link request failed', cause));
+    return page(res, 200, linkRequestedPage(result.link.label, session.email));
   }
 
   /**

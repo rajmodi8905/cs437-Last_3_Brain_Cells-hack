@@ -63,6 +63,9 @@ export interface TelegramInbound {
 export const messageKey = (message: TgMessage) => `m:${message.chat.id}:${message.message_id}`;
 export const callbackKey = (callback: TgCallbackQuery) => `c:${callback.id}`;
 
+/** The callback data of the delete confirmation button. */
+export const DELETE_DATA = 'delete';
+
 /** The item's global ID for a Telegram message key. */
 export const telegramGlobalId = (key: string) => chatGlobalId('telegram', key);
 
@@ -90,15 +93,19 @@ export interface TelegramAccount {
 /**
  * A one-time link the bot sends; only the token's SHA-256 is kept. A `login` link links the
  * Telegram user to the account signed in on the page; an `open` link opens the linked account
- * in the app.
+ * in the app. A `confirm` request is made when someone completes a login link on the page: it
+ * links nothing until the Telegram user taps Confirm in their own chat.
  */
 export interface TelegramLink {
   tokenHash: string;
-  purpose: 'login' | 'open';
+  purpose: 'login' | 'open' | 'confirm';
   userId: string;
-  /** `login`: the user's `tg:<id>` key. `open`: the linked vault (`google:<sub>`). */
+  /**
+   * `login`: the user's `tg:<id>` key. `open`: the linked vault (`google:<sub>`). `confirm`: the
+   * vault (`google:<sub>`) of the account that completed the login link.
+   */
   ownerKey: string;
-  /** `login`: the Telegram name the page shows. `open`: the account's email. */
+  /** `login`: the Telegram name the page shows. `open` and `confirm`: the account's email. */
   label: string;
   /** Seconds. */
   createdAt: number;

@@ -28,7 +28,7 @@ const LINK_COLUMNS =
   'token_hash, purpose, user_id, owner_key, label, created_at, expires_at, message_id';
 const linkOf = (row: LinkRow): TelegramLink => ({
   tokenHash: row.token_hash,
-  purpose: row.purpose === 'login' ? 'login' : 'open',
+  purpose: row.purpose === 'login' || row.purpose === 'confirm' ? row.purpose : 'open',
   userId: row.user_id,
   ownerKey: row.owner_key,
   label: row.label,
