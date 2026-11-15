@@ -195,7 +195,7 @@ export class LocalEngine implements EngineClient {
     this.model = next;
     saveSearchModel(next);
     this.ready = true;
-    await this.invalidateOldIndexes();
+    await this.invalidateOldIndexes(true);
     this.startWake();
     void this.drain();
   }
@@ -203,10 +203,21 @@ export class LocalEngine implements EngineClient {
     await this.repository.enqueueItem(itemId);
     if (this.ready) void this.drain();
   }
-  private async invalidateOldIndexes() {
+  /**
+   * Queues for re-indexing every ready item whose segments belong to another model. When the
+   * student has just switched models, failed items are queued too: one that failed under the
+   * old model (a picture with no text under a custom model) may index under the new one, and
+   * switching back must restore the default exactly. Otherwise a failed item stays failed until
+   * the student retries it.
+   */
+  private async invalidateOldIndexes(includeFailed = false) {
     const db = this.repository.database;
     await db.transaction('rw', db.items, db.segments, db.jobs, async () => {
-      for (const item of await db.items.where('status').equals('ready').toArray()) {
+      const stale = await db.items
+        .where('status')
+        .anyOf(includeFailed ? ['ready', 'failed'] : ['ready'])
+        .toArray();
+      for (const item of stale) {
         const segments = await db.segments.where('itemId').equals(item.id).toArray();
         if (!segments.length || segments.some((s) => s.indexVersion !== this.model.indexVersion)) {
           const generation = item.processingGeneration + 1;

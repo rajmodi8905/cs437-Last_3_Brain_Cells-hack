@@ -491,3 +491,33 @@ it('[S16] switching models re-queues every saved item, and switching back restor
   expect(activeSearchModel()).toBe(GEMMA);
   expect(engine.customModel?.indexVersion).toBe(custom.indexVersion);
 });
+
+it('[S16] switching back to the default re-queues a picture that failed under the custom model', async () => {
+  memoryStorage();
+  const { repository, item, claim } = await claimedNote();
+  // The picture has no text, so the student's own model could not index it.
+  expect(
+    await repository.failJob(claim, {
+      code: 'NO_TEXT',
+      message: 'No text found.',
+      retryable: false,
+    } as never),
+  ).toBe(true);
+  expect((await repository.getItem(item.id))?.status).toBe('failed');
+  stubCache();
+  const list = await manifest();
+  const custom = customSearchModel(await config());
+  vi.stubGlobal('fetch', serve());
+  await setupAssets(list, () => {}, undefined, custom);
+  await setupAssets(list, () => {}, undefined, GEMMA);
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async () => Response.json(list)),
+  );
+  const engine = new LocalEngine(repository);
+  (engine as any).drain = vi.fn(async () => {});
+  await engine.initialize();
+  await engine.setSearchModel(custom);
+  await engine.setSearchModel(GEMMA);
+  expect((await repository.getItem(item.id))?.status).toBe('queued');
+});
