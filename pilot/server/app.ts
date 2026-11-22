@@ -1000,7 +1000,12 @@ export function createPilotHandler(options: PilotServerOptions): RequestListener
       const after = Number(url.searchParams.get('after') ?? '0');
       if (!Number.isSafeInteger(after) || after < 0)
         throw new ApiError('INVALID_INPUT', 'after must be a cursor.');
-      return send(res, 200, await store.changesAfter(session.ownerKey, after));
+      // Every pass learns whether the library is encrypted before it sends anything.
+      const e2ee = await store.vaultE2ee(session.ownerKey);
+      return send(res, 200, {
+        ...(await store.changesAfter(session.ownerKey, after)),
+        ...(e2ee ? { e2ee } : {}),
+      });
     }
 
     if ((match = /^\/items\/([^/]+)\/upload$/.exec(path)) && method === 'POST') {

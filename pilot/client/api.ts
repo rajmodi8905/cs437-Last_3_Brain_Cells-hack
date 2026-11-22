@@ -1,7 +1,16 @@
 // Typed browser client for the pilot API (docs/pilot/protocol.md).
 import type { CloudItem, IndexBundle, PilotErrorCode } from '../contract';
+import type { SealedIndexDescriptor, SealedItemFields, VaultE2eeSettings } from '../contract/e2ee';
 
-export type ChangeItem = Partial<CloudItem> & Pick<CloudItem, 'globalId' | 'revision' | 'deleted'>;
+/**
+ * A cloud item as the change feed lists it. An end-to-end encrypted item arrives with only
+ * `sealed` (and `sealedIndex`); the sync engine adds the fields it opens from them.
+ */
+export type ChangeItem = Partial<CloudItem> &
+  Pick<CloudItem, 'globalId' | 'revision' | 'deleted'> & {
+    sealed?: SealedItemFields;
+    sealedIndex?: SealedIndexDescriptor;
+  };
 export type ItemDescription = Omit<CloudItem, 'globalId' | 'revision' | 'deleted' | 'index'>;
 
 export class ApiFailure extends Error {
@@ -36,6 +45,8 @@ export interface SessionInfo {
    * student's own (as after Google sign-in); this only lets that link count as choosing Auto-sync.
    */
   via?: 'telegram';
+  /** Set once the library is end-to-end encrypted (docs/pilot/e2ee-design.md). */
+  e2ee?: VaultE2eeSettings;
 }
 
 export interface ApiClient {
@@ -49,20 +60,35 @@ export interface ApiClient {
   changes(
     epoch: number,
     after: number,
-  ): Promise<{ cursor: number; changes: { cursor: number; item: ChangeItem }[] }>;
+  ): Promise<{
+    cursor: number;
+    changes: { cursor: number; item: ChangeItem }[];
+    /** Present when the library is end-to-end encrypted. */
+    e2ee?: VaultE2eeSettings;
+  }>;
   beginUpload(
     globalId: string,
-    body: { opId: string; epoch: number; item: ItemDescription },
+    body:
+      | { opId: string; epoch: number; item: ItemDescription }
+      | { opId: string; epoch: number; sealed: SealedItemFields },
   ): Promise<{ uploadId: string; chunkBytes: number }>;
   putChunk(uploadId: string, index: number, bytes: Uint8Array): Promise<void>;
   completeUpload(
     uploadId: string,
     body: { opId: string; epoch: number },
-  ): Promise<{ item: CloudItem }>;
+  ): Promise<{ item: ChangeItem }>;
   rename(
     globalId: string,
-    body: { opId: string; epoch: number; expectedRevision: number; title: string },
-  ): Promise<{ item: CloudItem }>;
+    body:
+      | { opId: string; epoch: number; expectedRevision: number; title: string }
+      | {
+          opId: string;
+          epoch: number;
+          expectedRevision: number;
+          sealedMeta: string;
+          metaRevision: number;
+        },
+  ): Promise<{ item: ChangeItem }>;
   remove(
     globalId: string,
     body: { opId: string; epoch: number; expectedRevision: number },
@@ -71,9 +97,17 @@ export interface ApiClient {
   original(globalId: string, range?: { start: number; end: number }): Promise<Uint8Array>;
   publishIndex(
     globalId: string,
-    body: { opId: string; epoch: number; bundle: IndexBundle },
-  ): Promise<{ item: CloudItem }>;
+    body:
+      | { opId: string; epoch: number; bundle: IndexBundle }
+      | { opId: string; epoch: number; sealedIndex: string; metaRevision: number },
+  ): Promise<{ item: ChangeItem }>;
   index(globalId: string): Promise<IndexBundle>;
+  /** An encrypted item's sealed index bundle, as stored. */
+  sealedIndex(globalId: string): Promise<Uint8Array>;
+  /** Turns end-to-end encryption on for the library, once per epoch. */
+  setVaultE2ee(
+    body: { opId: string; epoch: number } & VaultE2eeSettings,
+  ): Promise<{ e2ee: VaultE2eeSettings }>;
   removeVault(body: { epoch: number; confirm: string }): Promise<{ vault: { epoch: number } }>;
   /**
    * The same client, whose requests are refused with `ACCOUNT_CHANGED` unless the browser's
@@ -188,6 +222,13 @@ export function createApiClient(options: { base: string; fetch?: typeof fetch })
       },
       async index(globalId) {
         return json(await request(`/items/${enc(globalId)}/index`));
+      },
+      async sealedIndex(globalId) {
+        const res = await request(`/items/${enc(globalId)}/index`);
+        return new Uint8Array(await res.arrayBuffer());
+      },
+      async setVaultE2ee(body) {
+        return json(await request('/vault/e2ee', { method: 'PUT' }, body));
       },
       async original(globalId, range) {
         const res = await request(

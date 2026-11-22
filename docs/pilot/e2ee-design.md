@@ -1,6 +1,6 @@
 # End-to-end encrypted Auto-sync: design
 
-Status: in progress, 22 November 2026. Phase 0, the envelope library, is built: `pilot/contract/e2ee.ts`, tested in `pilot/tests/e2ee.test.ts`. Phase 1, the server, is built: sealed items, vault settings and pairing in `pilot/server`, tested in `pilot/tests/e2ee-server.test.ts`. No device uses them yet. It extends the [sync protocol](protocol.md) (v1) and the [pilot spec](SPEC.md).
+Status: in progress, 22 November 2026. Phase 0, the envelope library, is built: `pilot/contract/e2ee.ts`, tested in `pilot/tests/e2ee.test.ts`. Phase 1, the server, is built: sealed items, vault settings and pairing in `pilot/server`, tested in `pilot/tests/e2ee-server.test.ts`. Phase 2, the sync engine, is built: it seals and opens items in `pilot/client/sync.ts`, tested in `pilot/tests/e2ee-client.test.ts`. No screen turns encryption on yet; that is phase 3. It extends the [sync protocol](protocol.md) (v1) and the [pilot spec](SPEC.md).
 
 ## Summary
 
@@ -76,7 +76,7 @@ The plaintext `contentSha256` inside the sealed metadata is still checked: after
 
 Sealed items are added alongside v1 items, not instead of them. A vault is either **plain** (today's behaviour, unchanged) or **sealed** (encryption turned on). A sealed vault can still hold plain items, which is how bot items work.
 
-**Vault.** `PUT /vault/e2ee` takes `opId`, `epoch`, `vaultSalt` (16 bytes) and `keyCheck` (32 bytes), both base64url, and answers `{ e2ee: { vaultSalt, keyCheck } }`. It sets them once per epoch: the same settings again are answered the same way, other settings are refused with `INVALID_INPUT`, and removing the cloud library clears them. From then on `GET /session` includes `e2ee: { vaultSalt, keyCheck }`; a plain vault's session has no `e2ee` field, so existing clients see no change.
+**Vault.** `PUT /vault/e2ee` takes `opId`, `epoch`, `vaultSalt` (16 bytes) and `keyCheck` (32 bytes), both base64url, and answers `{ e2ee: { vaultSalt, keyCheck } }`. It sets them once per epoch: the same settings again are answered the same way, other settings are refused with `INVALID_INPUT`, and removing the cloud library clears them. From then on `GET /session` and every `GET /changes` page include `e2ee: { vaultSalt, keyCheck }`, so each sync pass knows before it sends anything; a plain vault's responses have no `e2ee` field, so existing clients see no change.
 
 **Item fields for sealed items.** The server stores and returns these; the v1 plaintext fields are absent.
 
@@ -109,6 +109,20 @@ Unchanged for sealed items: `opId` idempotency, `expectedRevision` and `REVISION
 **Delete.** As today. The tombstone is `{ globalId, revision, deleted: true }`; the server keeps no wrapped key or sealed metadata for it, and deletes the original and index objects after the tombstone commits.
 
 **Storage.** Sealed items share the `items` table and change feed with plain ones, with only the public fields in `data`. `PilotStore.getItem`, which all bot code uses, never returns a sealed item; the API routes read both kinds. The vault settings are a new `vaults.e2ee` column, and pairing requests a new `pairings` table that backups leave out. This is database migration 7, so the first release with it goes through the manual release path in [deployment.md](deployment.md), as migrations 3 to 6 did.
+
+## The sync engine (phase 2)
+
+The engine in `pilot/client/sync.ts` does all sealing and opening, so the screens and search keep working with the same item fields.
+
+- **Knowing the library is encrypted.** Each pull stores the `e2ee` settings from `GET /changes`. The engine derives the vault keys from the secret this device keeps and uses them only if the key check passes for the current epoch.
+- **Locked.** Without a matching secret the pass stops after the pull and returns `locked`: nothing is applied, sent or uploaded in plain, and local items wait as pending uploads. `unlock(code)` checks a typed recovery code against `keyCheck` before keeping it, so a wrong code is refused (`WRONG_KEY`) and a mistyped one too (`INVALID_CODE`).
+- **Turning it on.** `turnOnEncryption()` makes `R` and the salt, keeps them on the device first, then calls `PUT /vault/e2ee` and returns the recovery code. A retry after a lost reply sends the same settings again. If the server refuses, the unused secret is deleted. `recoveryCode()` shows the code again.
+- **Uploads.** In an encrypted library new uploads are sealed. The wrapped item key and sealed metadata are kept with the pending upload before it begins, so a resumed upload seals exactly the same ciphertext and its declared hash still matches. An upload begun in plain before encryption was turned on finishes in plain.
+- **Opening.** Sealed items are opened as they arrive, and the device's catalogue holds their opened fields next to `sealed`, so listing, download, Keep offline and export see titles and plaintext hashes as before. An item that does not open (tampered, or metadata moved from another item) is counted as failed and the catalogue keeps what it had.
+- **Originals.** A sealed original is downloaded one sealed chunk per request when it has several, and each chunk is opened as it arrives. The plaintext is checked against the sealed `contentSha256`. Offline copies are kept decrypted on the device.
+- **Renames and indexes.** A rename seals the metadata again under the next `metaRevision`. An index bundle is sealed for the item's current `metaRevision`, and only when the cloud copy already has this device's title and original. Other devices open a bundle only when its `metaRevision` is the item's, check it with `validateIndexBundle`, and keep an empty entry for one that does not open or match, so it is not downloaded again until the item changes.
+- **Storage on the device.** `R`, its salt and epoch are kept in the account's sync database (version 4 adds a `vault` table). Removing the cloud library, starting again after a reset, and signing out with the account's sync data removed all delete it.
+- **Export.** `exportCloudVault` takes the engine's `sealedReader()` and writes decrypted originals and titles. Without the key it stops and asks for the recovery code.
 
 ## Adding a device
 

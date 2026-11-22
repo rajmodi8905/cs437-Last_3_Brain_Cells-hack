@@ -3,10 +3,39 @@
 // against the last agreed state, so a crash between a local save and an upload loses nothing.
 import {
   PILOT_INDEX_VERSIONS,
+  pickItemDescription,
   searchMetadataDigest,
   validateIndexBundle,
-  type CloudItem,
+  type IndexBundle,
 } from '../contract';
+import {
+  E2EE_FORMAT,
+  E2eeError,
+  ORIGINAL_CHUNK_BYTES,
+  TAG_BYTES,
+  cipherChunkRange,
+  decodeRecoveryCode,
+  deriveVaultKeys,
+  encodeRecoveryCode,
+  fromBase64url,
+  keyCheck,
+  newItemKey,
+  newRecoverySecret,
+  newVaultSalt,
+  openIndexBundle,
+  openMeta,
+  openOriginalChunk,
+  plainOriginalLength,
+  sealIndexBundle,
+  sealMeta,
+  sealOriginal,
+  toBase64url,
+  unwrapItemKey,
+  verifyKeyCheck,
+  wrapItemKey,
+  type SealedItemFields,
+  type VaultKeys,
+} from '../contract/e2ee';
 import { ApiFailure, isAccountChanged, type ApiClient, type ChangeItem } from './api';
 import { emptySnapshot } from './types';
 import type {
@@ -16,10 +45,25 @@ import type {
   Mapping,
   OfflineStore,
   PendingOp,
+  RemoteIndexEntry,
   RemoteIndexStore,
   SyncSnapshot,
   SyncStateStore,
+  VaultSecretStore,
 } from './types';
+
+/** Opens an encrypted library's items outside a sync pass, as an export does. */
+export interface SealedReader {
+  /** The item with the fields its sealed metadata holds. */
+  open(item: ChangeItem): Promise<ChangeItem>;
+  /** The item's original, downloaded and decrypted. */
+  original(item: ChangeItem): Promise<Uint8Array>;
+}
+
+const hex = (bytes: ArrayBuffer) =>
+  [...new Uint8Array(bytes)].map((b) => b.toString(16).padStart(2, '0')).join('');
+const sha256Hex = async (bytes: Uint8Array) =>
+  hex(await globalThis.crypto.subtle.digest('SHA-256', bytes as BufferSource));
 
 export interface SyncResult {
   uploaded: number;
@@ -37,6 +81,11 @@ export interface SyncResult {
   quotaExceeded?: true;
   /** Set when the engine refused to run against a library other than the included one. */
   blocked?: 'library-mismatch';
+  /**
+   * The library is end-to-end encrypted and this device does not have its key yet: nothing
+   * was applied or sent. Enter the recovery code, or pair with a device that has it.
+   */
+  locked?: true;
 }
 
 /** No answer, or the server asked to come back later: keep the work and stop this pass. */
@@ -56,6 +105,9 @@ export class SyncEngine {
   private indexVersion: string;
   private downloadRangeBytes: number;
   private paused?: boolean;
+  private vaultSecret?: VaultSecretStore;
+  /** Vault keys derived for the settings and epoch they were checked against. */
+  private keyCache?: { vaultSalt: string; epoch: number; keys: VaultKeys };
 
   constructor(options: {
     api: ApiClient;
@@ -72,6 +124,8 @@ export class SyncEngine {
     indexVersion?: string;
     /** Originals larger than this are downloaded in parts of this size. */
     downloadRangeBytes?: number;
+    /** Where this device keeps an encrypted library's recovery secret. */
+    vaultSecret?: VaultSecretStore;
   }) {
     this.api = options.api;
     this.library = options.library;
@@ -82,6 +136,7 @@ export class SyncEngine {
     this.offline = options.offline;
     this.indexVersion = options.indexVersion ?? PILOT_INDEX_VERSIONS[0];
     this.downloadRangeBytes = options.downloadRangeBytes ?? 4 * 1024 * 1024;
+    this.vaultSecret = options.vaultSecret;
   }
 
   /** Explicit opt-in: the signed-in user chose to sync this device's library. */
@@ -116,8 +171,10 @@ export class SyncEngine {
     if (snapshot.epoch !== epoch) restart();
     try {
       await this.pull(snapshot, result);
-      await this.syncRemoteIndexes(snapshot, result);
-      await this.cleanOffline(snapshot);
+      if (!result.locked) {
+        await this.syncRemoteIndexes(snapshot, result);
+        await this.cleanOffline(snapshot);
+      }
     } catch (cause) {
       // The browser now has another account's session: keep nothing, let the app follow it.
       if (isAccountChanged(cause)) throw cause;
@@ -141,12 +198,45 @@ export class SyncEngine {
     if (!entry) throw new Error('This item is not in the cloud library.');
     const kept = await this.offline?.get(globalId);
     if (kept && kept.contentSha256 === entry.contentSha256) return kept.bytes;
-    const bytes = await this.fetchOriginal(globalId, entry.byteLength);
-    const digest = await globalThis.crypto.subtle.digest('SHA-256', bytes as BufferSource);
-    const hex = [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, '0')).join('');
-    if (hex !== entry.contentSha256)
+    const bytes = entry.sealed
+      ? await (await this.requireReader()).original(entry)
+      : await this.fetchOriginal(globalId, entry.byteLength);
+    if ((await sha256Hex(bytes)) !== entry.contentSha256)
       throw new Error('Downloaded original does not match its hash.');
     return bytes;
+  }
+
+  /**
+   * An encrypted original, one sealed chunk per request when it has several. Each chunk is
+   * opened as it arrives, so a changed, moved or cut chunk fails at once.
+   */
+  private async fetchSealedOriginal(keys: VaultKeys, epoch: number, entry: ChangeItem) {
+    const sealed = entry.sealed!;
+    const itemKey = await unwrapItemKey(keys, sealed.wrappedKey);
+    const ctx = { globalId: entry.globalId, epoch };
+    const cipherLength = sealed.cipherByteLength;
+    const plainLength = plainOriginalLength(cipherLength);
+    if (plainLength === null) throw new E2eeError('INVALID_FORMAT', 'Sealed length is not valid.');
+    const out = new Uint8Array(plainLength);
+    const whole = cipherLength <= ORIGINAL_CHUNK_BYTES + TAG_BYTES;
+    for (let i = 0; ; i++) {
+      const range = cipherChunkRange(i, cipherLength);
+      if (!range) break;
+      const part = whole
+        ? await this.api.original(entry.globalId)
+        : await this.api
+            .original(entry.globalId, range)
+            .catch((cause: unknown) =>
+              cause instanceof ApiFailure
+                ? Promise.reject(cause)
+                : this.api.original(entry.globalId, range),
+            );
+      out.set(
+        await openOriginalChunk(itemKey, part, ctx, i, range.isLast),
+        i * ORIGINAL_CHUNK_BYTES,
+      );
+    }
+    return out;
   }
 
   /** Large media comes in parts, each retried once, so one dropped response costs one part. */
@@ -197,6 +287,7 @@ export class SyncEngine {
       await this.pull(snapshot, result);
       if (this.paused) return { ...result, paused: true };
       await this.saveState(snapshot);
+      if (result.locked) return result;
       await this.syncRemoteIndexes(snapshot, result);
       await this.cleanOffline(snapshot);
     } catch (cause) {
@@ -368,9 +459,27 @@ export class SyncEngine {
 
   private async pull(snapshot: SyncSnapshot, result: SyncResult) {
     const page = await this.api.changes(snapshot.epoch!, snapshot.cursor);
+    snapshot.e2ee = page.e2ee;
+    const keys = await this.vaultKeys(snapshot);
+    // Without the key nothing can be read, and anything sent would be refused or plaintext.
+    if (snapshot.e2ee && !keys) {
+      result.locked = true;
+      return;
+    }
     const local = new Map((await this.library.listItems()).map((item) => [item.id, item]));
-    for (const { item } of page.changes) {
+    for (const change of page.changes) {
+      let item = change.item;
       const mapping = snapshot.mappings.find((m) => m.globalId === item.globalId);
+      if (item.sealed && !item.deleted) {
+        try {
+          item = await this.openItem(item, keys, snapshot.epoch!);
+        } catch (cause) {
+          if (!(cause instanceof E2eeError)) throw cause;
+          // Tampered or moved: the item stays as this device last had it.
+          result.failed++;
+          continue;
+        }
+      }
       if (item.deleted) {
         delete snapshot.catalogue[item.globalId];
         await this.offline?.delete(item.globalId);
@@ -422,17 +531,18 @@ export class SyncEngine {
           // Deleted here after the upload began. The server may have finished it with the
           // reply lost, so ask before dropping it; a finished one is deleted from the cloud too.
           if (op.uploadId && this.paused) return;
-          const finished = op.uploadId ? await this.finishedUpload(op, epoch) : undefined;
+          const begun = op.uploadId ? await this.finishedUpload(op, epoch) : undefined;
           this.dropOps(snapshot, op.globalId);
-          if (!finished) {
+          if (!begun) {
             if (mapping) mapping.state = 'deleted';
             return;
           }
+          const finished = await this.opened(begun, snapshot);
           snapshot.catalogue[finished.globalId] = finished;
           if (mapping)
             Object.assign(mapping, {
               state: 'synced',
-              syncedTitle: finished.title,
+              syncedTitle: finished.title ?? mapping.syncedTitle,
               syncedRevision: finished.revision,
             });
           const remove: PendingOp = {
@@ -447,27 +557,67 @@ export class SyncEngine {
           await this.send(remove, snapshot, result);
           return;
         }
-        let item: CloudItem | undefined;
+        // An encrypted library gets the sealed original; an upload begun in plain stays plain.
+        let payload = bytes;
+        let sealed: SealedItemFields | undefined;
+        if (op.sealed || (!op.uploadId && snapshot.e2ee)) {
+          const keys = await this.requireKeys(snapshot);
+          if (!op.sealed) {
+            const itemKey = await newItemKey();
+            op.sealed = {
+              wrappedKey: await wrapItemKey(keys, itemKey),
+              sealedMeta: await sealMeta(itemKey, pickItemDescription(local), {
+                globalId: op.globalId,
+                epoch,
+                metaRevision: 1,
+              }),
+            };
+            await this.saveState(snapshot);
+          }
+          const itemKey = await unwrapItemKey(keys, op.sealed.wrappedKey);
+          payload = await sealOriginal(itemKey, bytes, { globalId: op.globalId, epoch });
+          sealed = {
+            enc: E2EE_FORMAT,
+            ...op.sealed,
+            metaRevision: 1,
+            cipherByteLength: payload.length,
+            cipherSha256: await sha256Hex(payload),
+          };
+        }
+        let item: ChangeItem | undefined;
         for (let attempt = 0; !item; attempt++) {
           try {
             if (!op.uploadId) {
               if (this.paused) return;
               const { kind, title, mimeType, byteLength, contentSha256, createdAt, sourceUrl } =
                 local;
-              const begun = await this.api.beginUpload(op.globalId, {
-                opId: op.opId,
-                epoch,
-                item: { kind, title, mimeType, byteLength, contentSha256, createdAt, sourceUrl },
-              });
+              const begun = await this.api.beginUpload(
+                op.globalId,
+                sealed
+                  ? { opId: op.opId, epoch, sealed }
+                  : {
+                      opId: op.opId,
+                      epoch,
+                      item: {
+                        kind,
+                        title,
+                        mimeType,
+                        byteLength,
+                        contentSha256,
+                        createdAt,
+                        sourceUrl,
+                      },
+                    },
+              );
               op.uploadId = begun.uploadId;
               op.chunkBytes = begun.chunkBytes;
               op.sentChunks = 0;
               await this.saveState(snapshot);
             }
             const size = op.chunkBytes!;
-            for (let n = op.sentChunks ?? 0; n * size < bytes.length; n++) {
+            for (let n = op.sentChunks ?? 0; n * size < payload.length; n++) {
               if (this.paused) return;
-              await this.api.putChunk(op.uploadId, n, bytes.slice(n * size, (n + 1) * size));
+              await this.api.putChunk(op.uploadId, n, payload.slice(n * size, (n + 1) * size));
               op.sentChunks = n + 1;
               await this.saveState(snapshot);
             }
@@ -490,27 +640,52 @@ export class SyncEngine {
             await this.saveState(snapshot);
           }
         }
+        item = await this.opened(item, snapshot);
         snapshot.catalogue[item.globalId] = item;
         if (mapping)
           Object.assign(mapping, {
             state: 'synced',
-            syncedTitle: item.title,
+            syncedTitle: item.title ?? local.title,
             syncedRevision: item.revision,
           });
         result.uploaded++;
       } else if (op.kind === 'rename') {
         if (this.paused) return;
-        const { item } = await this.api.rename(op.globalId, {
-          opId: op.opId,
-          epoch,
-          expectedRevision: op.expectedRevision,
-          title: op.title,
-        });
+        const entry = snapshot.catalogue[op.globalId];
+        let renamed: ChangeItem;
+        if (entry?.sealed) {
+          // The title is sealed again with the item's own key, under the next metaRevision.
+          const itemKey = await unwrapItemKey(
+            await this.requireKeys(snapshot),
+            entry.sealed.wrappedKey,
+          );
+          const metaRevision = entry.sealed.metaRevision + 1;
+          const sealedMeta = await sealMeta(
+            itemKey,
+            { ...pickItemDescription(entry), title: op.title },
+            { globalId: op.globalId, epoch, metaRevision },
+          );
+          ({ item: renamed } = await this.api.rename(op.globalId, {
+            opId: op.opId,
+            epoch,
+            expectedRevision: op.expectedRevision,
+            sealedMeta,
+            metaRevision,
+          }));
+        } else {
+          ({ item: renamed } = await this.api.rename(op.globalId, {
+            opId: op.opId,
+            epoch,
+            expectedRevision: op.expectedRevision,
+            title: op.title,
+          }));
+        }
+        const item = await this.opened(renamed, snapshot);
         snapshot.catalogue[item.globalId] = item;
         if (mapping)
           Object.assign(mapping, {
             state: 'synced',
-            syncedTitle: item.title,
+            syncedTitle: item.title ?? op.title,
             syncedRevision: item.revision,
             remoteTitle: undefined,
             conflictLocalTitle: undefined,
@@ -542,7 +717,8 @@ export class SyncEngine {
         throw cause;
       }
       if (cause.code === 'REVISION_CONFLICT' && mapping) {
-        const current = cause.body.current as ChangeItem | undefined;
+        const listed = cause.body.current as ChangeItem | undefined;
+        const current = listed && (await this.opened(listed, snapshot).catch(() => listed));
         mapping.state = 'conflict';
         mapping.remoteTitle = current?.title;
         mapping.conflictLocalTitle = op.kind === 'rename' ? op.title : undefined;
@@ -579,7 +755,7 @@ export class SyncEngine {
   private async finishedUpload(
     op: Extract<PendingOp, { kind: 'upload' }>,
     epoch: number,
-  ): Promise<CloudItem | undefined> {
+  ): Promise<ChangeItem | undefined> {
     try {
       return (await this.api.completeUpload(op.uploadId!, { opId: op.completeOpId, epoch })).item;
     } catch (cause) {
@@ -680,6 +856,9 @@ export class SyncEngine {
     for (const entry of (await this.remoteIndex?.all()) ?? [])
       await this.remoteIndex!.delete(entry.globalId);
     for (const id of await this.offlineIds()) await this.offline!.delete(id);
+    // A new epoch has no encryption settings; the old secret can open nothing any more.
+    await this.vaultSecret?.delete();
+    this.keyCache = undefined;
     await this.state.save({ ...emptySnapshot(), epoch, libraryId: snapshot.libraryId });
   }
 
@@ -736,23 +915,53 @@ export class SyncEngine {
       return;
     }
     if (this.paused) return;
-    const { item } = await this.api.publishIndex(op.globalId, {
-      opId: op.opId,
-      epoch: snapshot.epoch!,
-      bundle: {
+    const epoch = snapshot.epoch!;
+    const bundle: IndexBundle = {
+      globalId: op.globalId,
+      contentSha256: local.contentSha256,
+      searchMetadataDigest: await searchMetadataDigest(local),
+      indexVersion: index.indexVersion,
+      dimension: 768,
+      segments: index.segments.map((segment) => ({
+        modality: segment.modality,
+        location: segment.location,
+        ...(segment.text !== undefined ? { text: segment.text } : {}),
+        vector: Array.from(segment.vector),
+      })),
+    };
+    const entry = snapshot.catalogue[op.globalId];
+    let published: ChangeItem;
+    if (entry?.sealed) {
+      // The server cannot check a sealed bundle against the item, so this device does: the
+      // cloud copy must already carry this original and title, or the index waits for it.
+      if (entry.contentSha256 !== local.contentSha256 || entry.title !== local.title) {
+        this.removeOp(snapshot, op);
+        return;
+      }
+      const itemKey = await unwrapItemKey(
+        await this.requireKeys(snapshot),
+        entry.sealed.wrappedKey,
+      );
+      const metaRevision = entry.sealed.metaRevision;
+      const sealedIndex = await sealIndexBundle(itemKey, bundle, {
         globalId: op.globalId,
-        contentSha256: local.contentSha256,
-        searchMetadataDigest: await searchMetadataDigest(local),
-        indexVersion: index.indexVersion,
-        dimension: 768,
-        segments: index.segments.map((segment) => ({
-          modality: segment.modality,
-          location: segment.location,
-          ...(segment.text !== undefined ? { text: segment.text } : {}),
-          vector: Array.from(segment.vector),
-        })),
-      },
-    });
+        epoch,
+        metaRevision,
+      });
+      ({ item: published } = await this.api.publishIndex(op.globalId, {
+        opId: op.opId,
+        epoch,
+        sealedIndex: toBase64url(sealedIndex),
+        metaRevision,
+      }));
+    } else {
+      ({ item: published } = await this.api.publishIndex(op.globalId, {
+        opId: op.opId,
+        epoch,
+        bundle,
+      }));
+    }
+    const item = await this.opened(published, snapshot);
     snapshot.catalogue[item.globalId] = item;
     mapping.publishedIndex = key;
     this.removeOp(snapshot, op);
@@ -767,7 +976,12 @@ export class SyncEngine {
     );
     const wanted = new Set<string>();
     for (const item of Object.values(snapshot.catalogue)) {
-      if (item.deleted || mine.has(item.globalId) || !item.index || !item.contentSha256) continue;
+      if (item.deleted || mine.has(item.globalId) || !item.contentSha256) continue;
+      if (item.sealed) {
+        if (await this.syncSealedIndex(snapshot, item, result)) wanted.add(item.globalId);
+        continue;
+      }
+      if (!item.index) continue;
       const usable =
         item.index.indexVersion === this.indexVersion &&
         item.index.contentSha256 === item.contentSha256 &&
@@ -804,6 +1018,167 @@ export class SyncEngine {
     }
     for (const entry of await this.remoteIndex.all())
       if (!wanted.has(entry.globalId)) await this.remoteIndex.delete(entry.globalId);
+  }
+
+  /**
+   * Keeps the opened index of an encrypted item from another device. Only a bundle sealed for
+   * the item's current metadata is used; one that does not open or does not match it is kept
+   * as empty, so it is not downloaded again until the item changes. Returns whether it is kept.
+   */
+  private async syncSealedIndex(snapshot: SyncSnapshot, item: ChangeItem, result: SyncResult) {
+    const sealed = item.sealed!;
+    if (!item.sealedIndex || item.sealedIndex.metaRevision !== sealed.metaRevision) return false;
+    const keys = await this.vaultKeys(snapshot);
+    if (!keys) return false;
+    const key = `sealed|${sealed.metaRevision}|${item.sealedIndex.byteLength}|${this.indexVersion}`;
+    if ((await this.remoteIndex!.get(item.globalId))?.key === key) return true;
+    const ctx = {
+      globalId: item.globalId,
+      epoch: snapshot.epoch!,
+      metaRevision: sealed.metaRevision,
+    };
+    let usable: RemoteIndexEntry['segments'] = [];
+    try {
+      const itemKey = await unwrapItemKey(keys, sealed.wrappedKey);
+      const bundle = await openIndexBundle(itemKey, await this.api.sealedIndex(item.globalId), ctx);
+      const valid = validateIndexBundle(
+        bundle,
+        {
+          globalId: item.globalId,
+          contentSha256: item.contentSha256!,
+          searchMetadataDigest: await searchMetadataDigest({ title: item.title ?? '' }),
+        },
+        [this.indexVersion],
+      );
+      if (valid.ok) usable = bundle.segments;
+    } catch (cause) {
+      if (isAccountChanged(cause)) throw cause;
+      result.failed++;
+      // A network failure is tried again next pass; a bundle that does not open is kept empty.
+      if (!(cause instanceof E2eeError)) return false;
+    }
+    await this.remoteIndex!.put(item.globalId, { key, kind: item.kind!, segments: usable });
+    return true;
+  }
+
+  /**
+   * The vault keys for the library's current settings, when this device holds the matching
+   * recovery secret and it passes the key check.
+   */
+  private async vaultKeys(snapshot: SyncSnapshot): Promise<VaultKeys | undefined> {
+    const settings = snapshot.e2ee;
+    const epoch = snapshot.epoch;
+    if (!settings || epoch === undefined || !this.vaultSecret) return undefined;
+    const cached = this.keyCache;
+    if (cached?.vaultSalt === settings.vaultSalt && cached.epoch === epoch) return cached.keys;
+    const stored = await this.vaultSecret.get();
+    if (!stored || stored.vaultSalt !== settings.vaultSalt || stored.epoch !== epoch)
+      return undefined;
+    const keys = await deriveVaultKeys(stored.secret, fromBase64url(settings.vaultSalt));
+    if (!(await verifyKeyCheck(keys, epoch, settings.keyCheck))) return undefined;
+    this.keyCache = { vaultSalt: settings.vaultSalt, epoch, keys };
+    return keys;
+  }
+
+  private async requireKeys(snapshot: SyncSnapshot): Promise<VaultKeys> {
+    const keys = await this.vaultKeys(snapshot);
+    if (!keys) throw new Error('Enter this library’s recovery code on this device first.');
+    return keys;
+  }
+
+  /** An encrypted item with the fields its sealed metadata holds added. */
+  private async openItem(item: ChangeItem, keys: VaultKeys | undefined, epoch: number) {
+    const sealed = item.sealed!;
+    if (!keys) throw new E2eeError('WRONG_KEY', 'This device does not have the library’s key.');
+    const itemKey = await unwrapItemKey(keys, sealed.wrappedKey);
+    const meta = await openMeta(itemKey, sealed.sealedMeta, {
+      globalId: item.globalId,
+      epoch,
+      metaRevision: sealed.metaRevision,
+    });
+    return { ...item, ...meta };
+  }
+
+  /** `item` as this device lists it: opened when it is sealed. */
+  private async opened(item: ChangeItem, snapshot: SyncSnapshot): Promise<ChangeItem> {
+    if (!item.sealed || item.deleted) return item;
+    return this.openItem(item, await this.vaultKeys(snapshot), snapshot.epoch!);
+  }
+
+  private async requireReader(): Promise<SealedReader> {
+    const reader = await this.sealedReader();
+    if (!reader) throw new Error('Enter this library’s recovery code on this device first.');
+    return reader;
+  }
+
+  /** Opens this encrypted library's items for an export; undefined while it is locked here. */
+  async sealedReader(): Promise<SealedReader | undefined> {
+    const snapshot = await this.state.load();
+    const keys = await this.vaultKeys(snapshot);
+    if (!keys) return undefined;
+    const epoch = snapshot.epoch!;
+    return {
+      open: (item) => (item.sealed ? this.openItem(item, keys, epoch) : Promise.resolve(item)),
+      original: (item) => this.fetchSealedOriginal(keys, epoch, item),
+    };
+  }
+
+  /** Whether the library is end-to-end encrypted, as of the last pass, and readable here. */
+  async encryption() {
+    const snapshot = await this.state.load();
+    return { on: !!snapshot.e2ee, unlocked: !!(await this.vaultKeys(snapshot)) };
+  }
+
+  /**
+   * Turns end-to-end encryption on for this account's library and returns the recovery code
+   * to show the student. The secret is kept on this device before the request is sent, so a
+   * lost reply never leaves the library encrypted under a key no device has; a retry sends the
+   * same settings again.
+   */
+  async turnOnEncryption(): Promise<string> {
+    if (!this.vaultSecret) throw new Error('This device cannot keep an encryption key.');
+    const snapshot = await this.state.load();
+    const epoch = snapshot.epoch;
+    if (epoch === undefined) throw new Error('Sign in and include a library first.');
+    if (snapshot.e2ee) throw new Error('End-to-end encryption is already on for this library.');
+    let stored = await this.vaultSecret.get();
+    if (!stored || stored.epoch !== epoch) {
+      stored = { epoch, vaultSalt: toBase64url(newVaultSalt()), secret: newRecoverySecret() };
+      await this.vaultSecret.put(stored);
+    }
+    const keys = await deriveVaultKeys(stored.secret, fromBase64url(stored.vaultSalt));
+    const settings = { vaultSalt: stored.vaultSalt, keyCheck: await keyCheck(keys, epoch) };
+    try {
+      await this.api.setVaultE2ee({ opId: this.newId(), epoch, ...settings });
+    } catch (cause) {
+      // Refused: the library has other settings (or none can be set), so this secret is unused.
+      if (cause instanceof ApiFailure && !isTransient(cause)) await this.vaultSecret.delete();
+      throw cause;
+    }
+    await this.state.save({ ...(await this.state.load()), e2ee: settings });
+    return encodeRecoveryCode(stored.secret);
+  }
+
+  /** Keeps the recovery secret typed on this device once it proves to be this library's. */
+  async unlock(code: string) {
+    if (!this.vaultSecret) throw new Error('This device cannot keep an encryption key.');
+    const secret = await decodeRecoveryCode(code);
+    const snapshot = await this.state.load();
+    const settings = snapshot.e2ee;
+    if (!settings || snapshot.epoch === undefined)
+      throw new Error('This cloud library is not end-to-end encrypted.');
+    const keys = await deriveVaultKeys(secret, fromBase64url(settings.vaultSalt));
+    if (!(await verifyKeyCheck(keys, snapshot.epoch, settings.keyCheck)))
+      throw new E2eeError('WRONG_KEY', 'This recovery code belongs to another library.');
+    await this.vaultSecret.put({ epoch: snapshot.epoch, vaultSalt: settings.vaultSalt, secret });
+  }
+
+  /** The recovery code again, for Settings; undefined unless this device holds the key. */
+  async recoveryCode() {
+    const snapshot = await this.state.load();
+    if (!(await this.vaultKeys(snapshot))) return undefined;
+    const stored = await this.vaultSecret!.get();
+    return stored && encodeRecoveryCode(stored.secret);
   }
 
   private removeOp(snapshot: SyncSnapshot, op: PendingOp) {

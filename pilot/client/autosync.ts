@@ -343,6 +343,7 @@ export class AutoSyncController {
       state: this.state,
       remoteIndex: this.state.remoteIndex,
       offline: this.state.offline,
+      vaultSecret: this.state.vaultSecret,
       libraryId,
     });
     const engine = this.engine;
@@ -458,6 +459,7 @@ export class AutoSyncController {
     return exportCloudVault({
       api: this.api.forAccount(session.account),
       epoch: session.vault.epoch,
+      vault: await this.engine?.sealedReader(),
       assertAccount: () => {
         if (this.session !== session)
           throw new Error('Your account changed. Start the export again.');

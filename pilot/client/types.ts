@@ -1,5 +1,6 @@
 // Device-side sync state. Persisted per signed-in account, never shared with Local only mode.
 import type { ItemKind, LibraryItem, SourceLocation } from '../../src/shared';
+import type { VaultE2eeSettings } from '../contract/e2ee';
 import type { ChangeItem } from './api';
 
 export type LocalItem = Pick<
@@ -62,6 +63,11 @@ export type PendingOp =
       chunkBytes?: number;
       /** Chunks the server has acknowledged, so a resumed upload does not send them again. */
       sentChunks?: number;
+      /**
+       * For an encrypted library: the item's wrapped key and sealed metadata, kept before the
+       * upload begins so that a resumed upload seals exactly the same ciphertext again.
+       */
+      sealed?: { wrappedKey: string; sealedMeta: string };
     }
   | {
       kind: 'rename';
@@ -87,6 +93,8 @@ export interface SyncSnapshot {
   ops: PendingOp[];
   /** Live cloud items by global ID, including ones that exist only on other devices. */
   catalogue: Record<string, ChangeItem>;
+  /** The library's encryption settings as of the last pull; absent for a plain library. */
+  e2ee?: VaultE2eeSettings;
 }
 
 export interface SyncStateStore {
@@ -102,6 +110,22 @@ export const emptySnapshot = (): SyncSnapshot => ({
   ops: [],
   catalogue: {},
 });
+
+/**
+ * The recovery secret of an end-to-end encrypted library, kept on this device for the epoch
+ * and vault salt it belongs to (docs/pilot/e2ee-design.md, "Keys").
+ */
+export interface StoredVaultSecret {
+  epoch: number;
+  vaultSalt: string;
+  secret: Uint8Array;
+}
+
+export interface VaultSecretStore {
+  get(): Promise<StoredVaultSecret | undefined>;
+  put(secret: StoredVaultSecret): Promise<void>;
+  delete(): Promise<void>;
+}
 
 /** Downloaded index of a cloud item, kept per account for local search. */
 export interface RemoteIndexEntry {

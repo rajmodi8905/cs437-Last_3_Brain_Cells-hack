@@ -11,8 +11,10 @@ import {
   type OfflineStore,
   type RemoteIndexEntry,
   type RemoteIndexStore,
+  type StoredVaultSecret,
   type SyncSnapshot,
   type SyncStateStore,
+  type VaultSecretStore,
 } from './types';
 
 export class MemoryLocalLibrary implements LocalLibrary {
@@ -118,5 +120,18 @@ export class MemoryOfflineStore implements OfflineStore {
   }
   async keys() {
     return [...this.copies.keys()].sort();
+  }
+}
+
+export class MemoryVaultSecretStore implements VaultSecretStore {
+  private stored?: StoredVaultSecret;
+  async get() {
+    return this.stored && structuredClone(this.stored);
+  }
+  async put(secret: StoredVaultSecret) {
+    this.stored = structuredClone(secret);
+  }
+  async delete() {
+    this.stored = undefined;
   }
 }

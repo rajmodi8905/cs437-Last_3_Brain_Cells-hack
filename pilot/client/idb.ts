@@ -6,8 +6,10 @@ import {
   type OfflineStore,
   type RemoteIndexEntry,
   type RemoteIndexStore,
+  type StoredVaultSecret,
   type SyncSnapshot,
   type SyncStateStore,
+  type VaultSecretStore,
 } from './types';
 
 interface Row extends SyncSnapshot {
@@ -18,11 +20,13 @@ class SyncStateDatabase extends Dexie {
   state!: Table<Row, string>;
   remote!: Table<RemoteIndexEntry & { globalId: string }, string>;
   offline!: Table<OfflineCopy & { globalId: string }, string>;
+  vault!: Table<StoredVaultSecret & { id: 'secret' }, string>;
   constructor(name: string, options?: DexieOptions) {
     super(name, options);
     this.version(1).stores({ state: 'id' });
     this.version(2).stores({ state: 'id', remote: 'globalId' });
     this.version(3).stores({ state: 'id', remote: 'globalId', offline: 'globalId' });
+    this.version(4).stores({ state: 'id', remote: 'globalId', offline: 'globalId', vault: 'id' });
   }
 }
 
@@ -91,7 +95,29 @@ export class IndexedDbSyncStateStore implements SyncStateStore {
     };
   }
 
-  /** Deletes this account's sync state, cloud indexes and offline copies from this device. */
+  /** The encrypted library's recovery secret on this device, if any. */
+  get vaultSecret(): VaultSecretStore {
+    const table = this.database.vault;
+    return {
+      get: async () => {
+        const row = await table.get('secret');
+        if (!row) return undefined;
+        const { id: _id, ...secret } = row;
+        return secret;
+      },
+      put: async (secret) => {
+        await table.put({ ...secret, id: 'secret' });
+      },
+      delete: async () => {
+        await table.delete('secret');
+      },
+    };
+  }
+
+  /**
+   * Deletes this account's sync state, cloud indexes, offline copies and recovery secret from
+   * this device.
+   */
   async destroy() {
     await this.database.delete();
   }

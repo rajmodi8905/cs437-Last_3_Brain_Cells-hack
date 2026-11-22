@@ -2,6 +2,7 @@
 import { Zip, ZipPassThrough, strToU8 } from 'fflate';
 import { ApiFailure, type ApiClient, type ChangeItem } from './api';
 import { validateCloudItem, type CloudItem } from '../contract';
+import type { SealedReader } from './sync';
 
 /**
  * Uses the existing local-library archive format, split at its 500-item / 250 MB import limits.
@@ -12,6 +13,8 @@ export async function exportCloudVault(options: {
   api: Pick<ApiClient, 'changes' | 'original'>;
   epoch: number;
   assertAccount?: () => void;
+  /** Opens an end-to-end encrypted library's items; the export holds them decrypted. */
+  vault?: SealedReader;
 }): Promise<Blob[]> {
   const check = () => options.assertAccount?.();
   async function read<T>(work: () => Promise<T>): Promise<T> {
@@ -74,14 +77,20 @@ export async function exportCloudVault(options: {
     totalBytes = 0;
     zip = openZip();
   }
-  for (const raw of catalogue.values()) {
+  for (const listed of catalogue.values()) {
     check();
+    const { vault } = options;
+    if (listed.sealed && !vault)
+      throw new Error('Enter this library’s recovery code on this device before exporting.');
+    const raw = listed.sealed ? await vault!.open(listed) : listed;
     const valid = validateCloudItem(raw as CloudItem);
     if (!valid.ok) throw new Error('Cloud metadata is incomplete. Sync again before exporting.');
     const item = raw as CloudItem;
     if (items.length && (items.length >= 500 || totalBytes + item.byteLength > 200_000_000))
       finish();
-    const bytes = await read(() => options.api.original(item.globalId));
+    const bytes = await read(() =>
+      listed.sealed ? vault!.original(raw) : options.api.original(item.globalId),
+    );
     check();
     const digest = new Uint8Array(await crypto.subtle.digest('SHA-256', bytes as BufferSource));
     const hash = Array.from(digest, (byte) => byte.toString(16).padStart(2, '0')).join('');
