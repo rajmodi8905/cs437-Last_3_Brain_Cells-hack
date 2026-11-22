@@ -460,6 +460,20 @@ const SHA256_HEX = /^[0-9a-f]{64}$/;
 const fail = <T>(code: PilotErrorCode, reason: string): Result<T> => ({ ok: false, code, reason });
 
 /**
+ * True when `value` is base64url that can hold a sealed blob (nonce, at least one byte and the
+ * tag) of at most `maxBytes`. The server can check no more than this shape.
+ */
+export const validSealedBlob = (value: unknown, maxBytes: number): value is string =>
+  typeof value === 'string' &&
+  B64URL.test(value) &&
+  value.length % 4 !== 1 &&
+  base64urlBytes(value) >= NONCE_BYTES + TAG_BYTES + 1 &&
+  base64urlBytes(value) <= maxBytes;
+
+export const validMetaRevision = (value: unknown): value is number =>
+  typeof value === 'number' && Number.isSafeInteger(value) && value >= 1;
+
+/**
  * Validates the public fields of a sealed item and keeps only those fields, so no client
  * field can reach storage unchecked (see #37).
  */
@@ -473,17 +487,12 @@ export function validateSealedItemFields(raw: unknown): Result<SealedItemFields>
     base64urlBytes(wrappedKey) !== WRAPPED_KEY_BYTES
   )
     return fail('INVALID_INPUT', 'wrappedKey must be 40 bytes of base64url.');
-  if (
-    typeof sealedMeta !== 'string' ||
-    !B64URL.test(sealedMeta) ||
-    base64urlBytes(sealedMeta) < NONCE_BYTES + TAG_BYTES + 1 ||
-    base64urlBytes(sealedMeta) > MAX_SEALED_META_BYTES
-  )
+  if (!validSealedBlob(sealedMeta, MAX_SEALED_META_BYTES))
     return fail(
       'INVALID_INPUT',
       `sealedMeta must be base64url, at most ${MAX_SEALED_META_BYTES} bytes.`,
     );
-  if (typeof metaRevision !== 'number' || !Number.isSafeInteger(metaRevision) || metaRevision < 1)
+  if (!validMetaRevision(metaRevision))
     return fail('INVALID_INPUT', 'metaRevision must be a positive integer.');
   if (typeof cipherSha256 !== 'string' || !SHA256_HEX.test(cipherSha256))
     return fail('INVALID_INPUT', 'cipherSha256 must be 64 lowercase hex characters.');
@@ -504,4 +513,58 @@ export function validateSealedItemFields(raw: unknown): Result<SealedItemFields>
       cipherSha256,
     },
   };
+}
+
+/** Where an item's sealed index bundle stands, as listed in the change feed. */
+export interface SealedIndexDescriptor {
+  metaRevision: number;
+  byteLength: number;
+}
+
+/** A vault's public encryption settings for its current epoch. */
+export interface VaultE2eeSettings {
+  vaultSalt: string;
+  keyCheck: string;
+}
+
+const KEY_CHECK_BYTES = 32;
+/** An uncompressed P-256 public key: 0x04, then X and Y. */
+const PAIRING_PUBLIC_KEY_BYTES = 65;
+/** The recovery secret sealed for pairing: nonce, 16 bytes and tag. */
+const PAIRING_SEALED_SECRET_BYTES = NONCE_BYTES + RECOVERY_SECRET_BYTES + TAG_BYTES;
+const PAIRING_CODE_CHARS = 8;
+
+const isBase64urlOf = (value: unknown, bytes: number): value is string =>
+  typeof value === 'string' &&
+  B64URL.test(value) &&
+  value.length === Math.ceil((bytes * 4) / 3) &&
+  base64urlBytes(value) === bytes;
+
+/** Validates the vault settings a device sends when it turns encryption on. */
+export function validateVaultE2ee(raw: unknown): Result<VaultE2eeSettings> {
+  const body = (raw && typeof raw === 'object' ? raw : {}) as Record<string, unknown>;
+  if (!isBase64urlOf(body.vaultSalt, VAULT_SALT_BYTES))
+    return fail('INVALID_INPUT', 'vaultSalt must be 16 bytes of base64url.');
+  if (!isBase64urlOf(body.keyCheck, KEY_CHECK_BYTES))
+    return fail('INVALID_INPUT', 'keyCheck must be 32 bytes of base64url.');
+  return { ok: true, value: { vaultSalt: body.vaultSalt, keyCheck: body.keyCheck } };
+}
+
+export const validPairingPublicKey = (value: unknown): value is string =>
+  isBase64urlOf(value, PAIRING_PUBLIC_KEY_BYTES);
+export const validPairingSealedSecret = (value: unknown): value is string =>
+  isBase64urlOf(value, PAIRING_SEALED_SECRET_BYTES);
+
+/** A one-time pairing code: 40 random bits as 8 Crockford base32 characters. */
+export function newPairingCode(): string {
+  return Array.from(random(PAIRING_CODE_CHARS), (byte) => ALPHABET[byte & 31]).join('');
+}
+
+/** A typed pairing code in its stored form, or undefined when it cannot be one. */
+export function normalizePairingCode(text: unknown): string | undefined {
+  if (typeof text !== 'string') return undefined;
+  const code = text.toUpperCase().replace(/[\s-]/g, '').replaceAll('O', '0').replace(/[IL]/g, '1');
+  return code.length === PAIRING_CODE_CHARS && [...code].every((c) => ALPHABET.includes(c))
+    ? code
+    : undefined;
 }

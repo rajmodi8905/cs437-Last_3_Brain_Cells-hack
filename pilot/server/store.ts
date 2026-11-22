@@ -1,6 +1,7 @@
 // Storage boundary for the pilot API. Memory implementations back the tests; PostgreSQL and
 // Azure Blob implementations must keep the same guarantees (see docs/pilot/protocol.md).
 import type { CloudItem } from '../contract';
+import type { SealedIndexDescriptor, SealedItemFields, VaultE2eeSettings } from '../contract/e2ee';
 
 export type ItemDescription = Omit<CloudItem, 'globalId' | 'revision' | 'deleted' | 'index'>;
 
@@ -9,6 +10,52 @@ export interface StoredItem extends CloudItem {
   indexObjectKey?: string;
   /** Stored size of the index bundle; it counts toward the quota like the original. */
   indexBytes?: number;
+}
+
+/**
+ * An end-to-end encrypted item (docs/pilot/e2ee-design.md). It has no plaintext fields: only
+ * the public `sealed` fields, the size of its stored ciphertext and where its objects are.
+ * `PilotStore.getItem` never returns one, so code written for plain items (the bots) cannot
+ * see it; the API routes read both kinds with `getAnyItem`.
+ */
+export interface SealedStoredItem {
+  globalId: string;
+  revision: number;
+  deleted: boolean;
+  /** Absent on a tombstone. */
+  sealed?: SealedItemFields;
+  sealedIndex?: SealedIndexDescriptor;
+  /** Stored ciphertext bytes of the original; it counts toward the quota. */
+  byteLength: number;
+  objectKey?: string;
+  indexObjectKey?: string;
+  indexBytes?: number;
+}
+
+export type AnyStoredItem = StoredItem | SealedStoredItem;
+
+/** True for an encrypted item, including its tombstone. */
+export const isSealed = (item: AnyStoredItem): item is SealedStoredItem => !('kind' in item);
+
+/** What an encrypted upload declares: the ciphertext's size and hash, and its public fields. */
+export interface SealedUpload {
+  byteLength: number;
+  contentSha256: string;
+  sealed: SealedItemFields;
+}
+
+/** A pairing request from a new device; the recovery secret it receives is sealed to it. */
+export interface PairingRecord {
+  pairingId: string;
+  ownerKey: string;
+  /** SHA-256 of the pairing code, never the code itself. */
+  codeHash: string;
+  newPublicKey: string;
+  /** Seconds. */
+  expiresAt: number;
+  claimed?: boolean;
+  oldPublicKey?: string;
+  sealedSecret?: string;
 }
 
 export interface Session {
@@ -31,11 +78,11 @@ export interface UploadRecord {
   ownerKey: string;
   epoch: number;
   globalId: string;
-  item: ItemDescription;
+  item: ItemDescription | SealedUpload;
   /** When the upload began, in seconds; unfinished uploads expire after a day. */
   createdAt: number;
   /** The published item, once completion succeeded. */
-  result?: CloudItem;
+  result?: CloudItem | Change['item'];
 }
 
 export const stagingKey = (uploadId: string, n: number) => `staging/${uploadId}/${n}`;
@@ -59,7 +106,11 @@ export interface LoginAttempt {
 
 export interface Change {
   cursor: number;
-  item: Partial<CloudItem> & Pick<CloudItem, 'globalId' | 'revision' | 'deleted'>;
+  item: Partial<CloudItem> &
+    Pick<CloudItem, 'globalId' | 'revision' | 'deleted'> & {
+      sealed?: SealedItemFields;
+      sealedIndex?: SealedIndexDescriptor;
+    };
 }
 
 export interface SavedResponse {
@@ -79,7 +130,27 @@ export interface PilotStore {
   createLoginAttempt(attempt: LoginAttempt): Promise<void>;
   /** Returns and removes the attempt in one step, so it can be used only once. */
   takeLoginAttempt(id: string): Promise<LoginAttempt | undefined>;
+  /** A plain item or tombstone; undefined for encrypted items, which bots must never see. */
   getItem(ownerKey: string, globalId: string): Promise<StoredItem | undefined>;
+  /** Any item, plain or encrypted. */
+  getAnyItem(ownerKey: string, globalId: string): Promise<AnyStoredItem | undefined>;
+  /** The vault's encryption settings for its current epoch, if encryption is on. */
+  vaultE2ee(ownerKey: string): Promise<VaultE2eeSettings | undefined>;
+  /**
+   * Turns encryption on for `epoch`: `set`, or `same` when these exact settings are already
+   * stored, `conflict` when others are, `reset` when the vault is no longer at `epoch`.
+   */
+  setVaultE2ee(
+    ownerKey: string,
+    epoch: number,
+    settings: VaultE2eeSettings,
+  ): Promise<'set' | 'same' | 'conflict' | 'reset'>;
+  createPairing(pairing: PairingRecord): Promise<void>;
+  getPairing(pairingId: string): Promise<PairingRecord | undefined>;
+  /** The account's unexpired-or-not pairing with this code hash; cleanUp removes old ones. */
+  findPairing(ownerKey: string, codeHash: string): Promise<PairingRecord | undefined>;
+  updatePairing(pairing: PairingRecord): Promise<void>;
+  deletePairing(pairingId: string): Promise<void>;
   /** Bytes held by live items and their index bundles plus reservations of unfinished uploads. */
   committedBytes(ownerKey: string): Promise<number>;
   savedResponse(ownerKey: string, opId: string): Promise<SavedResponse | undefined>;
@@ -97,25 +168,25 @@ export interface PilotStore {
   /** Received chunk numbers in ascending order. */
   receivedChunks(uploadId: string): Promise<number[]>;
   /** Marks the upload complete with its published item; it no longer reserves quota. */
-  finishUpload(uploadId: string, result: CloudItem): Promise<void>;
+  finishUpload(uploadId: string, result: CloudItem | Change['item']): Promise<void>;
   /**
    * Stores the item and appends its change in one step, allocating the next cursor, only if the
    * account is still at `epoch`; otherwise throws `VaultResetError` and changes nothing.
    */
-  publish(ownerKey: string, item: StoredItem, epoch: number): Promise<Change>;
+  publish(ownerKey: string, item: AnyStoredItem, epoch: number): Promise<Change>;
   changesAfter(ownerKey: string, after: number): Promise<{ cursor: number; changes: Change[] }>;
   /**
-   * Removes the account's cloud library: forgets its items, change feed, saved results and
-   * unfinished uploads and moves to a new epoch. Returns the removed items and the abandoned
+   * Removes the account's cloud library: forgets its items, change feed, saved results,
+   * unfinished uploads, encryption settings and pairings and moves to a new epoch. Returns the removed items and the abandoned
    * uploads' received chunks so their objects can be deleted.
    */
   resetVault(ownerKey: string): Promise<{
     epoch: number;
-    removed: StoredItem[];
+    removed: AnyStoredItem[];
     abandoned: { uploadId: string; chunks: number[] }[];
   }>;
   /**
-   * Deletes sessions and sign-in attempts that expired by `now`, unfinished uploads begun before
+   * Deletes sessions, sign-in attempts and pairings that expired by `now`, unfinished uploads begun before
    * `abandonedBefore`, finished uploads begun before `finishedBefore` and operation results
    * saved before `responsesBefore`. Returns the abandoned uploads' chunks to delete.
    */
@@ -144,8 +215,16 @@ export interface ObjectStore {
 }
 
 /** What other devices see: tombstones keep only identity and revision. */
-export const publicItem = (item: StoredItem): Change['item'] => {
+export const publicItem = (item: AnyStoredItem): Change['item'] => {
   if (item.deleted) return { globalId: item.globalId, revision: item.revision, deleted: true };
+  if (isSealed(item))
+    return {
+      globalId: item.globalId,
+      revision: item.revision,
+      deleted: false,
+      sealed: item.sealed,
+      ...(item.sealedIndex ? { sealedIndex: item.sealedIndex } : {}),
+    };
   const {
     objectKey: _objectKey,
     indexObjectKey: _indexObjectKey,

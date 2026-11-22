@@ -7,16 +7,32 @@ import {
   pickItemDescription,
   validateCloudItem,
   type IndexBundle,
-  type CloudItem,
   type ItemWrite,
   type PilotErrorCode,
+  type WriteDecision,
 } from '../contract';
 import {
+  MAX_SEALED_META_BYTES,
+  newPairingCode,
+  normalizePairingCode,
+  validMetaRevision,
+  validPairingPublicKey,
+  validPairingSealedSecret,
+  validSealedBlob,
+  validateSealedItemFields,
+  validateVaultE2ee,
+} from '../contract/e2ee';
+import {
   VaultResetError,
+  isSealed,
   publicItem,
   stagingKey,
+  type AnyStoredItem,
+  type ItemDescription,
   type ObjectStore,
   type PilotStore,
+  type SealedStoredItem,
+  type SealedUpload,
   type Session,
   type StoredItem,
 } from './store';
@@ -206,6 +222,32 @@ const sameText = (a: string, b: string) =>
 const MAX_JSON_BYTES = 64 * 1024;
 // 2,000 segments of 768 numbers as JSON stay well under this.
 const MAX_INDEX_BYTES = 24 * 1024 * 1024;
+/** How long a pairing code works (docs/pilot/e2ee-design.md, "Adding a device"). */
+const PAIRING_SECONDS = 600;
+/** Pairing codes an account may try per ten minutes: 40-bit codes stay out of reach. */
+const PAIRING_TRIES = 10;
+const pairingCodeHash = (code: string) => createHash('sha256').update(code).digest('hex');
+const isSealedUpload = (item: ItemDescription | SealedUpload): item is SealedUpload =>
+  'sealed' in item;
+
+/** A rename of an encrypted item: new sealed metadata under a higher `metaRevision`. */
+function decideSealedRename(
+  current: SealedStoredItem,
+  body: Record<string, unknown>,
+): WriteDecision {
+  if (current.deleted || !current.sealed) return { action: 'reject', code: 'ITEM_DELETED' };
+  const { expectedRevision, sealedMeta, metaRevision } = body;
+  if (
+    !validMetaRevision(expectedRevision) ||
+    !validSealedBlob(sealedMeta, MAX_SEALED_META_BYTES) ||
+    !validMetaRevision(metaRevision)
+  )
+    return { action: 'reject', code: 'INVALID_INPUT' };
+  if (expectedRevision !== current.revision) return { action: 'reject', code: 'REVISION_CONFLICT' };
+  if (metaRevision <= current.sealed.metaRevision)
+    return { action: 'reject', code: 'INVALID_INPUT' };
+  return { action: 'apply', nextRevision: current.revision + 1 };
+}
 
 class ApiError extends Error {
   constructor(
@@ -440,6 +482,7 @@ export function createPilotHandler(options: PilotServerOptions): RequestListener
   const byAddress = new RateLimiter(limits.addressBurst, limits.addressPerSecond, now);
   const signIns = new RateLimiter(limits.signInBurst, limits.signInPerMinute / 60, now);
   const byAccount = new RateLimiter(limits.accountBurst, limits.accountPerSecond, now);
+  const pairingClaims = new RateLimiter(PAIRING_TRIES, PAIRING_TRIES / PAIRING_SECONDS, now);
   const clientAddress = (req: IncomingMessage) => {
     const forwarded = options.trustProxy ? req.headers['x-forwarded-for'] : undefined;
     const last = typeof forwarded === 'string' ? forwarded.split(',').at(-1)?.trim() : undefined;
@@ -449,18 +492,23 @@ export function createPilotHandler(options: PilotServerOptions): RequestListener
     const wait = signIns.take(clientAddress(req));
     if (wait) throw limited(wait);
   };
-  const sessionBody = async (session: Session) => ({
-    csrf: session.csrf,
-    email: session.email,
-    // Opaque per-account ID so devices can keep each account's state apart.
-    account: accountOf(session.ownerKey),
-    vault: await store.vault(session.ownerKey),
-    // A WhatsApp vault (opened from a bot link) says so; other sessions are unchanged.
-    ...(session.ownerKey.startsWith('wa:') ? { kind: 'whatsapp' } : {}),
-    // An account session opened from a Telegram app link, so the app can treat that link as
-    // choosing Auto-sync; it is otherwise like the account's own sign-in.
-    ...(session.via ? { via: session.via } : {}),
-  });
+  const sessionBody = async (session: Session) => {
+    const e2ee = await store.vaultE2ee(session.ownerKey);
+    return {
+      csrf: session.csrf,
+      email: session.email,
+      // Opaque per-account ID so devices can keep each account's state apart.
+      account: accountOf(session.ownerKey),
+      vault: await store.vault(session.ownerKey),
+      // A WhatsApp vault (opened from a bot link) says so; other sessions are unchanged.
+      ...(session.ownerKey.startsWith('wa:') ? { kind: 'whatsapp' } : {}),
+      // An account session opened from a Telegram app link, so the app can treat that link as
+      // choosing Auto-sync; it is otherwise like the account's own sign-in.
+      ...(session.via ? { via: session.via } : {}),
+      // The vault salt and key check, once the library is end-to-end encrypted.
+      ...(e2ee ? { e2ee } : {}),
+    };
+  };
 
   const sessionCookie = (opened: OpenedSession) =>
     `${COOKIE}=${opened.cookie}; Path=/api; Max-Age=${sessionSeconds}; HttpOnly; Secure; SameSite=Lax`;
@@ -584,6 +632,19 @@ export function createPilotHandler(options: PilotServerOptions): RequestListener
     if (body.epoch !== epoch)
       throw new ApiError('VAULT_RESET', 'This cloud library was reset; resynchronise first.');
     return epoch;
+  }
+  /**
+   * An item of either kind. Plain items are read through `getItem`, as before encrypted items
+   * existed, so the read that a write decides on is the same one; encrypted ones come next.
+   */
+  async function findItem(ownerKey: string, globalId: string): Promise<AnyStoredItem | undefined> {
+    return (
+      (await store.getItem(ownerKey, globalId)) ?? (await store.getAnyItem(ownerKey, globalId))
+    );
+  }
+  async function requireE2ee(ownerKey: string) {
+    if (!(await store.vaultE2ee(ownerKey)))
+      throw new ApiError('INVALID_INPUT', 'End-to-end encryption is not on for this library.');
   }
   /** Replays the stored result for a repeated operation ID, otherwise runs and stores it. */
   async function idempotent(
@@ -949,14 +1010,40 @@ export function createPilotHandler(options: PilotServerOptions): RequestListener
       const opId = opIdOf(body);
       const epoch = await requireEpoch(session.ownerKey, body);
       const result = await idempotent(session.ownerKey, opId, async () => {
-        const description = pickItemDescription(body.item);
-        const item = { ...description, globalId };
-        const valid = validateCloudItem(item);
-        if (!valid.ok) throw new ApiError(valid.code, valid.reason);
-        const existing = await store.getItem(session.ownerKey, globalId);
+        // An encrypted library takes only sealed items from devices, and a plain one only plain
+        // items; the server checks and stores the ciphertext's length and hash.
+        const encrypted = (await store.vaultE2ee(session.ownerKey)) !== undefined;
+        let declared: ItemDescription | SealedUpload;
+        if (body.sealed !== undefined) {
+          if (!encrypted)
+            throw new ApiError(
+              'INVALID_INPUT',
+              'End-to-end encryption is not on for this library.',
+            );
+          if (!UUID_V4.test(globalId))
+            throw new ApiError('INVALID_INPUT', 'globalId must be a lowercase UUID v4.');
+          const valid = validateSealedItemFields(body.sealed);
+          if (!valid.ok) throw new ApiError(valid.code, valid.reason);
+          declared = {
+            byteLength: valid.value.cipherByteLength,
+            contentSha256: valid.value.cipherSha256,
+            sealed: valid.value,
+          };
+        } else {
+          if (encrypted)
+            throw new ApiError('INVALID_INPUT', 'This library is end-to-end encrypted.');
+          const description = pickItemDescription(body.item);
+          const valid = validateCloudItem({ ...description, globalId });
+          if (!valid.ok) throw new ApiError(valid.code, valid.reason);
+          declared = description;
+        }
+        const existing = await findItem(session.ownerKey, globalId);
         if (existing?.deleted) throw new ApiError('ITEM_DELETED', 'This item was deleted.');
         if (existing) throw new ApiError('INVALID_INPUT', 'This item already exists.');
-        if ((await store.committedBytes(session.ownerKey)) + item.byteLength > options.quotaBytes)
+        if (
+          (await store.committedBytes(session.ownerKey)) + declared.byteLength >
+          options.quotaBytes
+        )
           throw new ApiError('QUOTA_EXCEEDED', 'This would exceed your cloud storage quota.');
         const uploadId = randomUUID();
         await store.createUpload({
@@ -964,7 +1051,7 @@ export function createPilotHandler(options: PilotServerOptions): RequestListener
           ownerKey: session.ownerKey,
           epoch,
           globalId,
-          item: description,
+          item: declared,
           createdAt: now(),
         });
         return { status: 200, body: { uploadId, chunkBytes } };
@@ -1027,26 +1114,22 @@ export function createPilotHandler(options: PilotServerOptions): RequestListener
           throw new ApiError('HASH_MISMATCH', 'Uploaded length does not match the declaration.');
         if (hash.digest('hex') !== upload.item.contentSha256)
           throw new ApiError('HASH_MISMATCH', 'Uploaded bytes do not match the declared SHA-256.');
-        const existing = await store.getItem(session.ownerKey, upload.globalId);
+        const existing = await findItem(session.ownerKey, upload.globalId);
         if (existing?.deleted) throw new ApiError('ITEM_DELETED', 'This item was deleted.');
         if (existing) {
           // Published before a crash, but not yet marked finished: finish it now.
-          const published = publicItem(existing) as CloudItem;
+          const published = publicItem(existing);
           await store.finishUpload(upload.uploadId, published);
           return { status: 200, body: { item: published } };
         }
         const objectKey = `${session.ownerKey}/${upload.epoch}/${upload.globalId}/original`;
         await objects.compose(objectKey, parts);
-        const description = pickItemDescription(upload.item);
-        const item: StoredItem = {
-          ...description,
-          globalId: upload.globalId,
-          revision: 1,
-          deleted: false,
-          objectKey,
-        };
+        const identity = { globalId: upload.globalId, revision: 1, deleted: false, objectKey };
+        const item: AnyStoredItem = isSealedUpload(upload.item)
+          ? { ...identity, byteLength: upload.item.byteLength, sealed: upload.item.sealed }
+          : { ...pickItemDescription(upload.item), ...identity };
         await store.publish(session.ownerKey, item, epoch);
-        const published = publicItem(item) as CloudItem;
+        const published = publicItem(item);
         await store.finishUpload(upload.uploadId, published);
         for (const key of parts) await objects.delete(key);
         return { status: 200, body: { item: published } };
@@ -1060,14 +1143,18 @@ export function createPilotHandler(options: PilotServerOptions): RequestListener
       const opId = opIdOf(body);
       const epoch = await requireEpoch(session.ownerKey, body);
       const result = await idempotent(session.ownerKey, opId, async () => {
-        const current = await store.getItem(session.ownerKey, match![1]);
+        const current = await findItem(session.ownerKey, match![1]);
         if (!current) throw new ApiError('NOT_FOUND', 'Item not found.');
         const write = (
           method === 'DELETE'
             ? { type: 'delete', expectedRevision: body.expectedRevision }
             : { type: 'rename', expectedRevision: body.expectedRevision, title: body.title }
         ) as ItemWrite;
-        const decision = decideWrite(current, write);
+        // An encrypted item is renamed with sealed metadata; a plain title is refused.
+        const decision =
+          isSealed(current) && write.type === 'rename'
+            ? decideSealedRename(current, body)
+            : decideWrite(current, write);
         if (decision.action === 'reject') {
           if (decision.code === 'REVISION_CONFLICT')
             throw new ApiError(decision.code, 'The item changed on another device.', {
@@ -1075,18 +1162,35 @@ export function createPilotHandler(options: PilotServerOptions): RequestListener
             });
           throw new ApiError(decision.code, 'This change cannot be applied.');
         }
-        const next =
-          write.type === 'delete'
-            ? {
-                ...current,
-                revision: decision.nextRevision,
-                deleted: true,
-                objectKey: undefined,
-                indexObjectKey: undefined,
-                indexBytes: undefined,
-                index: undefined,
-              }
-            : { ...current, revision: decision.nextRevision, title: write.title };
+        const revision = decision.nextRevision;
+        let next: AnyStoredItem;
+        if (isSealed(current))
+          next =
+            write.type === 'delete'
+              ? // A sealed tombstone keeps nothing but identity: no wrapped key, no ciphertext.
+                { globalId: current.globalId, revision, deleted: true, byteLength: 0 }
+              : {
+                  ...current,
+                  revision,
+                  sealed: {
+                    ...current.sealed!,
+                    sealedMeta: body.sealedMeta as string,
+                    metaRevision: body.metaRevision as number,
+                  },
+                };
+        else
+          next =
+            write.type === 'delete'
+              ? {
+                  ...current,
+                  revision,
+                  deleted: true,
+                  objectKey: undefined,
+                  indexObjectKey: undefined,
+                  indexBytes: undefined,
+                  index: undefined,
+                }
+              : { ...current, revision, title: write.title };
         await store.publish(session.ownerKey, next, epoch);
         // Blobs go only after the tombstone has committed: if publishing or the commit fails,
         // the item and its original stay readable everywhere, and a retried delete finishes
@@ -1103,7 +1207,7 @@ export function createPilotHandler(options: PilotServerOptions): RequestListener
 
     if ((match = /^\/items\/([^/]+)\/original$/.exec(path)) && method === 'GET') {
       const session = await requireSession(req, false);
-      const item = await store.getItem(session.ownerKey, match[1]);
+      const item = await findItem(session.ownerKey, match[1]);
       if (
         !item ||
         item.deleted ||
@@ -1111,10 +1215,12 @@ export function createPilotHandler(options: PilotServerOptions): RequestListener
         !item.objectKey.startsWith(`${session.ownerKey}/`)
       )
         throw new ApiError('NOT_FOUND', 'Item not found.');
+      // An encrypted original is served as the ciphertext it was stored as.
+      const sealed = isSealed(item) ? item.sealed : undefined;
       const size = item.byteLength;
       const headers = {
-        'content-type': item.mimeType,
-        etag: `"sha256-${item.contentSha256}"`,
+        'content-type': sealed ? 'application/octet-stream' : (item as StoredItem).mimeType,
+        etag: `"sha256-${sealed ? sealed.cipherSha256 : (item as StoredItem).contentSha256}"`,
         'accept-ranges': 'bytes',
         // The app reads originals with fetch; a browser opening this URL directly must neither
         // render nor run what was uploaded.
@@ -1155,6 +1261,13 @@ export function createPilotHandler(options: PilotServerOptions): RequestListener
       const opId = opIdOf(body);
       const epoch = await requireEpoch(session.ownerKey, body);
       const result = await idempotent(session.ownerKey, opId, async () => {
+        const current = await store.getAnyItem(session.ownerKey, match![1]);
+        if (current && isSealed(current)) {
+          const next = await publishSealedIndex(session.ownerKey, epoch, current, body);
+          return { status: 200, body: { item: publicItem(next) } };
+        }
+        if (current && body.sealedIndex !== undefined)
+          throw new ApiError('INVALID_INPUT', 'Only an encrypted item takes a sealed index.');
         try {
           const next = await publishIndexBundle(
             {
@@ -1181,16 +1294,152 @@ export function createPilotHandler(options: PilotServerOptions): RequestListener
 
     if ((match = /^\/items\/([^/]+)\/index$/.exec(path)) && method === 'GET') {
       const session = await requireSession(req, false);
-      const item = await store.getItem(session.ownerKey, match[1]);
+      const item = await findItem(session.ownerKey, match[1]);
       if (item?.deleted) throw new ApiError('ITEM_DELETED', 'This item was deleted.');
       if (!item || !item.indexObjectKey || !item.indexObjectKey.startsWith(`${session.ownerKey}/`))
         throw new ApiError('NOT_FOUND', 'No index for this item.');
       const bytes = await objects.get(item.indexObjectKey);
       if (!bytes) throw new ApiError('NOT_FOUND', 'No index for this item.');
-      return send(res, 200, bytes, { 'content-type': 'application/json' });
+      return send(res, 200, bytes, {
+        'content-type': isSealed(item) ? 'application/octet-stream' : 'application/json',
+      });
+    }
+
+    if (path === '/vault/e2ee' && method === 'PUT') {
+      const session = await requireSession(req, true);
+      const body = await readJson(req);
+      const opId = opIdOf(body);
+      const epoch = await requireEpoch(session.ownerKey, body);
+      const result = await idempotent(session.ownerKey, opId, async () => {
+        const valid = validateVaultE2ee(body);
+        if (!valid.ok) throw new ApiError(valid.code, valid.reason);
+        const outcome = await store.setVaultE2ee(session.ownerKey, epoch, valid.value);
+        if (outcome === 'reset') throw new VaultResetError();
+        // Once per epoch: replacing the key would strand every device and every sealed item.
+        if (outcome === 'conflict')
+          throw new ApiError(
+            'INVALID_INPUT',
+            'End-to-end encryption is already on for this library.',
+          );
+        return { status: 200, body: { e2ee: valid.value } };
+      });
+      return send(res, result.status, result.body);
+    }
+
+    // Pairing (docs/pilot/e2ee-design.md, "Adding a device"). The server relays public keys and
+    // the sealed recovery secret within one account; it never sees the secret itself.
+    if (path === '/pairing' && method === 'POST') {
+      const session = await requireSession(req, true);
+      const body = await readJson(req);
+      await requireE2ee(session.ownerKey);
+      if (!validPairingPublicKey(body.publicKey))
+        throw new ApiError('INVALID_INPUT', 'publicKey must be an uncompressed P-256 key.');
+      const code = newPairingCode();
+      const pairing = {
+        pairingId: randomUUID(),
+        ownerKey: session.ownerKey,
+        codeHash: pairingCodeHash(code),
+        newPublicKey: body.publicKey,
+        expiresAt: now() + PAIRING_SECONDS,
+      };
+      await store.createPairing(pairing);
+      return send(res, 200, { pairingId: pairing.pairingId, code, expiresAt: pairing.expiresAt });
+    }
+
+    if (path === '/pairing/claim' && method === 'POST') {
+      const session = await requireSession(req, true);
+      const body = await readJson(req);
+      await requireE2ee(session.ownerKey);
+      // Every try counts, right or wrong, so codes cannot be guessed.
+      const wait = pairingClaims.take(session.ownerKey);
+      if (wait) throw limited(wait);
+      const code = normalizePairingCode(body.code);
+      const pairing = code && (await store.findPairing(session.ownerKey, pairingCodeHash(code)));
+      if (!pairing || pairing.claimed || pairing.expiresAt <= now())
+        throw new ApiError('NOT_FOUND', 'That code is not valid. Check it, or start again.');
+      await store.updatePairing({ ...pairing, claimed: true });
+      return send(res, 200, { pairingId: pairing.pairingId, publicKey: pairing.newPublicKey });
+    }
+
+    if ((match = /^\/pairing\/([^/]+)\/secret$/.exec(path)) && method === 'PUT') {
+      const session = await requireSession(req, true);
+      const body = await readJson(req);
+      await requireE2ee(session.ownerKey);
+      const pairing = await store.getPairing(match[1]);
+      if (
+        !pairing ||
+        pairing.ownerKey !== session.ownerKey ||
+        pairing.expiresAt <= now() ||
+        !pairing.claimed ||
+        pairing.sealedSecret
+      )
+        throw new ApiError('NOT_FOUND', 'This pairing is not waiting for a key.');
+      if (!validPairingPublicKey(body.publicKey) || !validPairingSealedSecret(body.sealedSecret))
+        throw new ApiError('INVALID_INPUT', 'Send a P-256 public key and the sealed secret.');
+      await store.updatePairing({
+        ...pairing,
+        oldPublicKey: body.publicKey,
+        sealedSecret: body.sealedSecret,
+      });
+      return send(res, 204);
+    }
+
+    if ((match = /^\/pairing\/([^/]+)$/.exec(path)) && method === 'GET') {
+      const session = await requireSession(req, false);
+      const pairing = await store.getPairing(match[1]);
+      if (!pairing || pairing.ownerKey !== session.ownerKey || pairing.expiresAt <= now())
+        throw new ApiError('NOT_FOUND', 'Pairing not found.');
+      if (!pairing.sealedSecret)
+        return send(res, 200, { status: pairing.claimed ? 'claimed' : 'waiting' });
+      // Handed over once: the new device has what it needs, and the record goes.
+      await store.deletePairing(pairing.pairingId);
+      return send(res, 200, {
+        status: 'ready',
+        publicKey: pairing.oldPublicKey,
+        sealedSecret: pairing.sealedSecret,
+      });
     }
 
     throw new ApiError('NOT_FOUND', 'No such endpoint.');
+  }
+
+  /**
+   * Stores an encrypted item's sealed index bundle. The server can check only that it is
+   * for the item's current sealed metadata; devices check its contents after opening it.
+   */
+  async function publishSealedIndex(
+    ownerKey: string,
+    epoch: number,
+    current: SealedStoredItem,
+    body: Record<string, unknown>,
+  ) {
+    if (current.deleted || !current.sealed)
+      throw new ApiError('ITEM_DELETED', 'This item was deleted.');
+    if (
+      !validSealedBlob(body.sealedIndex, MAX_INDEX_BYTES) ||
+      !validMetaRevision(body.metaRevision)
+    )
+      throw new ApiError(
+        'INVALID_INPUT',
+        'An encrypted item takes a sealedIndex and metaRevision.',
+      );
+    if (body.metaRevision !== current.sealed.metaRevision)
+      throw new ApiError('INDEX_INCOMPATIBLE', 'This index was built for other item metadata.');
+    const stored = new Uint8Array(Buffer.from(body.sealedIndex, 'base64url'));
+    // The new bundle replaces any earlier one, so only the difference is new storage.
+    const used = (await store.committedBytes(ownerKey)) - (current.indexBytes ?? 0);
+    if (used + stored.length > options.quotaBytes)
+      throw new ApiError('QUOTA_EXCEEDED', 'This would exceed your cloud storage quota.');
+    const indexObjectKey = `${ownerKey}/${epoch}/${current.globalId}/index`;
+    await objects.put(indexObjectKey, stored);
+    const next: SealedStoredItem = {
+      ...current,
+      sealedIndex: { metaRevision: body.metaRevision, byteLength: stored.length },
+      indexObjectKey,
+      indexBytes: stored.length,
+    };
+    await store.publish(ownerKey, next, epoch);
+    return next;
   }
 
   /** The largest body any route on this path accepts; each route still applies its own limit. */

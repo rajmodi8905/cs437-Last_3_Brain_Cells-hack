@@ -1,12 +1,16 @@
 // In-memory stores for tests and local development. Not durable; never use for the hosted pilot.
 import type { CloudItem } from '../contract';
+import type { VaultE2eeSettings } from '../contract/e2ee';
 import {
   VaultResetError,
+  isSealed,
   publicItem,
+  type AnyStoredItem,
   type Change,
   type CleanUpCutoffs,
   type LoginAttempt,
   type ObjectStore,
+  type PairingRecord,
   type PilotStore,
   type SavedResponse,
   type Session,
@@ -16,7 +20,8 @@ import {
 
 interface Vault {
   epoch: number;
-  items: Map<string, StoredItem>;
+  e2ee?: VaultE2eeSettings;
+  items: Map<string, AnyStoredItem>;
   changes: Change[];
   responses: Map<string, SavedResponse & { savedAt: number }>;
 }
@@ -28,6 +33,7 @@ export class MemoryPilotStore implements PilotStore {
   private uploads = new Map<string, UploadRecord>();
   private attempts = new Map<string, LoginAttempt>();
   private received = new Map<string, Set<number>>();
+  private pairings = new Map<string, PairingRecord>();
 
   async withOwnerLock<T>(ownerKey: string, run: () => Promise<T>): Promise<T> {
     const previous = this.ownerLocks.get(ownerKey) ?? Promise.resolve();
@@ -78,8 +84,45 @@ export class MemoryPilotStore implements PilotStore {
     this.attempts.delete(id);
     return attempt;
   }
-  async getItem(ownerKey: string, globalId: string) {
+  async getItem(ownerKey: string, globalId: string): Promise<StoredItem | undefined> {
+    const item = this.vaultOf(ownerKey).items.get(globalId);
+    return item && !isSealed(item) ? item : undefined;
+  }
+  async getAnyItem(ownerKey: string, globalId: string) {
     return this.vaultOf(ownerKey).items.get(globalId);
+  }
+  async vaultE2ee(ownerKey: string) {
+    const e2ee = this.vaultOf(ownerKey).e2ee;
+    return e2ee && { ...e2ee };
+  }
+  async setVaultE2ee(ownerKey: string, epoch: number, settings: VaultE2eeSettings) {
+    const vault = this.vaultOf(ownerKey);
+    if (vault.epoch !== epoch) return 'reset' as const;
+    if (vault.e2ee)
+      return vault.e2ee.vaultSalt === settings.vaultSalt &&
+        vault.e2ee.keyCheck === settings.keyCheck
+        ? ('same' as const)
+        : ('conflict' as const);
+    vault.e2ee = { vaultSalt: settings.vaultSalt, keyCheck: settings.keyCheck };
+    return 'set' as const;
+  }
+  async createPairing(pairing: PairingRecord) {
+    this.pairings.set(pairing.pairingId, { ...pairing });
+  }
+  async getPairing(pairingId: string) {
+    const pairing = this.pairings.get(pairingId);
+    return pairing && { ...pairing };
+  }
+  async findPairing(ownerKey: string, codeHash: string) {
+    for (const pairing of this.pairings.values())
+      if (pairing.ownerKey === ownerKey && pairing.codeHash === codeHash) return { ...pairing };
+    return undefined;
+  }
+  async updatePairing(pairing: PairingRecord) {
+    if (this.pairings.has(pairing.pairingId)) this.pairings.set(pairing.pairingId, { ...pairing });
+  }
+  async deletePairing(pairingId: string) {
+    this.pairings.delete(pairingId);
   }
   async committedBytes(ownerKey: string) {
     let bytes = 0;
@@ -107,6 +150,8 @@ export class MemoryPilotStore implements PilotStore {
       if (session.expiresAt <= cutoffs.now) this.sessions.delete(id);
     for (const [id, attempt] of this.attempts)
       if (attempt.expiresAt <= cutoffs.now) this.attempts.delete(id);
+    for (const [id, pairing] of this.pairings)
+      if (pairing.expiresAt <= cutoffs.now) this.pairings.delete(id);
     const abandoned: { uploadId: string; chunks: number[] }[] = [];
     for (const [id, upload] of this.uploads) {
       const old = upload.result
@@ -136,12 +181,12 @@ export class MemoryPilotStore implements PilotStore {
   async receivedChunks(uploadId: string) {
     return [...(this.received.get(uploadId) ?? [])].sort((a, b) => a - b);
   }
-  async finishUpload(uploadId: string, result: CloudItem) {
+  async finishUpload(uploadId: string, result: CloudItem | Change['item']) {
     const upload = this.uploads.get(uploadId);
     if (upload) upload.result = result;
     this.received.delete(uploadId);
   }
-  async publish(ownerKey: string, item: StoredItem, epoch: number) {
+  async publish(ownerKey: string, item: AnyStoredItem, epoch: number) {
     const vault = this.vaultOf(ownerKey);
     if (vault.epoch !== epoch) throw new VaultResetError();
     vault.items.set(item.globalId, item);
@@ -158,6 +203,7 @@ export class MemoryPilotStore implements PilotStore {
     const vault = this.vaultOf(ownerKey);
     const removed = [...vault.items.values()];
     vault.epoch += 1;
+    vault.e2ee = undefined;
     vault.items.clear();
     vault.changes = [];
     vault.responses.clear();
@@ -168,6 +214,8 @@ export class MemoryPilotStore implements PilotStore {
         this.uploads.delete(id);
         this.received.delete(id);
       }
+    for (const [id, pairing] of this.pairings)
+      if (pairing.ownerKey === ownerKey) this.pairings.delete(id);
     return { epoch: vault.epoch, removed: removed.filter((item) => !item.deleted), abandoned };
   }
 

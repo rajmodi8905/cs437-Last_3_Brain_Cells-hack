@@ -4,12 +4,16 @@
 import { AsyncLocalStorage } from 'node:async_hooks';
 import pg from 'pg';
 import type { CloudItem } from '../contract';
+import type { VaultE2eeSettings } from '../contract/e2ee';
 import {
   VaultResetError,
+  isSealed,
   publicItem,
+  type AnyStoredItem,
   type Change,
   type CleanUpCutoffs,
   type LoginAttempt,
+  type PairingRecord,
   type PilotStore,
   type SavedResponse,
   type Session,
@@ -184,6 +188,22 @@ const MIGRATIONS = [
     PRIMARY KEY (owner_key, global_id)
   );
   ALTER TABLE sessions ADD COLUMN via text;
+  `,
+  // 7: end-to-end encrypted Auto-sync (docs/pilot/e2ee-design.md). `vaults.e2ee` holds the
+  // vault salt and key check for the current epoch; encrypted items live in `items` like plain
+  // ones, with only public fields in `data`. Pairing requests last ten minutes and are not
+  // backed up. Times in seconds.
+  `
+  ALTER TABLE vaults ADD COLUMN e2ee jsonb;
+  CREATE TABLE pairings (
+    pairing_id text PRIMARY KEY,
+    owner_key text NOT NULL,
+    code_hash text NOT NULL,
+    data jsonb NOT NULL,
+    expires_at bigint NOT NULL
+  );
+  CREATE INDEX pairings_by_code ON pairings (owner_key, code_hash);
+  CREATE INDEX pairings_expiry ON pairings (expires_at);
   `,
 ];
 
@@ -464,12 +484,81 @@ export class PostgresPilotStore implements PilotStore {
       : undefined;
   }
 
-  async getItem(ownerKey: string, globalId: string) {
-    const { rows } = await this.database.query<{ data: StoredItem }>(
+  async getItem(ownerKey: string, globalId: string): Promise<StoredItem | undefined> {
+    const item = await this.getAnyItem(ownerKey, globalId);
+    return item && !isSealed(item) ? item : undefined;
+  }
+  async getAnyItem(ownerKey: string, globalId: string) {
+    const { rows } = await this.database.query<{ data: AnyStoredItem }>(
       'SELECT data FROM items WHERE owner_key = $1 AND global_id = $2',
       [ownerKey, globalId],
     );
     return rows[0]?.data;
+  }
+
+  async vaultE2ee(ownerKey: string) {
+    const { rows } = await this.database.query<{ e2ee: VaultE2eeSettings | null }>(
+      'SELECT e2ee FROM vaults WHERE owner_key = $1',
+      [ownerKey],
+    );
+    return rows[0]?.e2ee ?? undefined;
+  }
+  async setVaultE2ee(ownerKey: string, epoch: number, settings: VaultE2eeSettings) {
+    return this.transaction(async (db) => {
+      const vault = await this.lockVault(db, ownerKey);
+      if (vault.epoch !== epoch) return 'reset' as const;
+      const { rows } = await db.query<{ e2ee: VaultE2eeSettings | null }>(
+        'SELECT e2ee FROM vaults WHERE owner_key = $1',
+        [ownerKey],
+      );
+      const current = rows[0].e2ee;
+      if (current)
+        return current.vaultSalt === settings.vaultSalt && current.keyCheck === settings.keyCheck
+          ? ('same' as const)
+          : ('conflict' as const);
+      await db.query('UPDATE vaults SET e2ee = $2 WHERE owner_key = $1', [
+        ownerKey,
+        JSON.stringify({ vaultSalt: settings.vaultSalt, keyCheck: settings.keyCheck }),
+      ]);
+      return 'set' as const;
+    });
+  }
+
+  async createPairing(pairing: PairingRecord) {
+    await this.database.query(
+      `INSERT INTO pairings (pairing_id, owner_key, code_hash, data, expires_at)
+       VALUES ($1, $2, $3, $4, $5)`,
+      [
+        pairing.pairingId,
+        pairing.ownerKey,
+        pairing.codeHash,
+        JSON.stringify(pairing),
+        pairing.expiresAt,
+      ],
+    );
+  }
+  async getPairing(pairingId: string) {
+    const { rows } = await this.database.query<{ data: PairingRecord }>(
+      'SELECT data FROM pairings WHERE pairing_id = $1',
+      [pairingId],
+    );
+    return rows[0]?.data;
+  }
+  async findPairing(ownerKey: string, codeHash: string) {
+    const { rows } = await this.database.query<{ data: PairingRecord }>(
+      'SELECT data FROM pairings WHERE owner_key = $1 AND code_hash = $2 LIMIT 1',
+      [ownerKey, codeHash],
+    );
+    return rows[0]?.data;
+  }
+  async updatePairing(pairing: PairingRecord) {
+    await this.database.query('UPDATE pairings SET data = $2 WHERE pairing_id = $1', [
+      pairing.pairingId,
+      JSON.stringify(pairing),
+    ]);
+  }
+  async deletePairing(pairingId: string) {
+    await this.database.query('DELETE FROM pairings WHERE pairing_id = $1', [pairingId]);
   }
 
   async committedBytes(ownerKey: string) {
@@ -549,7 +638,7 @@ export class PostgresPilotStore implements PilotStore {
     );
     return rows.map((row) => row.n);
   }
-  async finishUpload(uploadId: string, result: CloudItem) {
+  async finishUpload(uploadId: string, result: CloudItem | Change['item']) {
     await this.transaction(async (db) => {
       await db.query('UPDATE uploads SET result = $2 WHERE upload_id = $1', [
         uploadId,
@@ -559,7 +648,7 @@ export class PostgresPilotStore implements PilotStore {
     });
   }
 
-  async publish(ownerKey: string, item: StoredItem, epoch: number): Promise<Change> {
+  async publish(ownerKey: string, item: AnyStoredItem, epoch: number): Promise<Change> {
     return this.transaction(async (db) => {
       const vault = await this.lockVault(db, ownerKey);
       if (vault.epoch !== epoch) throw new VaultResetError();
@@ -596,6 +685,7 @@ export class PostgresPilotStore implements PilotStore {
     return this.transaction(async (db) => {
       await db.query('DELETE FROM sessions WHERE expires_at <= $1', [cutoffs.now]);
       await db.query('DELETE FROM login_attempts WHERE expires_at <= $1', [cutoffs.now]);
+      await db.query('DELETE FROM pairings WHERE expires_at <= $1', [cutoffs.now]);
       const stale = await db.query<{ upload_id: string; finished: boolean; chunks: number[] }>(
         `SELECT u.upload_id, u.result IS NOT NULL AS finished,
                 COALESCE(array_agg(c.n ORDER BY c.n) FILTER (WHERE c.n IS NOT NULL), '{}') AS chunks
@@ -621,11 +711,12 @@ export class PostgresPilotStore implements PilotStore {
     return this.transaction(async (db) => {
       const vault = await this.lockVault(db, ownerKey);
       const epoch = vault.epoch + 1;
-      await db.query('UPDATE vaults SET epoch = $2, last_cursor = 0 WHERE owner_key = $1', [
-        ownerKey,
-        epoch,
-      ]);
-      const removed = await db.query<{ data: StoredItem }>(
+      await db.query(
+        'UPDATE vaults SET epoch = $2, last_cursor = 0, e2ee = NULL WHERE owner_key = $1',
+        [ownerKey, epoch],
+      );
+      await db.query('DELETE FROM pairings WHERE owner_key = $1', [ownerKey]);
+      const removed = await db.query<{ data: AnyStoredItem }>(
         'DELETE FROM items WHERE owner_key = $1 RETURNING data',
         [ownerKey],
       );

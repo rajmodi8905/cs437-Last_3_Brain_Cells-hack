@@ -1,6 +1,6 @@
 # End-to-end encrypted Auto-sync: design
 
-Status: proposal, 22 November 2026. Phase 0, the envelope library, is built: `pilot/contract/e2ee.ts`, tested in `pilot/tests/e2ee.test.ts`. Nothing else is built. It extends the [sync protocol](protocol.md) (v1) and the [pilot spec](SPEC.md).
+Status: in progress, 22 November 2026. Phase 0, the envelope library, is built: `pilot/contract/e2ee.ts`, tested in `pilot/tests/e2ee.test.ts`. Phase 1, the server, is built: sealed items, vault settings and pairing in `pilot/server`, tested in `pilot/tests/e2ee-server.test.ts`. No device uses them yet. It extends the [sync protocol](protocol.md) (v1) and the [pilot spec](SPEC.md).
 
 ## Summary
 
@@ -76,7 +76,7 @@ The plaintext `contentSha256` inside the sealed metadata is still checked: after
 
 Sealed items are added alongside v1 items, not instead of them. A vault is either **plain** (today's behaviour, unchanged) or **sealed** (encryption turned on). A sealed vault can still hold plain items, which is how bot items work.
 
-**Vault.** `GET /session` adds `e2ee: { enabled, vaultSalt, keyCheck } | null`. `PUT /vault/e2ee` sets them once per epoch: `opId`, `epoch`, `vaultSalt`, `keyCheck`. It is refused if they are already set for this epoch.
+**Vault.** `PUT /vault/e2ee` takes `opId`, `epoch`, `vaultSalt` (16 bytes) and `keyCheck` (32 bytes), both base64url, and answers `{ e2ee: { vaultSalt, keyCheck } }`. It sets them once per epoch: the same settings again are answered the same way, other settings are refused with `INVALID_INPUT`, and removing the cloud library clears them. From then on `GET /session` includes `e2ee: { vaultSalt, keyCheck }`; a plain vault's session has no `e2ee` field, so existing clients see no change.
 
 **Item fields for sealed items.** The server stores and returns these; the v1 plaintext fields are absent.
 
@@ -100,9 +100,15 @@ Sealed items are added alongside v1 items, not instead of them. A vault is eithe
 
 Unchanged for sealed items: `opId` idempotency, `expectedRevision` and `REVISION_CONFLICT`, delete-always-wins tombstones, the change feed and cursors, quota (now counted in ciphertext bytes, which are slightly larger), `X-Recall-Account`, CSRF, rate limits, and the owner-prefix check on every object key.
 
-**Upload.** `POST /items/{globalId}/upload` takes `{ enc, wrappedKey, sealedMeta, metaRevision: 1, cipherByteLength, cipherSha256 }` for a sealed item. Chunks and completion work as today, on ciphertext.
+**Upload.** `POST /items/{globalId}/upload` takes `{ opId, epoch, sealed: { enc, wrappedKey, sealedMeta, metaRevision: 1, cipherByteLength, cipherSha256 } }` for a sealed item, and keeps only those six fields. Chunks and completion work as today, on ciphertext, and the quota counts `cipherByteLength`. An encrypted vault refuses plain uploads from devices, and a plain vault refuses sealed ones, both with `INVALID_INPUT`; the bot's own items are not uploaded through this route. The published item is `{ globalId, revision, deleted, sealed }`, plus `sealedIndex` once there is one. `GET /items/{globalId}/original` serves the ciphertext as `application/octet-stream`, with `ETag: "sha256-<cipherSha256>"` and byte ranges, so a device can fetch and open one chunk at a time.
 
-**Rename.** `PATCH /items/{globalId}` takes `{ sealedMeta, metaRevision, expectedRevision }`. The old index bundle becomes stale until the device publishes one for the new `metaRevision`, the same rule as today's title digest.
+**Rename.** `PATCH /items/{globalId}` takes `{ opId, epoch, expectedRevision, sealedMeta, metaRevision }`. A stale `expectedRevision` is `REVISION_CONFLICT`; a `metaRevision` that does not grow, or a plain `title`, is `INVALID_INPUT`. The old index bundle becomes stale until the device publishes one for the new `metaRevision`, the same rule as today's title digest.
+
+**Index.** `PUT /items/{globalId}/index` takes `{ opId, epoch, sealedIndex, metaRevision }`, with the sealed bundle as base64url. A `metaRevision` other than the item's is `INDEX_INCOMPATIBLE`, and a plain `bundle` is `INVALID_INPUT`. The item then lists `sealedIndex: { metaRevision, byteLength }`, and `GET /items/{globalId}/index` serves the bundle as `application/octet-stream`.
+
+**Delete.** As today. The tombstone is `{ globalId, revision, deleted: true }`; the server keeps no wrapped key or sealed metadata for it, and deletes the original and index objects after the tombstone commits.
+
+**Storage.** Sealed items share the `items` table and change feed with plain ones, with only the public fields in `data`. `PilotStore.getItem`, which all bot code uses, never returns a sealed item; the API routes read both kinds. The vault settings are a new `vaults.e2ee` column, and pairing requests a new `pairings` table that backups leave out. This is database migration 7, so the first release with it goes through the manual release path in [deployment.md](deployment.md), as migrations 3 to 6 did.
 
 ## Adding a device
 
@@ -117,7 +123,16 @@ Google sign-in still opens the session. Before a new device can read a sealed va
 3. Both devices show the same 6-digit check number, derived from both public keys. The student confirms they match. This stops a dishonest server from swapping in its own key.
 4. The old device encrypts `R` with the shared key and posts it with its public key. The new device decrypts it, checks `keyCheck`, and the server deletes the pairing record.
 
-The server only ever sees public keys and an encrypted `R`. Pairing is rate-limited like sign-in.
+The server only ever sees public keys and an encrypted `R`.
+
+**Pairing API.** All four calls need a signed-in session; the three writes need encryption to be on for the vault (`INVALID_INPUT` otherwise). A pairing never crosses accounts: another account gets `404` for it.
+
+| Call                                                                              | Answer                                                                                                                                                        |
+| --------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `POST /pairing` with the new device's 65-byte `publicKey`                         | `{ pairingId, code, expiresAt }`; the code is 8 Crockford base32 characters, valid for 10 minutes, and the server keeps only its SHA-256                      |
+| `POST /pairing/claim` with the typed `code`                                       | `{ pairingId, publicKey }`, once; case, spaces, dashes and look-alike letters are forgiven. Each account gets 10 tries per 10 minutes, right or wrong (`429`) |
+| `PUT /pairing/{pairingId}/secret` with `publicKey` and the 44-byte `sealedSecret` | `204`, once, after a claim                                                                                                                                    |
+| `GET /pairing/{pairingId}`                                                        | `{ status: "waiting" }` or `{ status: "claimed" }`, then `{ status: "ready", publicKey, sealedSecret }` once, after which the record is gone                  |
 
 ## Bot items in a sealed vault
 
