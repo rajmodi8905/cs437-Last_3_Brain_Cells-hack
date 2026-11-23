@@ -100,7 +100,7 @@ export function createTelegramChannel(input: {
     async sendText(to, text) {
       await api.sendMessage(to.chatId, fitTelegram(text, TELEGRAM_LIMITS.text));
     },
-    async sendResults(to, query, rows, keywordOnly) {
+    async sendResults(to, query, rows, keywordOnly, note) {
       const at = now();
       const picks = rows.map((row) => ({
         token: randomBytes(9).toString('base64url'),
@@ -118,6 +118,7 @@ export function createTelegramChannel(input: {
         ...(!keywordOnly && rows.some((row) => row.description.endsWith('still indexing'))
           ? ['', TELEGRAM_REPLIES.stillIndexing]
           : []),
+        ...(note ? ['', note] : []),
       ].join('\n');
       const keyboard: InlineKeyboard = {
         inline_keyboard: rows.map((row, i) => [
@@ -712,12 +713,20 @@ export function createTelegramBot(options: TelegramBotOptions) {
     };
     try {
       const { rows, keywordOnly } = await search(account.ownerKey, clip(query, 500), engine);
+      // The bot cannot read sealed items, so in an encrypted library it says what it searched.
+      const note = (await store.vaultE2ee(account.ownerKey))
+        ? TELEGRAM_REPLIES.encryptedLibrary
+        : undefined;
       // The "still processing" message and the last "typing…" are out before the results.
       await notice;
       await stopTyping();
       await answer(key, async () => {
-        if (!rows.length) return say(sender, TELEGRAM_REPLIES.noResults(query, keywordOnly))();
-        await channel.sendResults(addressOf(sender, account), query, rows, keywordOnly);
+        if (!rows.length)
+          return say(
+            sender,
+            [TELEGRAM_REPLIES.noResults(query, keywordOnly), ...(note ? [note] : [])].join(' '),
+          )();
+        await channel.sendResults(addressOf(sender, account), query, rows, keywordOnly, note);
       });
     } finally {
       clearTimeout(timer);

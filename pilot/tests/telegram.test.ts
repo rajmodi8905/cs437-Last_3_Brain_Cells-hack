@@ -2039,6 +2039,20 @@ describe.each(backends)('Telegram bot: %s', (name, available, open) => {
         'Nothing matched “cricket” in your AnyRecall library. Try other words.',
       );
     });
+
+    it('says it searches only what was sent here once the library is end-to-end encrypted', async () => {
+      const t = await setup();
+      await t.link();
+      await t.send(textUpdate('note Badminton team signup'));
+      const { epoch } = await t.store.vault(OWNER_X);
+      await t.store.setVaultE2ee(OWNER_X, epoch, { vaultSalt: 'salt', keyCheck: 'check' });
+      await t.send(textUpdate('badminton'));
+      const found = t.tg.to(USER_A.id).at(-1)!;
+      expect(found.text).toContain('Badminton team signup');
+      expect(found.text).toContain(TELEGRAM_REPLIES.encryptedLibrary);
+      await t.send(textUpdate('zzzz qqqq'));
+      expect(t.tg.textsTo(USER_A.id).at(-1)).toContain(TELEGRAM_REPLIES.encryptedLibrary);
+    });
   });
 
   describe('Typing and slow searches', () => {

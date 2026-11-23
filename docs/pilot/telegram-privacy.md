@@ -1,6 +1,6 @@
 # AnyRecall on Telegram: privacy
 
-Pilot version 2.3 · Updated 11 November 2026
+Pilot version 2.4 · Updated 23 November 2026
 
 This page is for students who use the AnyRecall bot on Telegram. It adds to the pilot Privacy Policy (docs/pilot/privacy-policy.md in the repository) and does not change it for anyone else. AnyRecall is a student project, not an official IIT Gandhinagar service. Using the bot is your choice: if you never open it, nothing on this page applies to you.
 
@@ -33,7 +33,9 @@ Voice notes, audio, videos, stickers, locations, contacts and other files (such 
 
 Telegram stores chats with bots on its own servers. Chats with bots are cloud chats: they are not end-to-end encrypted, and Telegram passes your messages and files to us. Telegram's own terms and privacy policy cover what Telegram does. In the chat the bot shows your email only in part (for example `s•••a@iitgn.ac.in`).
 
-Our server, on Microsoft Azure, stores and processes your files to make them searchable, and sees the searches you type to the bot, because it searches your library on the server for you (including items you synced from the app). Storage is encrypted at rest but not end to end: the project's operators and the cloud provider can technically access it. We do not use your files or searches for advertising, analytics or training models, and we do not share them with other students.
+Our server, on Microsoft Azure, stores and processes your files to make them searchable, and sees the searches you type to the bot, because it searches your library on the server for you (including items you synced from the app). What you send the bot is encrypted at rest but not end to end: the project's operators and the cloud provider can technically access it. We do not use your files or searches for advertising, analytics or training models, and we do not share them with other students.
+
+If you turned on end-to-end encryption for your library in the app, the server cannot read the items your devices synced, so the bot searches only what you sent it, and says so under its replies. What you send the bot stays readable by the server, because the bot has to read it; the app labels those items "Sent through Telegram, readable by the pilot service".
 
 The AnyRecall app's own promise is unchanged: for students who do not use the bot, files and searches stay on their device, and nothing is uploaded unless they sign in and choose to include their library. Opening the app from the bot does not upload the library already on that device unless you choose "Include this device's library", as for any sign-in.
 

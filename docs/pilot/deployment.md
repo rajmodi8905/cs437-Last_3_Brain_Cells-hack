@@ -8,7 +8,7 @@ One Linux Azure VM runs three Compose services: Caddy terminates HTTPS, the Node
 
 The runtime image includes the built PWA, browser WASM/workers, bundled server and backup CLI, and, for the opt-in WhatsApp and Telegram channels, the engine host page (`npm run build:engine-host`, at `/app/engine-host`, never under `dist/`), the three Playwright packages and Playwright's headless Chromium with its Debian libraries. Chromium starts only with the WhatsApp or Telegram settings. The image contains neither source/test directories, the rest of the application dependency tree, local libraries, credentials nor model weights. `scripts/prepare-assets.mjs` regenerates browser runtime assets during the image build; the pinned model manifest retains explicit model setup downloads. `.models` is a local test cache and must not enter the image.
 
-Originals/index bundles live in a private Azure Blob container. Database backups go to a separate private container. Use the VM's system-assigned managed identity, with Storage Blob Data Contributor scoped to this pilot's storage account or its required containers. Leave `PILOT_MANAGED_IDENTITY_CLIENT_ID` blank for that identity. Configure Blob versioning and soft-delete retention for both blobs and containers before launch; database backups do not contain original bytes. Account operators can read content; this pilot does not provide end-to-end encryption.
+Originals/index bundles live in a private Azure Blob container. Database backups go to a separate private container. Use the VM's system-assigned managed identity, with Storage Blob Data Contributor scoped to this pilot's storage account or its required containers. Leave `PILOT_MANAGED_IDENTITY_CLIENT_ID` blank for that identity. Configure Blob versioning and soft-delete retention for both blobs and containers before launch; database backups do not contain original bytes. Account operators can read content, unless a student turns on end-to-end encryption for their library (see below); items sent to the Telegram bot stay readable either way.
 
 The app opens/migrates PostgreSQL before listening and attempts a database backup at startup, then every 24 hours, retaining the newest 14 logical backups. A healthy HTTP process does not prove a successful backup or available originals: check both explicitly. Preserve the PostgreSQL and Caddy data directories during upgrades; never delete them as a deployment cleanup step.
 
@@ -155,6 +155,14 @@ The log shows `Telegram channel on (webhook): https://…/api/v1/telegram/webhoo
 **Polling instead.** Long polling also works on the VM (`PILOT_TELEGRAM_MODE=polling`, no webhook secret), for example while the domain is unavailable; only one process may poll a bot, so stop any laptop trial with the same token. Starting a polling process removes the webhook. Linking still uses the pilot's Google sign-in.
 
 **Turning it off.** Remove `compose.telegram.yaml` and run `up --detach --wait app` without it. Items saved through Telegram stay in the students' own cloud libraries (they are ordinary items there), and links stop working. Telegram keeps calling the webhook, which then answers `NOT_FOUND`; remove it by restarting a polling trial once, or by revoking the token in BotFather when the bot is retired.
+
+## End-to-end encryption (opt-in per library)
+
+Students can turn on end-to-end encryption for their cloud library in Settings ([e2ee-design.md](e2ee-design.md)). The server then stores only ciphertext for that library's items, a vault salt and key check, and short-lived pairing requests. Nothing needs configuring: there are no keys or secrets on the server.
+
+**First release with it.** It adds database migration 7 (`vaults.e2ee` and the `pairings` table), so `deploy-release.sh` refuses the automatic release once ("Database migration plan changed; manual release required."). Release that image by hand as for the bot channels, then check `/api/v1/session` still answers for a signed-in account and that a fresh backup's manifest shows database version 7. Backups made before the release need the earlier image to restore. Rolling back to an image from before the release leaves the new column and table in place; older code ignores them, but encrypted items look like incomplete items to it, so do not roll back once a student has turned encryption on.
+
+Blob soft delete and versioning keep the plain objects of items sealed after encryption was turned on recoverable for up to 28 days, as the Privacy Policy says. Keep those settings as configured: the policy's retention figures depend on them.
 
 ## Backup, rollback and close
 

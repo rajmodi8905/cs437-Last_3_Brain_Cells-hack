@@ -33,7 +33,14 @@ export interface ChatChannel<To> {
   captionLimit: number;
   sendText(to: To, text: string): Promise<void>;
   /** A search answer with at least one row; the person picks a row to get the original back. */
-  sendResults(to: To, query: string, rows: ResultRow[], keywordOnly: boolean): Promise<void>;
+  /** `note`, when given, is added under the results. */
+  sendResults(
+    to: To,
+    query: string,
+    rows: ResultRow[],
+    keywordOnly: boolean,
+    note?: string,
+  ): Promise<void>;
   /** A photo or PDF; the channel decides whether it goes as a photo or as a document. */
   sendFile(to: To, file: OutgoingFile): Promise<void>;
   /** A message with an "Open in app" button for a one-time link. */

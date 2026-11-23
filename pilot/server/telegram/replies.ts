@@ -154,6 +154,9 @@ export const TELEGRAM_REPLIES = {
         ? ' Search by meaning is off right now, so only titles were matched.'
         : ' Try other words.'
     }`,
+  /** Under search replies when the library is end-to-end encrypted (docs/pilot/e2ee-design.md). */
+  encryptedLibrary:
+    'Your library is end-to-end encrypted, so I can only search what you sent me here. Search in the app for everything else.',
   gone: "That item isn't in your library any more.",
   expired: 'That result button has expired (they work for a day). Search again to get it.',
   appOnly: "This one can't be sent in Telegram. Open it in your browser instead.",

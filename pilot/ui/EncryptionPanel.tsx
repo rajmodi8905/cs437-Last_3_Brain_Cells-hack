@@ -184,9 +184,9 @@ export function EncryptionPanel({
           </p>
           <p className="field-help">
             Items already in your cloud library are encrypted on the next sync, and their readable
-            copies are deleted. Copies in the service&apos;s backups can remain for up to 14 days.
-            Items you send to the Telegram bot stay readable by the pilot service, because the bot
-            has to read them.
+            copies are deleted. Earlier readable copies can remain in the service&apos;s backups for
+            up to 28 days. Items you send to the Telegram bot stay readable by the pilot service,
+            because the bot has to read them.
           </p>
           <label>
             Type the last group of the code to confirm you saved it

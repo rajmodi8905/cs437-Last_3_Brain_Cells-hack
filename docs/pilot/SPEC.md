@@ -94,6 +94,58 @@ The wire format, states and limits referred to below are defined in [protocol.md
 
 **Test:** Export a vault and compare hashes with the stored originals; inspect the metrics records and confirm they hold no document or query content.
 
+## End-to-end encryption (opt-in)
+
+A student can turn on end-to-end encryption for their cloud library in Settings. [e2ee-design.md](e2ee-design.md) has the design, formats and threat model; the wire changes are in [protocol.md](protocol.md#end-to-end-encrypted-items-opt-in). Plain libraries keep the behaviour of P01 to P15 exactly.
+
+### E1 — No plaintext on the server
+
+**Statement:** For a sealed item the server holds only ciphertext and public fields: no original, title, source URL, extracted text, transcript or vector reaches it, in any database row, change-feed entry, saved result, stored object or backup. Devices seal before upload with a per-item key wrapped by the vault key, and list and open sealed items like plain ones.
+
+**Test:** Items whose content, title and index text hold a unique marker are synced from an encrypted library; the marker is in no item row, change, request body or stored object (`pilot/tests/e2ee-client.test.ts`, `e2ee-server.test.ts`), and on PostgreSQL and Azure Blob in no exported row and no object (`e2ee-durable.test.ts`). In a browser the upload request carries sealed fields and no title (`pilot/e2e/encryption.spec.ts`).
+
+### E2 — Another device needs the key
+
+**Statement:** A device without the key applies and sends nothing for an encrypted library and says it is waiting for the key. A recovery code is accepted only when it matches the library's key check; a wrong code and a mistyped one are refused and nothing is kept. With the key, the device opens, downloads (byte for byte, also in chunks and from an offline copy) and searches sealed items like plain ones.
+
+**Test:** `pilot/tests/e2ee-client.test.ts` ("E2 another device needs the recovery code"), `e2ee-durable.test.ts`, and in a browser `pilot/e2e/encryption.spec.ts`.
+
+### E3 — Tampered ciphertext is refused
+
+**Statement:** A changed, swapped, moved, cut or reordered chunk, sealed metadata moved from another item, or a wrong key is refused with a clear error and replaces nothing: no offline copy is kept and the item stays as the device last had it.
+
+**Test:** Every tamper case of the envelope (`pilot/tests/e2ee.test.ts`) and, through the engine, a changed original and moved metadata (`e2ee-client.test.ts`, "E3").
+
+### E4 — Turning encryption on seals what is already there
+
+**Statement:** After encryption is turned on, the plain items of the library (except bot items) are sealed in place under the next revision, from a device's own copy or after downloading and checking them, and their indexes follow. The server then forgets the plaintext: earlier change-feed entries, saved results and finished uploads no longer describe the item, and its plain objects are deleted after the commit. A rename made meanwhile is kept. Earlier readable copies can remain in backups and storage recovery copies for up to 28 days, and the setup screen and Privacy Policy say so.
+
+**Test:** `pilot/tests/e2ee-reseal.test.ts` (own items, another device's items with their index, a concurrent rename, stale and repeated reseals, and the store's forgetting on memory and PostgreSQL), `e2ee-durable.test.ts`, and in a browser `pilot/e2e/encryption.spec.ts`.
+
+### E5 — Pairing passes the key safely
+
+**Statement:** A new device gets the recovery secret from a device that has it through a typed 8-character code valid for 10 minutes. The new device commits to its public key before either key is shown and reveals it last, both devices show the same six-digit check number, and the secret is sent sealed to the new device only after the student confirms on both. A key swapped by the server makes the numbers differ or is refused. Pairing stays inside one account, wrong codes are limited, and the record is deleted at the end.
+
+**Test:** `pilot/tests/e2ee-pairing.test.ts` (including a server that swaps either key), `e2ee-server.test.ts` ("E5"), `e2ee-durable.test.ts`, and two browser windows in `pilot/e2e/encryption.spec.ts`.
+
+### E6 — Bot items stay plain and the bot sees only them
+
+**Statement:** In an encrypted library the Telegram bot keeps saving plain items; devices never seal them, the server refuses to, and the app labels them "Sent through Telegram, readable by the pilot service". The bot never reads a sealed item, and its search replies say that it searches only what was sent to it.
+
+**Test:** `pilot/tests/e2ee-server.test.ts` ("E6"), `e2ee-reseal.test.ts` ("E6") and `pilot/tests/telegram.test.ts` ("says it searches only what was sent here once the library is end-to-end encrypted").
+
+### E7 — Export with the key
+
+**Statement:** Exporting an encrypted library writes decrypted originals and titles, checked against their sealed hashes, and without the key on the device it stops and asks for the recovery code.
+
+**Test:** `pilot/tests/e2ee-client.test.ts` ("E7 export of an encrypted library").
+
+### E8 — The key never leaves a device in the clear
+
+**Statement:** The recovery secret and the keys derived from it are never sent in any request, except sealed to a new device during pairing.
+
+**Test:** A request recorder over turning encryption on, syncing and pairing finds no form of the secret or recovery code in any body (`pilot/tests/e2ee-client.test.ts`, "E8"; `e2ee-pairing.test.ts`).
+
 ## WhatsApp channel (opt-in)
 
 These statements cover the optional WhatsApp channel ([whatsapp.md](whatsapp.md)): students message the bot's number, agree to its notice, and the pilot server stores what they send in a vault for that sender, indexes it, answers searches in the chat and opens that vault in the app from a one-time link. A student who never messages the bot sees no change, and P01 to P15 are unchanged. Tests run against a stand-in for Meta's Graph API with webhook deliveries in Meta's documented format; claims about the real Meta number need their own evidence.
@@ -200,7 +252,7 @@ These statements cover the optional Telegram channel ([telegram.md](telegram.md)
 
 ### T8 — Search in Telegram
 
-**Statement:** Typed text that is not a command or a save is a search of the linked account's whole library (items saved through Telegram and items synced from the app, by meaning where they have a usable index, by title otherwise), answered with at most five results and one button per result; each button's data is a short random token (within Telegram's 64 bytes) stored with the item, place and account and valid for a day. Tapping one sends the original back with an "Open in browser" button, and every tap is acknowledged. For a fixture library, the bot's top result is the same item and location the app's own search returns for that account.
+**Statement:** Typed text that is not a command or a save is a search of the linked account's whole library (items saved through Telegram and items synced from the app, by meaning where they have a usable index, by title otherwise), answered with at most five results and one button per result (in a library with end-to-end encryption on, only the plain items, those saved through Telegram, are searched, and the reply says so: see E6); each button's data is a short random token (within Telegram's 64 bytes) stored with the item, place and account and valid for a day. Tapping one sends the original back with an "Open in browser" button, and every tap is acknowledged. For a fixture library, the bot's top result is the same item and location the app's own search returns for that account.
 
 **Test:** With pinned real models, the bot, linked to an account, indexes `sample-03.pdf` and `sample-01.jpg` sent as files; for the queries of the W7 test its top buttons are the PDF at page 2 and the photo, and the app, signed in as that account through the bot's app link with the device's (empty) library included, returns the same item and location first. With a stand-in engine: seven notes give five buttons of `p:` and 12 characters; a note synced from the app with its index is found and sent back; a picked photo is sent with `sendPhoto` and a PDF with `sendDocument`, both byte for byte with the title (and page) as caption, a note as text, each followed by a working "Open in browser" link; items still being indexed match by title and keyword-only search says so; no match says so; an expired or unknown button says the result expired; every tap is answered with `answerCallbackQuery`.
 
@@ -213,7 +265,6 @@ These statements cover the optional Telegram channel ([telegram.md](telegram.md)
 ### Telegram transport and safety checks
 
 A message's content is kept only while it is handled, on Telegram and WhatsApp alike: once its job is done or has failed for good (a saved note, a search, a refused contact or location, a result tap), only its key and type stay, also after the item is deleted in the app or the cloud library is removed; a sweep in the server's clean-up forgets the content of any handled message that still has it (`pilot/tests/telegram.test.ts`, "Message content is kept only while it is handled"; `whatsapp.test.ts`).
-
 
 Beyond T1 to T9: replies to one chat are spaced at least a second apart (Telegram allows about one message a second per chat) and HTTP 429 is waited out for Telegram's `retry_after`; downloads stop as soon as they pass the limit; the bot token appears in no error, log line or description, whether Telegram refuses a call, the server cannot be reached or the token is wrong; with `PILOT_TELEGRAM_ALLOWED_USERS` set, anyone else gets a "not open yet" reply and nothing of theirs is stored; settings are all or none and errors name the setting, never a value; a local trial may use development sign-in for linking only while listening on loopback, and behind a tunnel only with memory storage; linked accounts, links, Telegram-saved items and sessions opened from a Telegram link are kept on memory and PostgreSQL alike and survive a backup and restore (`pilot/tests/telegram-transport.test.ts`, `telegram-config.test.ts`, `telegram-store.test.ts`, `telegram-entry.test.ts`).
 
