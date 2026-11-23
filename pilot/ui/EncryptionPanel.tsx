@@ -183,8 +183,10 @@ export function EncryptionPanel({
             Recovery code: <strong className="recovery-code">{setupCode}</strong>
           </p>
           <p className="field-help">
-            Items already in your cloud library are not encrypted again yet; items you send to the
-            Telegram bot stay readable by the pilot service, because the bot has to read them.
+            Items already in your cloud library are encrypted on the next sync, and their readable
+            copies are deleted. Copies in the service&apos;s backups can remain for up to 14 days.
+            Items you send to the Telegram bot stay readable by the pilot service, because the bot
+            has to read them.
           </p>
           <label>
             Type the last group of the code to confirm you saved it

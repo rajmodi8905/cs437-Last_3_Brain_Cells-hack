@@ -561,6 +561,29 @@ export class PostgresPilotStore implements PilotStore {
     await this.database.query('DELETE FROM pairings WHERE pairing_id = $1', [pairingId]);
   }
 
+  async forgetPlaintext(
+    ownerKey: string,
+    globalId: string,
+    item: Change['item'],
+    keepUploadId: string,
+  ) {
+    await this.transaction(async (db) => {
+      await db.query(
+        `UPDATE changes SET item = $3 WHERE owner_key = $1 AND item->>'globalId' = $2`,
+        [ownerKey, globalId, JSON.stringify(item)],
+      );
+      await db.query(
+        `DELETE FROM responses WHERE owner_key = $1 AND body->'item'->>'globalId' = $2`,
+        [ownerKey, globalId],
+      );
+      await db.query(
+        `DELETE FROM uploads
+          WHERE owner_key = $1 AND global_id = $2 AND result IS NOT NULL AND upload_id <> $3`,
+        [ownerKey, globalId, keepUploadId],
+      );
+    });
+  }
+
   async committedBytes(ownerKey: string) {
     const { rows } = await this.database.query<{ bytes: string }>(
       `SELECT

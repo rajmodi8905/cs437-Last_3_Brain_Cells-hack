@@ -323,6 +323,9 @@ export function AutoSyncSection({
                         <span className="item-meta">
                           {kindNames[item.kind ?? ''] ?? 'Item'} · {bytes(item.byteLength ?? 0)}
                           {kept ? ' · Kept offline' : ''}
+                          {view.encryption.on && view.botItems.includes(item.globalId)
+                            ? ' · Sent through Telegram, readable by the pilot service'
+                            : ''}
                         </span>
                       </div>
                       <div className="cloud-item-actions">

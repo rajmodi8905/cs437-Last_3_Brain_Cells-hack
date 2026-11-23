@@ -1,6 +1,6 @@
 # End-to-end encrypted Auto-sync: design
 
-Status: in progress, 23 November 2026. Phase 0, the envelope library, is built: `pilot/contract/e2ee.ts`, tested in `pilot/tests/e2ee.test.ts`. Phase 1, the server, is built: sealed items, vault settings and pairing in `pilot/server`, tested in `pilot/tests/e2ee-server.test.ts`. Phase 2, the sync engine, is built: it seals and opens items in `pilot/client/sync.ts`, tested in `pilot/tests/e2ee-client.test.ts`. Phase 3, the screens, is built: `pilot/ui/EncryptionPanel.tsx` in Settings, with pairing tested in `pilot/tests/e2ee-pairing.test.ts` and both flows in a browser in `pilot/e2e/encryption.spec.ts`. Items uploaded before encryption was turned on stay plain until phase 4. It extends the [sync protocol](protocol.md) (v1) and the [pilot spec](SPEC.md).
+Status: in progress, 23 November 2026. Phase 0, the envelope library, is built: `pilot/contract/e2ee.ts`, tested in `pilot/tests/e2ee.test.ts`. Phase 1, the server, is built: sealed items, vault settings and pairing in `pilot/server`, tested in `pilot/tests/e2ee-server.test.ts`. Phase 2, the sync engine, is built: it seals and opens items in `pilot/client/sync.ts`, tested in `pilot/tests/e2ee-client.test.ts`. Phase 3, the screens, is built: `pilot/ui/EncryptionPanel.tsx` in Settings, with pairing tested in `pilot/tests/e2ee-pairing.test.ts` and both flows in a browser in `pilot/e2e/encryption.spec.ts`. Phase 4, sealing what is already in the cloud library, is built: the reseal operation on the server and in the engine, tested in `pilot/tests/e2ee-reseal.test.ts` and in a browser. It extends the [sync protocol](protocol.md) (v1) and the [pilot spec](SPEC.md).
 
 ## Summary
 
@@ -168,20 +168,21 @@ The Auto-sync section in Settings has an **End-to-end encryption** panel once th
 ## Bot items in a sealed vault
 
 - The bot keeps publishing plain v1 items with plaintext originals and indexes, as it does today. Its code does not change.
-- Devices already read plain items. They keep doing so, and show a small label on bot items in results and in Settings: "Sent through Telegram, readable by the server".
+- Devices already read plain items. They keep doing so. In an encrypted library they label bot items in search results and in Settings: "Sent through Telegram, readable by the pilot service".
+- Devices learn which items are bot items from `GET /bot-items`, which lists the account's items the Telegram bot saved (`tg_saved`), and ask only while some plain item is not yet known to be one. The server also refuses to seal a bot item.
 - The bot's search (`chat/search.ts`, `ownerSearchItems`) skips sealed items, because their index bundles are ciphertext. The bot's notice, privacy page and the T-statements must change from "searches your whole cloud library" to "searches what you sent the bot".
 - Optional, later: a **Seal this item** action. A device re-uploads a bot item as a sealed item and deletes the plain copy. After that the bot can no longer find it.
 
 ## Turning it on for an existing library
 
-1. Settings → Auto-sync → **Turn on end-to-end encryption**. The device generates `R` and shows the recovery code. The student must type back its last group before continuing.
-2. The device sets `vaultSalt` and `keyCheck`, then re-uploads every item it can open as a sealed item under the same `globalId`, using a new `reseal` operation: one revision, with the plaintext objects deleted after the sealed ones are committed.
-3. Items no device holds locally (cloud-only) are downloaded, sealed and re-uploaded by the first device that has them. Bot items stay plain.
-4. Two things outlive the switch and must be stated, not hidden:
-   - Azure Blob soft delete and versioning (14 days) keep the old plaintext objects. Either purge those versions in the same change (`deleteBlob` with versions), or tell the student plaintext copies remain for up to 14 days.
-   - The daily database backups (14 kept) hold the old plaintext metadata until they age out.
+1. Settings → Auto-sync → **Turn on end-to-end encryption**. The device shows the recovery code, the student types back its last group, and only then are `vaultSalt` and `keyCheck` set.
+2. From then on every unlocked device, after each pull, queues a **reseal** for each plain cloud item that is not a bot item and has no other work queued. Items this device synced are sealed from its own copy; items only another device had are downloaded, checked against their hash, and sealed. Whichever device gets there first does it; a second one gets `REVISION_CONFLICT` and sees the item sealed on its next pull.
+3. A reseal is an upload of the sealed original with `reseal: { expectedRevision }` next to `sealed`. Completing it replaces the plain item with the sealed one under the next revision, in one step, and only if the item is still plain, live, at that revision and not a bot item. The sealed original gets its own object key, so the plain one stays readable until the change has committed. Then the server forgets the plaintext: it rewrites the item's earlier change-feed entries to the sealed version, drops saved operation results and finished uploads that still describe it, and deletes the plain original and index objects after the commit.
+4. Indexes follow. A device that sealed its own item publishes its index again, sealed. A device that sealed another device's item seals the index it had downloaded for it and publishes that. A device whose item was sealed by another device, and finds no index for its current metadata, publishes its own.
+5. A rename made on one device while another sealed the item is kept: the pull sees a new revision with the same title, so the queued rename is sent against the new revision instead of becoming a conflict.
+6. Two things outlive the switch, and the setup screen says so: Azure Blob soft delete and versioning keep the deleted plain objects for up to 14 days, and the daily database backups (14 kept) hold the old metadata until they age out. Purging Blob versions early is not possible while soft delete is on, so the screen tells the student instead.
 
-New libraries can choose encryption during **Set up Auto-sync**, so they never upload plaintext at all.
+New libraries that turn encryption on before including anything never upload plaintext at all.
 
 ## Spec statements and tests
 

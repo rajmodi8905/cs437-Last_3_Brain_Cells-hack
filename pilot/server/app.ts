@@ -37,6 +37,7 @@ import {
   type SealedUpload,
   type Session,
   type StoredItem,
+  type UploadRecord,
 } from './store';
 import { IndexPublishError, publishIndexBundle } from './index-publish';
 import { DEFAULT_LIMITS, RateLimiter, type RateLimits } from './limits';
@@ -644,6 +645,59 @@ export function createPilotHandler(options: PilotServerOptions): RequestListener
       (await store.getItem(ownerKey, globalId)) ?? (await store.getAnyItem(ownerKey, globalId))
     );
   }
+  /** Items the Telegram bot saved into this account; they stay plain so the bot can read them. */
+  async function botItems(ownerKey: string) {
+    return options.telegram ? await options.telegram.state.savedItems(ownerKey) : [];
+  }
+
+  /** A plain, live item at `expectedRevision` that a device may seal in place. */
+  async function checkReseal(ownerKey: string, existing: AnyStoredItem, expectedRevision: number) {
+    if (isSealed(existing))
+      throw new ApiError('INVALID_INPUT', 'This item is already end-to-end encrypted.');
+    if ((await botItems(ownerKey)).includes(existing.globalId))
+      throw new ApiError('INVALID_INPUT', 'Items sent through Telegram stay readable by the bot.');
+    if (existing.revision !== expectedRevision)
+      throw new ApiError('REVISION_CONFLICT', 'The item changed on another device.', {
+        current: publicItem(existing),
+      });
+  }
+
+  /**
+   * Replaces a plain item with its sealed upload under the next revision, then forgets the
+   * plaintext: earlier change entries, saved results and, after the commit, the plain original
+   * and index objects. The sealed original gets its own key, so the plain one stays readable
+   * until the change has committed.
+   */
+  async function sealInPlace(
+    res: ServerResponse,
+    ownerKey: string,
+    epoch: number,
+    upload: UploadRecord,
+    existing: StoredItem,
+    parts: string[],
+  ) {
+    const declared = upload.item as SealedUpload;
+    const objectKey = `${ownerKey}/${upload.epoch}/${upload.globalId}/sealed`;
+    await objects.compose(objectKey, parts);
+    const item: SealedStoredItem = {
+      globalId: upload.globalId,
+      revision: existing.revision + 1,
+      deleted: false,
+      byteLength: declared.byteLength,
+      sealed: declared.sealed,
+      objectKey,
+    };
+    await store.publish(ownerKey, item, epoch);
+    const published = publicItem(item);
+    await store.forgetPlaintext(ownerKey, upload.globalId, published, upload.uploadId);
+    await store.finishUpload(upload.uploadId, published);
+    for (const key of [existing.objectKey, existing.indexObjectKey])
+      if (key && key !== objectKey && key.startsWith(`${ownerKey}/`))
+        await afterCommit(res, () => objects.delete(key));
+    for (const key of parts) await objects.delete(key);
+    return published;
+  }
+
   /** The account's unexpired pairing; another account's, or an expired one, is not found. */
   async function ownPairing(session: Session, pairingId: string) {
     const pairing = await store.getPairing(pairingId);
@@ -1043,6 +1097,12 @@ export function createPilotHandler(options: PilotServerOptions): RequestListener
             contentSha256: valid.value.cipherSha256,
             sealed: valid.value,
           };
+          if (body.reseal !== undefined) {
+            const { expectedRevision } = (body.reseal ?? {}) as { expectedRevision?: unknown };
+            if (!validMetaRevision(expectedRevision))
+              throw new ApiError('INVALID_INPUT', 'reseal needs the expectedRevision.');
+            declared.reseal = { expectedRevision };
+          }
         } else {
           if (encrypted)
             throw new ApiError('INVALID_INPUT', 'This library is end-to-end encrypted.');
@@ -1053,9 +1113,15 @@ export function createPilotHandler(options: PilotServerOptions): RequestListener
         }
         const existing = await findItem(session.ownerKey, globalId);
         if (existing?.deleted) throw new ApiError('ITEM_DELETED', 'This item was deleted.');
-        if (existing) throw new ApiError('INVALID_INPUT', 'This item already exists.');
+        // A reseal replaces the plain item, so its bytes are freed as the sealed ones arrive.
+        let replaced = 0;
+        if (isSealedUpload(declared) && declared.reseal) {
+          if (!existing) throw new ApiError('NOT_FOUND', 'Item not found.');
+          await checkReseal(session.ownerKey, existing, declared.reseal.expectedRevision);
+          replaced = existing.byteLength + (existing.indexBytes ?? 0);
+        } else if (existing) throw new ApiError('INVALID_INPUT', 'This item already exists.');
         if (
-          (await store.committedBytes(session.ownerKey)) + declared.byteLength >
+          (await store.committedBytes(session.ownerKey)) - replaced + declared.byteLength >
           options.quotaBytes
         )
           throw new ApiError('QUOTA_EXCEEDED', 'This would exceed your cloud storage quota.');
@@ -1130,6 +1196,16 @@ export function createPilotHandler(options: PilotServerOptions): RequestListener
           throw new ApiError('HASH_MISMATCH', 'Uploaded bytes do not match the declared SHA-256.');
         const existing = await findItem(session.ownerKey, upload.globalId);
         if (existing?.deleted) throw new ApiError('ITEM_DELETED', 'This item was deleted.');
+        const reseal = isSealedUpload(upload.item) ? upload.item.reseal : undefined;
+        if (reseal && existing && !isSealed(existing)) {
+          await checkReseal(session.ownerKey, existing, reseal.expectedRevision);
+          return {
+            status: 200,
+            body: {
+              item: await sealInPlace(res, session.ownerKey, epoch, upload, existing, parts),
+            },
+          };
+        }
         if (existing) {
           // Published before a crash, but not yet marked finished: finish it now.
           const published = publicItem(existing);
@@ -1317,6 +1393,11 @@ export function createPilotHandler(options: PilotServerOptions): RequestListener
       return send(res, 200, bytes, {
         'content-type': isSealed(item) ? 'application/octet-stream' : 'application/json',
       });
+    }
+
+    if (path === '/bot-items' && method === 'GET') {
+      const session = await requireSession(req, false);
+      return send(res, 200, { globalIds: await botItems(session.ownerKey) });
     }
 
     if (path === '/vault/e2ee' && method === 'PUT') {

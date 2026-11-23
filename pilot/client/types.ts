@@ -78,6 +78,25 @@ export type PendingOp =
       expectedRevision: number;
     }
   | { kind: 'delete'; opId: string; localId: string; globalId: string; expectedRevision: number }
+  | {
+      /**
+       * Seals a plain cloud item in place once the library is encrypted: its original is sent
+       * again as ciphertext and replaces the plain item of `expectedRevision`.
+       */
+      kind: 'reseal';
+      opId: string;
+      completeOpId: string;
+      globalId: string;
+      /** This device's copy, when it has one; otherwise the original is downloaded. */
+      localId?: string;
+      expectedRevision: number;
+      uploadId?: string;
+      chunkBytes?: number;
+      sentChunks?: number;
+      sealed?: { wrappedKey: string; sealedMeta: string };
+      /** For an item only another device had: publishes the index this device downloaded. */
+      indexOpId?: string;
+    }
   | { kind: 'publishIndex'; opId: string; localId: string; globalId: string; key: string };
 
 export interface SyncSnapshot {
@@ -95,6 +114,10 @@ export interface SyncSnapshot {
   catalogue: Record<string, ChangeItem>;
   /** The library's encryption settings as of the last pull; absent for a plain library. */
   e2ee?: VaultE2eeSettings;
+  /** Items the Telegram bot saved into the account; they stay plain, and are labelled. */
+  botItems?: string[];
+  /** Items that could not be sealed, by the revision tried; tried again once they change. */
+  resealSkipped?: Record<string, number>;
 }
 
 export interface SyncStateStore {

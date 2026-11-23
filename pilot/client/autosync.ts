@@ -48,6 +48,8 @@ export interface AutoSyncView {
    * and whether this device has the key (docs/pilot/e2ee-design.md).
    */
   encryption: { on: boolean; unlocked: boolean };
+  /** Items the Telegram bot saved; in an encrypted library they are labelled as readable. */
+  botItems: string[];
   error?: string;
   /** How a Google sign-in that came back without a session ended. */
   signInResult?: string;
@@ -67,6 +69,7 @@ const SIGNED_OUT_VIEW = {
   needsResync: false,
   offlineIds: [],
   encryption: { on: false, unlocked: false },
+  botItems: [],
 } satisfies Partial<AutoSyncView>;
 
 /** The engine hook search uses to include cloud items (see LocalEngine.extraSegments). */
@@ -119,6 +122,7 @@ export class AutoSyncController {
     offlineIds: [],
     signOutPending: false,
     encryption: { on: false, unlocked: false },
+    botItems: [],
   };
   private listeners = new Set<() => void>();
   private engine?: SyncEngine;
@@ -678,6 +682,7 @@ export class AutoSyncController {
       needsResync: !!snapshot.needsResync,
       offlineIds,
       encryption,
+      botItems: snapshot.botItems ?? [],
       syncedCount: live.filter((m) => m.state === 'synced').length,
       cloudOnly: Object.values(snapshot.catalogue)
         .filter((item) => !mapped.has(item.globalId))

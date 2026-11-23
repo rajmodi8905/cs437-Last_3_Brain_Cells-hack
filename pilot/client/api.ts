@@ -78,7 +78,13 @@ export interface ApiClient {
     globalId: string,
     body:
       | { opId: string; epoch: number; item: ItemDescription }
-      | { opId: string; epoch: number; sealed: SealedItemFields },
+      | {
+          opId: string;
+          epoch: number;
+          sealed: SealedItemFields;
+          /** Replaces the plain item of this revision with its sealed version. */
+          reseal?: { expectedRevision: number };
+        },
   ): Promise<{ uploadId: string; chunkBytes: number }>;
   putChunk(uploadId: string, index: number, bytes: Uint8Array): Promise<void>;
   completeUpload(
@@ -112,6 +118,8 @@ export interface ApiClient {
   index(globalId: string): Promise<IndexBundle>;
   /** An encrypted item's sealed index bundle, as stored. */
   sealedIndex(globalId: string): Promise<Uint8Array>;
+  /** Items the Telegram bot saved into this account; they stay plain. */
+  botItems(): Promise<{ globalIds: string[] }>;
   /** New device: starts a pairing with the hash of its public key. */
   startPairing(body: {
     commitment: string;
@@ -247,6 +255,9 @@ export function createApiClient(options: { base: string; fetch?: typeof fetch })
       async sealedIndex(globalId) {
         const res = await request(`/items/${enc(globalId)}/index`);
         return new Uint8Array(await res.arrayBuffer());
+      },
+      async botItems() {
+        return json(await request('/bot-items'));
       },
       async startPairing(body) {
         return json(await request('/pairing', { method: 'POST' }, body));

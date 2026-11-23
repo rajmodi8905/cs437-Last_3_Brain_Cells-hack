@@ -124,6 +124,31 @@ export class MemoryPilotStore implements PilotStore {
   async deletePairing(pairingId: string) {
     this.pairings.delete(pairingId);
   }
+  async forgetPlaintext(
+    ownerKey: string,
+    globalId: string,
+    item: Change['item'],
+    keepUploadId: string,
+  ) {
+    const vault = this.vaultOf(ownerKey);
+    vault.changes = vault.changes.map((change) =>
+      change.item.globalId === globalId ? { ...change, item } : change,
+    );
+    for (const [opId, saved] of vault.responses) {
+      const body = saved.body as { item?: { globalId?: string } } | undefined;
+      if (body?.item?.globalId === globalId) vault.responses.delete(opId);
+    }
+    for (const [id, upload] of this.uploads)
+      if (
+        upload.ownerKey === ownerKey &&
+        upload.globalId === globalId &&
+        upload.result &&
+        id !== keepUploadId
+      ) {
+        this.uploads.delete(id);
+        this.received.delete(id);
+      }
+  }
   async committedBytes(ownerKey: string) {
     let bytes = 0;
     for (const item of this.vaultOf(ownerKey).items.values())

@@ -42,6 +42,8 @@ export interface SealedUpload {
   byteLength: number;
   contentSha256: string;
   sealed: SealedItemFields;
+  /** Set when the upload replaces a plain item of this revision with its sealed version. */
+  reseal?: { expectedRevision: number };
 }
 
 /**
@@ -157,6 +159,17 @@ export interface PilotStore {
   findPairing(ownerKey: string, codeHash: string): Promise<PairingRecord | undefined>;
   updatePairing(pairing: PairingRecord): Promise<void>;
   deletePairing(pairingId: string): Promise<void>;
+  /**
+   * After an item was sealed in place: rewrites its earlier change-feed entries to `item` and
+   * drops the saved operation results and finished uploads that still describe it in plain
+   * text, except the upload `keepUploadId` that sealed it.
+   */
+  forgetPlaintext(
+    ownerKey: string,
+    globalId: string,
+    item: Change['item'],
+    keepUploadId: string,
+  ): Promise<void>;
   /** Bytes held by live items and their index bundles plus reservations of unfinished uploads. */
   committedBytes(ownerKey: string): Promise<number>;
   savedResponse(ownerKey: string, opId: string): Promise<SavedResponse | undefined>;

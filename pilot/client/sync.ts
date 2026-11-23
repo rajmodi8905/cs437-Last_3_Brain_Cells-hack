@@ -40,6 +40,7 @@ import {
   wrapItemKey,
   type PairingKeys,
   type SealedItemFields,
+  type SealedMeta,
   type VaultKeys,
 } from '../contract/e2ee';
 import { ApiFailure, isAccountChanged, type ApiClient, type ChangeItem } from './api';
@@ -101,6 +102,8 @@ export interface SyncResult {
   failed: number;
   /** Index bundles this device published. */
   indexed: number;
+  /** Plain cloud items this device sealed in place after encryption was turned on. */
+  resealed?: number;
   /** Sync was paused; any work completed before the pause is recorded in the counts. */
   paused?: true;
   /** The cloud library was removed or reset; the user must start again. */
@@ -319,6 +322,8 @@ export class SyncEngine {
       if (result.locked) return result;
       await this.syncRemoteIndexes(snapshot, result);
       await this.cleanOffline(snapshot);
+      await this.planReseals(snapshot);
+      await this.saveState(snapshot);
     } catch (cause) {
       // Another account's session: stop without changing this account's state.
       if (isAccountChanged(cause)) throw cause;
@@ -525,6 +530,15 @@ export class SyncEngine {
       const localItem = local.get(mapping.localId);
       if (!localItem) continue; // A local delete is pending and will win.
       const remoteTitle = item.title ?? mapping.syncedTitle;
+      if (remoteTitle === mapping.syncedTitle && localItem.title !== remoteTitle) {
+        // The other side kept the title and changed something else (it sealed the item): this
+        // device's rename still stands, now against the new revision.
+        mapping.syncedRevision = item.revision;
+        for (const queued of snapshot.ops)
+          if (queued.kind === 'rename' && queued.globalId === item.globalId)
+            queued.expectedRevision = item.revision;
+        continue;
+      }
       if (localItem.title === mapping.syncedTitle || localItem.title === remoteTitle) {
         if (localItem.title !== remoteTitle)
           await this.library.renameItem(mapping.localId, remoteTitle);
@@ -547,6 +561,14 @@ export class SyncEngine {
       }
     }
     snapshot.cursor = page.cursor;
+    // This device's sealed items whose cloud copy has no index for its current metadata (it
+    // was sealed by another device, or its index went with the plain copy) are indexed again.
+    for (const mapping of snapshot.mappings) {
+      const entry = snapshot.catalogue[mapping.globalId];
+      if (mapping.state !== 'synced' || !entry?.sealed) continue;
+      if (entry.sealedIndex?.metaRevision !== entry.sealed.metaRevision)
+        delete mapping.publishedIndex;
+    }
   }
 
   private async send(op: PendingOp, snapshot: SyncSnapshot, result: SyncResult) {
@@ -587,88 +609,24 @@ export class SyncEngine {
           return;
         }
         // An encrypted library gets the sealed original; an upload begun in plain stays plain.
-        let payload = bytes;
-        let sealed: SealedItemFields | undefined;
-        if (op.sealed || (!op.uploadId && snapshot.e2ee)) {
-          const keys = await this.requireKeys(snapshot);
-          if (!op.sealed) {
-            const itemKey = await newItemKey();
-            op.sealed = {
-              wrappedKey: await wrapItemKey(keys, itemKey),
-              sealedMeta: await sealMeta(itemKey, pickItemDescription(local), {
-                globalId: op.globalId,
-                epoch,
-                metaRevision: 1,
-              }),
-            };
-            await this.saveState(snapshot);
-          }
-          const itemKey = await unwrapItemKey(keys, op.sealed.wrappedKey);
-          payload = await sealOriginal(itemKey, bytes, { globalId: op.globalId, epoch });
-          sealed = {
-            enc: E2EE_FORMAT,
-            ...op.sealed,
-            metaRevision: 1,
-            cipherByteLength: payload.length,
-            cipherSha256: await sha256Hex(payload),
-          };
-        }
-        let item: ChangeItem | undefined;
-        for (let attempt = 0; !item; attempt++) {
-          try {
-            if (!op.uploadId) {
-              if (this.paused) return;
-              const { kind, title, mimeType, byteLength, contentSha256, createdAt, sourceUrl } =
-                local;
-              const begun = await this.api.beginUpload(
-                op.globalId,
-                sealed
-                  ? { opId: op.opId, epoch, sealed }
-                  : {
-                      opId: op.opId,
-                      epoch,
-                      item: {
-                        kind,
-                        title,
-                        mimeType,
-                        byteLength,
-                        contentSha256,
-                        createdAt,
-                        sourceUrl,
-                      },
-                    },
-              );
-              op.uploadId = begun.uploadId;
-              op.chunkBytes = begun.chunkBytes;
-              op.sentChunks = 0;
-              await this.saveState(snapshot);
-            }
-            const size = op.chunkBytes!;
-            for (let n = op.sentChunks ?? 0; n * size < payload.length; n++) {
-              if (this.paused) return;
-              await this.api.putChunk(op.uploadId, n, payload.slice(n * size, (n + 1) * size));
-              op.sentChunks = n + 1;
-              await this.saveState(snapshot);
-            }
-            if (this.paused) return;
-            ({ item } = await this.api.completeUpload(op.uploadId, {
-              opId: op.completeOpId,
-              epoch,
-            }));
-          } catch (cause) {
-            // The server expired the unfinished upload: begin once more with new operation IDs.
-            if (attempt > 0 || !(cause instanceof ApiFailure) || cause.code !== 'NOT_FOUND')
-              throw cause;
-            Object.assign(op, {
-              uploadId: undefined,
-              chunkBytes: undefined,
-              sentChunks: 0,
-              opId: this.newId(),
-              completeOpId: this.newId(),
-            });
-            await this.saveState(snapshot);
-          }
-        }
+        const sealing =
+          op.sealed || (!op.uploadId && snapshot.e2ee)
+            ? await this.sealForUpload(op, snapshot, pickItemDescription(local), bytes)
+            : undefined;
+        const { kind, title, mimeType, byteLength, contentSha256, createdAt, sourceUrl } = local;
+        let item = await this.transfer(op, snapshot, sealing?.payload ?? bytes, () =>
+          this.api.beginUpload(
+            op.globalId,
+            sealing
+              ? { opId: op.opId, epoch, sealed: sealing.sealed }
+              : {
+                  opId: op.opId,
+                  epoch,
+                  item: { kind, title, mimeType, byteLength, contentSha256, createdAt, sourceUrl },
+                },
+          ),
+        );
+        if (!item) return;
         item = await this.opened(item, snapshot);
         snapshot.catalogue[item.globalId] = item;
         if (mapping)
@@ -723,6 +681,10 @@ export class SyncEngine {
       } else if (op.kind === 'publishIndex') {
         if (this.paused) return;
         await this.sendIndex(op, snapshot, mapping, result);
+        return;
+      } else if (op.kind === 'reseal') {
+        if (this.paused) return;
+        await this.sendReseal(op, snapshot, mapping, result);
         return;
       } else {
         if (this.paused) return;
@@ -1047,6 +1009,225 @@ export class SyncEngine {
     }
     for (const entry of await this.remoteIndex.all())
       if (!wanted.has(entry.globalId)) await this.remoteIndex.delete(entry.globalId);
+  }
+
+  /**
+   * Seals `bytes` for an upload. The item key (wrapped) and sealed metadata are kept on `op`
+   * before anything is sent, so a resumed upload seals exactly the same ciphertext again.
+   */
+  private async sealForUpload(
+    op: { globalId: string; sealed?: { wrappedKey: string; sealedMeta: string } },
+    snapshot: SyncSnapshot,
+    meta: SealedMeta,
+    bytes: Uint8Array,
+  ) {
+    const keys = await this.requireKeys(snapshot);
+    const epoch = snapshot.epoch!;
+    if (!op.sealed) {
+      const itemKey = await newItemKey();
+      op.sealed = {
+        wrappedKey: await wrapItemKey(keys, itemKey),
+        sealedMeta: await sealMeta(itemKey, meta, {
+          globalId: op.globalId,
+          epoch,
+          metaRevision: 1,
+        }),
+      };
+      await this.saveState(snapshot);
+    }
+    const itemKey = await unwrapItemKey(keys, op.sealed.wrappedKey);
+    const payload = await sealOriginal(itemKey, bytes, { globalId: op.globalId, epoch });
+    const sealed: SealedItemFields = {
+      enc: E2EE_FORMAT,
+      ...op.sealed,
+      metaRevision: 1,
+      cipherByteLength: payload.length,
+      cipherSha256: await sha256Hex(payload),
+    };
+    return { payload, sealed };
+  }
+
+  /**
+   * Sends `payload` through an upload: begins it once, sends the chunks the server has not
+   * acknowledged, and completes it. Returns undefined when sync was paused on the way. When the
+   * server expired the unfinished upload, it begins once more under new operation IDs.
+   */
+  private async transfer(
+    op: {
+      opId: string;
+      completeOpId: string;
+      uploadId?: string;
+      chunkBytes?: number;
+      sentChunks?: number;
+    },
+    snapshot: SyncSnapshot,
+    payload: Uint8Array,
+    begin: () => Promise<{ uploadId: string; chunkBytes: number }>,
+  ): Promise<ChangeItem | undefined> {
+    const epoch = snapshot.epoch!;
+    for (let attempt = 0; ; attempt++) {
+      try {
+        if (!op.uploadId) {
+          if (this.paused) return undefined;
+          const begun = await begin();
+          op.uploadId = begun.uploadId;
+          op.chunkBytes = begun.chunkBytes;
+          op.sentChunks = 0;
+          await this.saveState(snapshot);
+        }
+        const size = op.chunkBytes!;
+        for (let n = op.sentChunks ?? 0; n * size < payload.length; n++) {
+          if (this.paused) return undefined;
+          await this.api.putChunk(op.uploadId, n, payload.slice(n * size, (n + 1) * size));
+          op.sentChunks = n + 1;
+          await this.saveState(snapshot);
+        }
+        if (this.paused) return undefined;
+        return (await this.api.completeUpload(op.uploadId, { opId: op.completeOpId, epoch })).item;
+      } catch (cause) {
+        if (attempt > 0 || !(cause instanceof ApiFailure) || cause.code !== 'NOT_FOUND')
+          throw cause;
+        Object.assign(op, {
+          uploadId: undefined,
+          chunkBytes: undefined,
+          sentChunks: 0,
+          opId: this.newId(),
+          completeOpId: this.newId(),
+        });
+        await this.saveState(snapshot);
+      }
+    }
+  }
+
+  /**
+   * After a pull in an encrypted library: queues a reseal for each plain cloud item that is not
+   * a bot item and has no other work queued. The bot's list is asked for only while some plain
+   * item is not yet known to be one.
+   */
+  private async planReseals(snapshot: SyncSnapshot) {
+    if (!snapshot.e2ee || !(await this.vaultKeys(snapshot))) return;
+    const busy = new Set(snapshot.ops.map((op) => op.globalId));
+    const candidates = () => {
+      const bot = new Set(snapshot.botItems ?? []);
+      return Object.values(snapshot.catalogue).filter(
+        (item) =>
+          !item.deleted &&
+          !item.sealed &&
+          !bot.has(item.globalId) &&
+          !busy.has(item.globalId) &&
+          snapshot.resealSkipped?.[item.globalId] !== item.revision,
+      );
+    };
+    if (!candidates().length) return;
+    snapshot.botItems = (await this.api.botItems()).globalIds;
+    for (const item of candidates()) {
+      const mapping = snapshot.mappings.find((m) => m.globalId === item.globalId);
+      // Only a settled item: a pending rename or conflict here is sorted out first.
+      if (mapping && mapping.state !== 'synced') continue;
+      snapshot.ops.push({
+        kind: 'reseal',
+        opId: this.newId(),
+        completeOpId: this.newId(),
+        globalId: item.globalId,
+        localId: mapping?.localId,
+        expectedRevision: item.revision,
+      });
+    }
+  }
+
+  /**
+   * Seals a plain cloud item in place: from this device's copy when it has the same original,
+   * otherwise downloaded and checked. An item only another device had keeps the index this
+   * device downloaded for it, sealed; this device's own items publish theirs again sealed.
+   */
+  private async sendReseal(
+    op: Extract<PendingOp, { kind: 'reseal' }>,
+    snapshot: SyncSnapshot,
+    mapping: Mapping | undefined,
+    result: SyncResult,
+  ) {
+    const epoch = snapshot.epoch!;
+    const entry = snapshot.catalogue[op.globalId];
+    if (!entry || entry.deleted || entry.sealed || entry.revision !== op.expectedRevision) {
+      this.removeOp(snapshot, op);
+      return;
+    }
+    try {
+      let bytes: Uint8Array | undefined;
+      if (op.localId) {
+        const local = (await this.library.listItems()).find((item) => item.id === op.localId);
+        if (local?.contentSha256 === entry.contentSha256)
+          bytes = await this.library.getOriginal(op.localId);
+      }
+      bytes ??= await this.download(op.globalId);
+      const sealing = await this.sealForUpload(op, snapshot, pickItemDescription(entry), bytes);
+      const done = await this.transfer(op, snapshot, sealing.payload, () =>
+        this.api.beginUpload(op.globalId, {
+          opId: op.opId,
+          epoch,
+          sealed: sealing.sealed,
+          reseal: { expectedRevision: op.expectedRevision },
+        }),
+      );
+      if (!done) return;
+      let item = await this.opened(done, snapshot);
+      if (mapping) {
+        mapping.syncedRevision = item.revision;
+        // Its plain index went with the plain item: this device publishes it again, sealed.
+        delete mapping.publishedIndex;
+      } else {
+        const kept = await this.remoteIndex?.get(op.globalId);
+        if (kept?.segments.length && entry.index?.indexVersion === this.indexVersion) {
+          op.indexOpId ??= this.newId();
+          await this.saveState(snapshot);
+          const itemKey = await unwrapItemKey(
+            await this.requireKeys(snapshot),
+            item.sealed!.wrappedKey,
+          );
+          const metaRevision = item.sealed!.metaRevision;
+          const bundle: IndexBundle = {
+            globalId: op.globalId,
+            contentSha256: entry.contentSha256!,
+            searchMetadataDigest: await searchMetadataDigest({ title: entry.title ?? '' }),
+            indexVersion: this.indexVersion,
+            dimension: 768,
+            segments: kept.segments,
+          };
+          const sealedIndex = await sealIndexBundle(itemKey, bundle, {
+            globalId: op.globalId,
+            epoch,
+            metaRevision,
+          });
+          item = await this.opened(
+            (
+              await this.api.publishIndex(op.globalId, {
+                opId: op.indexOpId,
+                epoch,
+                sealedIndex: toBase64url(sealedIndex),
+                metaRevision,
+              })
+            ).item,
+            snapshot,
+          );
+        }
+      }
+      snapshot.catalogue[op.globalId] = item;
+      result.resealed = (result.resealed ?? 0) + 1;
+      this.removeOp(snapshot, op);
+    } catch (cause) {
+      if (!(cause instanceof ApiFailure)) throw cause;
+      if (cause.code === 'VAULT_RESET' || cause.code === 'ACCOUNT_CHANGED' || isTransient(cause))
+        throw cause;
+      this.removeOp(snapshot, op);
+      if (cause.code === 'QUOTA_EXCEEDED') {
+        result.quotaExceeded = true;
+        return;
+      }
+      // Changed or deleted meanwhile: the next pull shows what it is now, and it is planned again.
+      if (['REVISION_CONFLICT', 'ITEM_DELETED', 'NOT_FOUND'].includes(cause.code)) return;
+      (snapshot.resealSkipped ??= {})[op.globalId] = op.expectedRevision;
+      result.failed++;
+    }
   }
 
   /**

@@ -42,6 +42,9 @@ export function CloudResultRow({
           {result.excerpt && <span className="result-excerpt">{result.excerpt}</span>}
           <span className="item-meta">
             <strong className="loc">{locationLabel(result)}</strong> · In your cloud library
+            {view.encryption.on && view.botItems.includes(globalId)
+              ? ' · Sent through Telegram, readable by the pilot service'
+              : ''}
           </span>
         </span>
         <div className="cloud-result-actions">

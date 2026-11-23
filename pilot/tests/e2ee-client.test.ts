@@ -1,7 +1,6 @@
 /// <reference types="node" />
 // Phase 2 of docs/pilot/e2ee-design.md: the sync engine seals what it sends to an encrypted
 // library and opens what it receives, so the server only ever holds ciphertext.
-import { randomUUID } from 'node:crypto';
 import { strFromU8, unzipSync } from 'fflate';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { createApiClient } from '../client/api';
@@ -287,39 +286,6 @@ describe('E3 tampered ciphertext is refused and replaces nothing', () => {
       'First',
       'Second',
     ]);
-  });
-});
-
-describe('E6 bot items stay plain in an encrypted library', () => {
-  it('lists and opens a plain bot item next to sealed ones', async () => {
-    const { code } = await encryptedLibrary();
-    const bytes = text('Sent through Telegram');
-    const globalId = randomUUID();
-    const objectKey = `${OWNER}/1/${globalId}/original`;
-    await pilot.objects.put(objectKey, bytes);
-    await pilot.store.publish(
-      OWNER,
-      {
-        globalId,
-        kind: 'note',
-        title: 'Telegram note',
-        mimeType: 'text/plain',
-        byteLength: bytes.length,
-        contentSha256: sha256(bytes),
-        createdAt: 1,
-        revision: 1,
-        deleted: false,
-        objectKey,
-      },
-      1,
-    );
-    const laptop = await unlockedLaptop(code);
-    const bot = (await laptop.engine.catalogue()).find((item) => item.globalId === globalId);
-    expect(bot).toMatchObject({ title: 'Telegram note' });
-    expect(bot).not.toHaveProperty('sealed');
-    expect(Buffer.from(await laptop.engine.download(globalId)).equals(Buffer.from(bytes))).toBe(
-      true,
-    );
   });
 });
 

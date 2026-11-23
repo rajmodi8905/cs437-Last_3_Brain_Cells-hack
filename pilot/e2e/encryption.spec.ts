@@ -143,3 +143,33 @@ test('pairing passes the key to a new device once both show the same number', as
     'Mess menu',
   );
 });
+
+test('turning encryption on seals what is already in the cloud library', async ({ browser }) => {
+  const email = account();
+  const phone = await openApp(browser);
+  const bytes = pdf('Hostel rules for guests and visitors');
+  await save(phone, 'Hostel rules', bytes);
+  const phoneSync = await syncAs(phone, email);
+  await expect(phoneSync).toContainText('1 item synced');
+
+  const reseals: string[] = [];
+  phone.on('request', (request) => {
+    if (/\/items\/[^/]+\/upload$/.test(request.url())) reseals.push(request.postData() ?? '');
+  });
+  const code = await turnOn(phoneSync);
+  await expect.poll(() => reseals.length).toBe(1);
+  expect(reseals[0]).toContain('"reseal"');
+  expect(reseals[0]).not.toContain('Hostel rules');
+
+  const laptop = await openApp(browser);
+  const laptopSync = await syncAs(laptop, email);
+  await laptopSync.getByLabel('Recovery code').fill(code);
+  await laptopSync.getByRole('button', { name: 'Unlock' }).click();
+  const cloud = laptopSync.getByRole('list', { name: 'In your cloud library' });
+  await expect(cloud).toContainText('Hostel rules');
+  const [download] = await Promise.all([
+    laptop.waitForEvent('download'),
+    cloud.getByRole('button', { name: 'Download Hostel rules' }).click(),
+  ]);
+  expect(sha(await readFile((await download.path())!))).toBe(sha(bytes));
+});
