@@ -100,9 +100,9 @@ A student can turn on end-to-end encryption for their cloud library in Settings.
 
 ### E1 — No plaintext on the server
 
-**Statement:** For a sealed item the server holds only ciphertext and public fields: no original, title, source URL, extracted text, transcript or vector reaches it, in any database row, change-feed entry, saved result, stored object or backup. Devices seal before upload with a per-item key wrapped by the vault key, and list and open sealed items like plain ones.
+**Statement:** For a sealed item the server holds only ciphertext and public fields: no original, title, source URL, extracted text, transcript or vector reaches it, in any database row, change-feed entry, saved result, stored object or backup. Devices seal before upload with a per-item key wrapped by the vault key, and list and open sealed items like plain ones. A library can be encrypted while it is included: encryption is turned on first, so its first upload is already sealed, and the library is not included if that fails.
 
-**Test:** Items whose content, title and index text hold a unique marker are synced from an encrypted library; the marker is in no item row, change, request body or stored object (`pilot/tests/e2ee-client.test.ts`, `e2ee-server.test.ts`), and on PostgreSQL and Azure Blob in no exported row and no object (`e2ee-durable.test.ts`). In a browser the upload request carries sealed fields and no title (`pilot/e2e/encryption.spec.ts`).
+**Test:** Items whose content, title and index text hold a unique marker are synced from an encrypted library; the marker is in no item row, change, request body or stored object (`pilot/tests/e2ee-client.test.ts`, `e2ee-server.test.ts`), and on PostgreSQL and Azure Blob in no exported row and no object (`e2ee-durable.test.ts`). Encrypting while including sends nothing until the recovery code is confirmed and uploads each item sealed from the start, never as a reseal (`e2ee-first-upload.test.ts`). In a browser the upload request carries sealed fields and no title (`pilot/e2e/encryption.spec.ts`).
 
 ### E2 — Another device needs the key
 

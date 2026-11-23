@@ -5,7 +5,7 @@ import { plainMessage } from '../../src/app/plainError';
 import { enterViewer } from '../../src/app/viewerHistory';
 import { bytes } from '../../src/ui/hooks';
 import { getAutoSync, syncSummary } from '../client/autosync';
-import { EncryptionPanel } from './EncryptionPanel';
+import { EncryptionPanel, IncludeLibrary } from './EncryptionPanel';
 
 const kindNames: Record<string, string> = {
   image: 'Image',
@@ -272,16 +272,11 @@ export function AutoSyncSection({
                 cloud content. Read the <a href="#/privacy">Privacy Policy</a> and{' '}
                 <a href="#/terms">Terms and Conditions</a> before including your library.
               </p>
-              <button
-                className="button primary"
-                disabled={busy}
-                onClick={act(async () => {
-                  if (await controller.include())
-                    notify('Your library is included. Changes on this device now sync.');
-                })}
-              >
-                Include this device&apos;s library
-              </button>
+              <IncludeLibrary
+                controller={controller}
+                encrypted={view.encryption.on}
+                notify={notify}
+              />
             </>
           ) : view.paused ? (
             <p role="status">

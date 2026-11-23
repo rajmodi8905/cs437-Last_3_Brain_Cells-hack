@@ -160,6 +160,7 @@ This replaces the pairing calls first built in phase 1, which had the new device
 
 The Auto-sync section in Settings has an **End-to-end encryption** panel once the library is included.
 
+- **Before including.** A box chooses encryption from the start; see "Turning it on for an existing library".
 - **Off.** It says the pilot service can read cloud copies. **Turn on end-to-end encryption** shows the recovery code first (it is kept on the device, nothing is sent yet). The student types its last group to confirm they saved it, and only then is encryption turned on.
 - **On, with the key.** **Show recovery code** shows it again. **Add a device** takes the pairing code from the new device, shows the check number, and sends the key after **The numbers match**.
 - **On, without the key.** Auto-sync says it is waiting for the library's key. The student types the recovery code and chooses **Unlock**, or chooses **Pair with another device**, which shows a pairing code and then the check number.
@@ -182,7 +183,7 @@ The Auto-sync section in Settings has an **End-to-end encryption** panel once th
 5. A rename made on one device while another sealed the item is kept: the pull sees a new revision with the same title, so the queued rename is sent against the new revision instead of becoming a conflict.
 6. Two things outlive the switch, and the setup screen and the Privacy Policy say so: Azure Blob soft delete and versioning keep the deleted plain objects recoverable for up to 28 days (14 days as a previous version, then 14 days soft-deleted), and the daily database backups (14 kept) hold the old metadata until they age out. Purging Blob versions early is not possible while soft delete is on, so the student is told instead.
 
-New libraries that turn encryption on before including anything never upload plaintext at all.
+A library can also start out encrypted. The include step in Settings has a box, **Encrypt end to end before anything is uploaded**. With it ticked, **Include this device's library** shows the recovery code first, and **Include and encrypt** turns encryption on with the session's epoch and only then includes the library, so its first upload is already sealed and nothing of it is ever uploaded readable. If encryption cannot be turned on (another device already did), the library is not included. A device whose cloud library is already encrypted is told so before it includes anything (`pilot/tests/e2ee-first-upload.test.ts`, and in a browser `pilot/e2e/encryption.spec.ts`).
 
 ## Spec statements and tests
 

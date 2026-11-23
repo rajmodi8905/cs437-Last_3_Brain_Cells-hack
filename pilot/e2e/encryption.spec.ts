@@ -173,3 +173,49 @@ test('turning encryption on seals what is already in the cloud library', async (
   ]);
   expect(sha(await readFile((await download.path())!))).toBe(sha(bytes));
 });
+
+/** Signs in without including this device's library; returns the Auto-sync section. */
+async function signInOnly(page: Page, email: string) {
+  await page.goto('/#/settings');
+  const sync = page.getByRole('region', { name: 'Auto-sync' });
+  await sync.getByRole('button', { name: 'Set up Auto-sync' }).click();
+  await sync.getByLabel('IITGN email').fill(email);
+  await sync.getByRole('button', { name: 'Sign in (development)' }).click();
+  await expect(sync).toContainText(`Signed in as ${email}`);
+  return sync;
+}
+
+test('a library can be encrypted before its first upload', async ({ browser }) => {
+  const email = account();
+  const phone = await openApp(browser);
+  await save(phone, 'Exam timetable', pdf('Midsem exams start on the third Monday'));
+  const uploads: string[] = [];
+  phone.on('request', (request) => {
+    if (/\/items\/[^/]+\/upload$/.test(request.url())) uploads.push(request.postData() ?? '');
+  });
+  const sync = await signInOnly(phone, email);
+  await sync
+    .getByRole('checkbox', { name: /Encrypt end to end before anything is uploaded/ })
+    .check();
+  await sync.getByRole('button', { name: "Include this device's library" }).click();
+  const code = (await sync.locator('.recovery-code').innerText()).trim();
+  expect(code).toMatch(/^([0-9A-HJKMNP-TV-Z]{4}-){6}[0-9A-HJKMNP-TV-Z]{3}$/);
+  expect(await wcag(phone)).toEqual([]);
+  // Nothing is included or uploaded while the code is on screen.
+  await phone.waitForTimeout(1000);
+  expect(uploads).toEqual([]);
+  await sync.getByLabel('Type the last group of the code').fill(code.split('-').at(-1)!);
+  await sync.getByRole('button', { name: 'Include and encrypt' }).click();
+  await expect(sync).toContainText('1 item synced');
+  await expect(sync).toContainText('On. Originals, titles and search data are encrypted');
+  expect(uploads).toHaveLength(1);
+  expect(uploads[0]).toContain('"sealed"');
+  expect(uploads[0]).not.toContain('"reseal"');
+  expect(uploads[0]).not.toContain('Exam timetable');
+
+  // Another device is told before it includes anything.
+  const laptop = await openApp(browser);
+  const laptopSync = await signInOnly(laptop, email);
+  await expect(laptopSync).toContainText('Your cloud library is end-to-end encrypted');
+  await expect(laptopSync.getByRole('checkbox', { name: /Encrypt end to end/ })).toHaveCount(0);
+});

@@ -377,6 +377,28 @@ export class AutoSyncController {
   }
 
   /**
+   * Includes this device's library with end-to-end encryption on from the start. Encryption is
+   * turned on first and the library is included only once that worked, so its first upload is
+   * already sealed and nothing of it is ever uploaded readable. Resolves true once included.
+   */
+  async includeEncrypted(): Promise<boolean> {
+    const engine = this.engine;
+    const session = this.session;
+    if (!engine || !session) return false;
+    try {
+      await this.onAccount(() => engine.turnOnEncryption(session.vault.epoch));
+    } catch (cause) {
+      if (cause instanceof ApiFailure && cause.code === 'INVALID_INPUT')
+        throw new Error(
+          "Your cloud library is already end-to-end encrypted. Include this device's library, then enter its recovery code.",
+          { cause },
+        );
+      throw cause;
+    }
+    return this.include();
+  }
+
+  /**
    * One sync pass at a time; later calls wait for the current one. Resolves with the pass's
    * result, or undefined when it did not run or failed (the view then explains why).
    */
@@ -518,10 +540,11 @@ export class AutoSyncController {
     return this.engine;
   }
 
-  /** The recovery code to write down, before encryption is turned on. */
+  /** The recovery code to write down, before encryption is turned on (also before including). */
   prepareEncryption() {
     const engine = this.requireEngine();
-    return this.onAccount(() => engine.prepareEncryption());
+    const epoch = this.session?.vault.epoch;
+    return this.onAccount(() => engine.prepareEncryption(epoch));
   }
 
   async turnOnEncryption() {
@@ -673,7 +696,9 @@ export class AutoSyncController {
 
   private async refresh(snapshot: SyncSnapshot) {
     const offlineIds = (await this.engine?.offlineIds()) ?? [];
-    const encryption = (await this.engine?.encryption()) ?? { on: false, unlocked: false };
+    let encryption = (await this.engine?.encryption()) ?? { on: false, unlocked: false };
+    // Before this device's first pass, the session says whether the library is encrypted.
+    if (!encryption.on && this.session?.e2ee) encryption = { on: true, unlocked: false };
     const live = snapshot.mappings.filter((m) => m.state !== 'deleted');
     const mapped = new Set(live.map((m) => m.globalId));
     this.set({

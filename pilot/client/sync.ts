@@ -1345,28 +1345,38 @@ export class SyncEngine {
    * lost reply never leaves the library encrypted under a key no device has; a retry sends the
    * same settings again.
    */
-  async turnOnEncryption(): Promise<string> {
-    if (!this.vaultSecret) throw new Error('This device cannot keep an encryption key.');
-    const snapshot = await this.state.load();
-    const epoch = snapshot.epoch;
-    if (epoch === undefined) throw new Error('Sign in and include a library first.');
-    if (snapshot.e2ee) throw new Error('End-to-end encryption is already on for this library.');
-    let stored = await this.vaultSecret.get();
-    if (!stored || stored.epoch !== epoch) {
-      stored = { epoch, vaultSalt: toBase64url(newVaultSalt()), secret: newRecoverySecret() };
-      await this.vaultSecret.put(stored);
-    }
+  async turnOnEncryption(epoch?: number): Promise<string> {
+    const { stored, epoch: at } = await this.secretToTurnOn(epoch);
     const keys = await deriveVaultKeys(stored.secret, fromBase64url(stored.vaultSalt));
-    const settings = { vaultSalt: stored.vaultSalt, keyCheck: await keyCheck(keys, epoch) };
+    const settings = { vaultSalt: stored.vaultSalt, keyCheck: await keyCheck(keys, at) };
     try {
-      await this.api.setVaultE2ee({ opId: this.newId(), epoch, ...settings });
+      await this.api.setVaultE2ee({ opId: this.newId(), epoch: at, ...settings });
     } catch (cause) {
       // Refused: the library has other settings (or none can be set), so this secret is unused.
-      if (cause instanceof ApiFailure && !isTransient(cause)) await this.vaultSecret.delete();
+      if (cause instanceof ApiFailure && !isTransient(cause)) await this.vaultSecret!.delete();
       throw cause;
     }
-    await this.state.save({ ...(await this.state.load()), e2ee: settings });
+    const latest = await this.state.load();
+    await this.state.save({ ...latest, epoch: latest.epoch ?? at, e2ee: settings });
     return encodeRecoveryCode(stored.secret);
+  }
+
+  /**
+   * The recovery secret to turn encryption on with, made once per epoch and kept until it is
+   * used or refused. `epoch` is the session's, for a library that is not included yet.
+   */
+  private async secretToTurnOn(epoch?: number) {
+    if (!this.vaultSecret) throw new Error('This device cannot keep an encryption key.');
+    const snapshot = await this.state.load();
+    const at = snapshot.epoch ?? epoch;
+    if (at === undefined) throw new Error('Sign in first.');
+    if (snapshot.e2ee) throw new Error('End-to-end encryption is already on for this library.');
+    let stored = await this.vaultSecret.get();
+    if (!stored || stored.epoch !== at) {
+      stored = { epoch: at, vaultSalt: toBase64url(newVaultSalt()), secret: newRecoverySecret() };
+      await this.vaultSecret.put(stored);
+    }
+    return { stored, epoch: at };
   }
 
   /** Keeps the recovery secret typed on this device once it proves to be this library's. */
@@ -1389,20 +1399,12 @@ export class SyncEngine {
 
   /**
    * The recovery code for a library about to be encrypted, so the student can write it down
-   * before anything is sent. The same code is then used by `turnOnEncryption`.
+   * before anything is sent. The same code is then used by `turnOnEncryption`. Before the
+   * library is included, pass the session's epoch: encryption can then be turned on before
+   * the first upload, so nothing is ever uploaded readable.
    */
-  async prepareEncryption(): Promise<string> {
-    if (!this.vaultSecret) throw new Error('This device cannot keep an encryption key.');
-    const snapshot = await this.state.load();
-    const epoch = snapshot.epoch;
-    if (epoch === undefined) throw new Error('Sign in and include a library first.');
-    if (snapshot.e2ee) throw new Error('End-to-end encryption is already on for this library.');
-    let stored = await this.vaultSecret.get();
-    if (!stored || stored.epoch !== epoch) {
-      stored = { epoch, vaultSalt: toBase64url(newVaultSalt()), secret: newRecoverySecret() };
-      await this.vaultSecret.put(stored);
-    }
-    return encodeRecoveryCode(stored.secret);
+  async prepareEncryption(epoch?: number): Promise<string> {
+    return encodeRecoveryCode((await this.secretToTurnOn(epoch)).stored.secret);
   }
 
   /** New device: starts pairing and returns the code to type on a device that has the key. */

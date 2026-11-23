@@ -369,3 +369,134 @@ export function EncryptionPanel({
     </div>
   );
 }
+
+/**
+ * Settings' include step. Ticking end-to-end encryption shows the recovery code first, and the
+ * library is included only after encryption is on, so nothing of it is uploaded readable. When
+ * the cloud library is already encrypted, it says what comes after including.
+ */
+export function IncludeLibrary({
+  controller,
+  encrypted,
+  notify,
+}: {
+  controller: Controller;
+  /** The cloud library is already end-to-end encrypted (by another device). */
+  encrypted: boolean;
+  notify: (message: string) => void;
+}) {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  const [encrypt, setEncrypt] = useState(false);
+  const [setupCode, setSetupCode] = useState<string>();
+  const [typedGroup, setTypedGroup] = useState('');
+  const act = (work: () => Promise<unknown>) => async () => {
+    setBusy(true);
+    setError('');
+    try {
+      await work();
+    } catch (cause) {
+      setError(plainMessage(cause));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  if (setupCode)
+    return (
+      <form
+        onSubmit={(e) => {
+          e.preventDefault();
+          void act(async () => {
+            if (await controller.includeEncrypted())
+              notify(
+                'Your library is included and end-to-end encrypted. Changes on this device now sync.',
+              );
+          })();
+        }}
+      >
+        <p>
+          This is your recovery code. Write it down and keep it somewhere safe. A new device needs
+          it, or a device that already has the key, to open your cloud library. If you lose the code
+          and every device, nobody can recover your cloud library, including the pilot team.
+        </p>
+        <p>
+          Recovery code: <strong className="recovery-code">{setupCode}</strong>
+        </p>
+        <label>
+          Type the last group of the code to confirm you saved it
+          <input
+            autoComplete="off"
+            autoCapitalize="characters"
+            spellCheck={false}
+            value={typedGroup}
+            onChange={(e) => setTypedGroup(e.target.value)}
+          />
+        </label>
+        <div className="button-row">
+          <button
+            className="button primary"
+            disabled={busy || typedGroup.trim().toUpperCase() !== lastGroup(setupCode)}
+          >
+            Include and encrypt
+          </button>
+          <button
+            type="button"
+            className="button secondary"
+            disabled={busy}
+            onClick={() => {
+              setSetupCode(undefined);
+              setTypedGroup('');
+            }}
+          >
+            Cancel
+          </button>
+        </div>
+        {error && (
+          <p className="notice error" role="alert">
+            {error}
+          </p>
+        )}
+      </form>
+    );
+
+  return (
+    <>
+      {encrypted ? (
+        <p className="notice" role="status">
+          Your cloud library is end-to-end encrypted. After you include this device&apos;s library,
+          enter its recovery code or pair with a device that has the key. Nothing uploads from this
+          device until then.
+        </p>
+      ) : (
+        <label className="sync-signout-choice">
+          <input type="checkbox" checked={encrypt} onChange={(e) => setEncrypt(e.target.checked)} />
+          <span>
+            Encrypt end to end before anything is uploaded. Your devices encrypt originals, titles
+            and search data, and the pilot service cannot read them. You get a recovery code to
+            keep.
+          </span>
+        </label>
+      )}
+      <button
+        className="button primary"
+        disabled={busy}
+        onClick={act(async () => {
+          if (encrypt && !encrypted) {
+            setSetupCode(await controller.prepareEncryption());
+            return;
+          }
+          if (await controller.include())
+            notify('Your library is included. Changes on this device now sync.');
+        })}
+      >
+        Include this device&apos;s library
+      </button>
+      {error && (
+        <p className="notice error" role="alert">
+          {error}
+        </p>
+      )}
+    </>
+  );
+}
