@@ -5,6 +5,7 @@ import { plainMessage } from '../../src/app/plainError';
 import { enterViewer } from '../../src/app/viewerHistory';
 import { bytes } from '../../src/ui/hooks';
 import { getAutoSync, syncSummary } from '../client/autosync';
+import { EncryptionPanel } from './EncryptionPanel';
 
 const kindNames: Record<string, string> = {
   image: 'Image',
@@ -286,6 +287,8 @@ export function AutoSyncSection({
             <p role="status">
               Sync is paused on this device. Nothing is sent or received until you resume.
             </p>
+          ) : view.encryption.on && !view.encryption.unlocked ? (
+            <p role="status">Auto-sync is waiting for your library&apos;s key on this device.</p>
           ) : (
             <p role="status">
               Auto-sync is on. {view.syncedCount} item{view.syncedCount === 1 ? '' : 's'} synced
@@ -296,6 +299,9 @@ export function AutoSyncSection({
             <p className="notice error">
               Sync is paused: this account is linked to a different library on this device.
             </p>
+          )}
+          {view.included && !view.needsResync && (
+            <EncryptionPanel controller={controller} encryption={view.encryption} notify={notify} />
           )}
           {view.conflicts.map((conflict) => (
             <p className="notice" key={`${conflict.title}-${conflict.remoteTitle}`}>

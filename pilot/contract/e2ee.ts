@@ -568,3 +568,102 @@ export function normalizePairingCode(text: unknown): string | undefined {
     ? code
     : undefined;
 }
+
+// ---- pairing (docs/pilot/e2ee-design.md, "Adding a device") ----
+//
+// Commit, then reveal: the new device publishes only a hash of its public key, the old device
+// then shows its key, and only after that does the new device reveal its own. A server that
+// relays the keys cannot choose its substitutes after seeing both, so it cannot search for
+// keys that make the two devices show the same check number.
+
+const PAIRING_COMMITMENT_BYTES = 32;
+
+export const validPairingCommitment = (value: unknown): value is string =>
+  isBase64urlOf(value, PAIRING_COMMITMENT_BYTES);
+
+/** One device's ephemeral ECDH P-256 pair, for one pairing; the private key never leaves. */
+export interface PairingKeys {
+  privateKey: CryptoKey;
+  /** The uncompressed public key as base64url. */
+  publicKey: string;
+}
+
+/** Both public keys and the pairing they belong to; the secret is bound to all three. */
+export interface PairingContext {
+  pairingId: string;
+  newPublicKey: string;
+  oldPublicKey: string;
+}
+
+export async function newPairingKeys(): Promise<PairingKeys> {
+  const pair = await subtle().generateKey({ name: 'ECDH', namedCurve: 'P-256' }, false, [
+    'deriveBits',
+  ]);
+  const raw = new Uint8Array(await subtle().exportKey('raw', pair.publicKey));
+  return { privateKey: pair.privateKey, publicKey: toBase64url(raw) };
+}
+
+/** What the new device publishes first: a hash that fixes its public key. */
+export async function pairingCommitment(publicKey: string): Promise<string> {
+  const data = utf8(`${E2EE_FORMAT}|pairing-commit|${publicKey}`);
+  return toBase64url(new Uint8Array(await subtle().digest('SHA-256', data)));
+}
+
+/** The six-digit number both devices show; it changes if either public key was swapped. */
+export async function pairingCheckNumber(newPublicKey: string, oldPublicKey: string) {
+  const data = utf8(`${E2EE_FORMAT}|pairing-check|${newPublicKey}|${oldPublicKey}`);
+  const digest = new DataView(await subtle().digest('SHA-256', data));
+  return String(digest.getUint32(0) % 1_000_000).padStart(6, '0');
+}
+
+const pairingAad = (ctx: PairingContext) =>
+  utf8(`${E2EE_FORMAT}|pairing|${ctx.pairingId}|${ctx.newPublicKey}|${ctx.oldPublicKey}`);
+
+async function pairingKey(own: PairingKeys, peerPublicKey: string, ctx: PairingContext) {
+  let peer: CryptoKey;
+  try {
+    peer = await subtle().importKey(
+      'raw',
+      fromBase64url(peerPublicKey),
+      { name: 'ECDH', namedCurve: 'P-256' },
+      false,
+      [],
+    );
+  } catch {
+    throw new E2eeError('INVALID_FORMAT', 'That is not a P-256 public key.');
+  }
+  const shared = await subtle().deriveBits({ name: 'ECDH', public: peer }, own.privateKey, 256);
+  const ikm = await subtle().importKey('raw', shared, 'HKDF', false, ['deriveKey']);
+  return subtle().deriveKey(
+    { name: 'HKDF', hash: 'SHA-256', salt: utf8(ctx.pairingId), info: pairingAad(ctx) },
+    ikm,
+    { name: 'AES-GCM', length: 256 },
+    false,
+    ['encrypt', 'decrypt'],
+  );
+}
+
+/** On the device that has the library: the recovery secret sealed for the new device. */
+export async function sealPairingSecret(
+  own: PairingKeys,
+  ctx: PairingContext,
+  secret: Uint8Array,
+): Promise<string> {
+  if (secret.length !== RECOVERY_SECRET_BYTES)
+    throw new E2eeError('INVALID_FORMAT', 'A recovery secret is 16 bytes.');
+  const key = await pairingKey(own, ctx.newPublicKey, ctx);
+  return toBase64url(await sealBlob(key, secret, pairingAad(ctx)));
+}
+
+/** On the new device: the recovery secret, if it was sealed for this pairing and key. */
+export async function openPairingSecret(
+  own: PairingKeys,
+  ctx: PairingContext,
+  sealed: string,
+): Promise<Uint8Array<ArrayBuffer>> {
+  const key = await pairingKey(own, ctx.oldPublicKey, ctx);
+  const secret = await openBlob(key, fromBase64url(sealed), pairingAad(ctx));
+  if (secret.length !== RECOVERY_SECRET_BYTES)
+    throw new E2eeError('INVALID_FORMAT', 'A recovery secret is 16 bytes.');
+  return secret;
+}

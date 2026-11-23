@@ -1,6 +1,6 @@
 # End-to-end encrypted Auto-sync: design
 
-Status: in progress, 22 November 2026. Phase 0, the envelope library, is built: `pilot/contract/e2ee.ts`, tested in `pilot/tests/e2ee.test.ts`. Phase 1, the server, is built: sealed items, vault settings and pairing in `pilot/server`, tested in `pilot/tests/e2ee-server.test.ts`. Phase 2, the sync engine, is built: it seals and opens items in `pilot/client/sync.ts`, tested in `pilot/tests/e2ee-client.test.ts`. No screen turns encryption on yet; that is phase 3. It extends the [sync protocol](protocol.md) (v1) and the [pilot spec](SPEC.md).
+Status: in progress, 23 November 2026. Phase 0, the envelope library, is built: `pilot/contract/e2ee.ts`, tested in `pilot/tests/e2ee.test.ts`. Phase 1, the server, is built: sealed items, vault settings and pairing in `pilot/server`, tested in `pilot/tests/e2ee-server.test.ts`. Phase 2, the sync engine, is built: it seals and opens items in `pilot/client/sync.ts`, tested in `pilot/tests/e2ee-client.test.ts`. Phase 3, the screens, is built: `pilot/ui/EncryptionPanel.tsx` in Settings, with pairing tested in `pilot/tests/e2ee-pairing.test.ts` and both flows in a browser in `pilot/e2e/encryption.spec.ts`. Items uploaded before encryption was turned on stay plain until phase 4. It extends the [sync protocol](protocol.md) (v1) and the [pilot spec](SPEC.md).
 
 ## Summary
 
@@ -130,23 +130,40 @@ Google sign-in still opens the session. Before a new device can read a sealed va
 
 **Recovery code.** Type the 27-character code (26 characters and a check character); the device derives the vault keys, checks `keyCheck`, then syncs.
 
-**Pairing with a device you already have.** The app cannot scan a QR code: Caddy's `Permissions-Policy: camera=()` blocks the camera, and that is worth keeping. So pairing uses a short typed code.
+**Pairing with a device you already have.** The app cannot scan a QR code: Caddy's `Permissions-Policy: camera=()` blocks the camera, and that is worth keeping. So pairing uses a short typed code and a six-digit check number.
 
-1. The new device creates an ECDH P-256 key pair and calls `POST /pairing` with its public key. The server returns a pairing ID and a short code (8 characters, valid for 10 minutes, one use), and the new device shows the code.
-2. On the old device, the student chooses **Add a device** and types the code. It fetches the new device's public key, creates its own ephemeral pair, and derives a shared key with ECDH and HKDF.
-3. Both devices show the same 6-digit check number, derived from both public keys. The student confirms they match. This stops a dishonest server from swapping in its own key.
-4. The old device encrypts `R` with the shared key and posts it with its public key. The new device decrypts it, checks `keyCheck`, and the server deletes the pairing record.
+The order matters. If one device published its public key first and the other sent its key together with the secret, a dishonest server could keep generating substitute keys until both screens showed the same six digits (about a million tries, a few seconds of work). So the new device commits first and reveals last:
 
-The server only ever sees public keys and an encrypted `R`.
+1. The new device creates an ephemeral ECDH P-256 pair and calls `POST /pairing` with only a commitment, `SHA-256("ar-e2ee-1|pairing-commit|" + publicKey)`. The server returns a pairing ID and an 8-character code, valid for 10 minutes and used once, and the new device shows the code.
+2. On the device that has the key, the student chooses **Add a device** and types the code. That device claims the pairing, receives the commitment, creates its own pair and publishes its public key.
+3. Only then does the new device reveal its public key. The old device checks it against the commitment; a different key stops the pairing.
+4. Both devices show the check number, from SHA-256 of both public keys. A server that swapped a key had to fix its substitutes before it could see the key it needed to match, so the numbers differ.
+5. The student confirms the numbers match on both devices. The old device then seals `R` with AES-256-GCM under a key from ECDH and HKDF, bound to the pairing ID and both public keys. The new device opens it, checks `keyCheck`, keeps `R`, and deletes the pairing.
 
-**Pairing API.** All four calls need a signed-in session; the three writes need encryption to be on for the vault (`INVALID_INPUT` otherwise). A pairing never crosses accounts: another account gets `404` for it.
+The server only ever sees a commitment, two public keys and an encrypted `R`. The private keys live in the page's memory, so leaving Settings ends a pairing.
 
-| Call                                                                              | Answer                                                                                                                                                        |
-| --------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `POST /pairing` with the new device's 65-byte `publicKey`                         | `{ pairingId, code, expiresAt }`; the code is 8 Crockford base32 characters, valid for 10 minutes, and the server keeps only its SHA-256                      |
-| `POST /pairing/claim` with the typed `code`                                       | `{ pairingId, publicKey }`, once; case, spaces, dashes and look-alike letters are forgiven. Each account gets 10 tries per 10 minutes, right or wrong (`429`) |
-| `PUT /pairing/{pairingId}/secret` with `publicKey` and the 44-byte `sealedSecret` | `204`, once, after a claim                                                                                                                                    |
-| `GET /pairing/{pairingId}`                                                        | `{ status: "waiting" }` or `{ status: "claimed" }`, then `{ status: "ready", publicKey, sealedSecret }` once, after which the record is gone                  |
+**Pairing API.** All calls need a signed-in session; the writes also need encryption to be on for the vault (`INVALID_INPUT` otherwise). Each step needs the one before it and happens once (`INVALID_INPUT` otherwise). A pairing never crosses accounts: another account gets `404` for it.
+
+| Call                                                                 | Answer                                                                                                                                                         |
+| -------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `POST /pairing` with the new device's 32-byte `commitment`           | `{ pairingId, code, expiresAt }`; the code is 8 Crockford base32 characters, valid for 10 minutes, and the server keeps only its SHA-256                       |
+| `POST /pairing/claim` with the typed `code`                          | `{ pairingId, commitment }`, once; case, spaces, dashes and look-alike letters are forgiven. Each account gets 10 tries per 10 minutes, right or wrong (`429`) |
+| `PUT /pairing/{pairingId}/old-key` with the old device's `publicKey` | `204`, after the claim                                                                                                                                         |
+| `PUT /pairing/{pairingId}/new-key` with the new device's `publicKey` | `204`, after the old key, and only if the key matches the commitment                                                                                           |
+| `PUT /pairing/{pairingId}/secret` with the 44-byte `sealedSecret`    | `204`, after the new key                                                                                                                                       |
+| `GET /pairing/{pairingId}`                                           | `{ claimed, oldPublicKey?, newPublicKey?, sealedSecret? }`, each field once its step is done                                                                   |
+| `DELETE /pairing/{pairingId}`                                        | `204`; the new device deletes the pairing once it has the key, and either device when it cancels                                                               |
+
+This replaces the pairing calls first built in phase 1, which had the new device publish its key first.
+
+## The screens (phase 3)
+
+The Auto-sync section in Settings has an **End-to-end encryption** panel once the library is included.
+
+- **Off.** It says the pilot service can read cloud copies. **Turn on end-to-end encryption** shows the recovery code first (it is kept on the device, nothing is sent yet). The student types its last group to confirm they saved it, and only then is encryption turned on.
+- **On, with the key.** **Show recovery code** shows it again. **Add a device** takes the pairing code from the new device, shows the check number, and sends the key after **The numbers match**.
+- **On, without the key.** Auto-sync says it is waiting for the library's key. The student types the recovery code and chooses **Unlock**, or chooses **Pair with another device**, which shows a pairing code and then the check number.
+- The panel says that items sent to the Telegram bot stay readable by the pilot service, and, until phase 4, that items already in the cloud library are not encrypted again.
 
 ## Bot items in a sealed vault
 

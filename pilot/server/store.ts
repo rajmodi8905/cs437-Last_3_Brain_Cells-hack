@@ -44,17 +44,23 @@ export interface SealedUpload {
   sealed: SealedItemFields;
 }
 
-/** A pairing request from a new device; the recovery secret it receives is sealed to it. */
+/**
+ * A pairing request from a new device (docs/pilot/e2ee-design.md, "Adding a device"). Each
+ * step fills one field, once: the new device's commitment, the claim, the old device's public
+ * key, the new device's public key, and the recovery secret sealed to it.
+ */
 export interface PairingRecord {
   pairingId: string;
   ownerKey: string;
   /** SHA-256 of the pairing code, never the code itself. */
   codeHash: string;
-  newPublicKey: string;
+  /** Hash of the new device's public key, published before either key. */
+  commitment?: string;
   /** Seconds. */
   expiresAt: number;
   claimed?: boolean;
   oldPublicKey?: string;
+  newPublicKey?: string;
   sealedSecret?: string;
 }
 

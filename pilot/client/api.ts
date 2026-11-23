@@ -49,6 +49,14 @@ export interface SessionInfo {
   e2ee?: VaultE2eeSettings;
 }
 
+/** A pairing as the server holds it: each field appears once its step is done. */
+export interface PairingState {
+  claimed: boolean;
+  oldPublicKey?: string;
+  newPublicKey?: string;
+  sealedSecret?: string;
+}
+
 export interface ApiClient {
   config(): Promise<{ signIn: 'google' | 'dev' }>;
   /** Development servers only: a token for a typed email. */
@@ -104,6 +112,19 @@ export interface ApiClient {
   index(globalId: string): Promise<IndexBundle>;
   /** An encrypted item's sealed index bundle, as stored. */
   sealedIndex(globalId: string): Promise<Uint8Array>;
+  /** New device: starts a pairing with the hash of its public key. */
+  startPairing(body: {
+    commitment: string;
+  }): Promise<{ pairingId: string; code: string; expiresAt: number }>;
+  /** Device with the key: claims the code typed from the new device's screen. */
+  claimPairing(body: { code: string }): Promise<{ pairingId: string; commitment: string }>;
+  pairingStep(
+    pairingId: string,
+    step: 'old-key' | 'new-key' | 'secret',
+    body: { publicKey: string } | { sealedSecret: string },
+  ): Promise<void>;
+  pairing(pairingId: string): Promise<PairingState>;
+  deletePairing(pairingId: string): Promise<void>;
   /** Turns end-to-end encryption on for the library, once per epoch. */
   setVaultE2ee(
     body: { opId: string; epoch: number } & VaultE2eeSettings,
@@ -226,6 +247,21 @@ export function createApiClient(options: { base: string; fetch?: typeof fetch })
       async sealedIndex(globalId) {
         const res = await request(`/items/${enc(globalId)}/index`);
         return new Uint8Array(await res.arrayBuffer());
+      },
+      async startPairing(body) {
+        return json(await request('/pairing', { method: 'POST' }, body));
+      },
+      async claimPairing(body) {
+        return json(await request('/pairing/claim', { method: 'POST' }, body));
+      },
+      async pairingStep(pairingId, step, body) {
+        await request(`/pairing/${enc(pairingId)}/${step}`, { method: 'PUT' }, body);
+      },
+      async pairing(pairingId) {
+        return json(await request(`/pairing/${enc(pairingId)}`));
+      },
+      async deletePairing(pairingId) {
+        await request(`/pairing/${enc(pairingId)}`, { method: 'DELETE' });
       },
       async setVaultE2ee(body) {
         return json(await request('/vault/e2ee', { method: 'PUT' }, body));

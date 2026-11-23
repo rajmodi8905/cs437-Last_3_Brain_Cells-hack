@@ -282,3 +282,21 @@
   min-height: 44px;
   font-size: 16px;
 }
+
+/* End-to-end encryption panel (pilot Auto-sync). */
+.encryption-panel {
+  margin: 8px 0 24px;
+}
+.recovery-code,
+.check-number {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  letter-spacing: 0.06em;
+}
+.recovery-code {
+  display: inline-block;
+  font-size: 1.1rem;
+  overflow-wrap: anywhere;
+}
+.check-number {
+  white-space: nowrap;
+}

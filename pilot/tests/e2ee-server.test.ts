@@ -13,6 +13,7 @@ import {
   newRecoverySecret,
   newVaultSalt,
   openOriginalChunk,
+  pairingCommitment,
   sealMeta,
   sealOriginal,
   toBase64url,
@@ -476,8 +477,10 @@ describe('E6 the bot never sees sealed items', () => {
   });
 });
 
-describe('E5 pairing gives a new device the encrypted recovery secret', () => {
-  const pubKey = (fill: number) => toBase64url(new Uint8Array(65).fill(fill));
+describe('E5 pairing relays a commitment, both keys and the sealed secret, in order', () => {
+  const key = (fill: number) => toBase64url(new Uint8Array(65).fill(fill));
+  const NEW_KEY = key(1);
+  const OLD_KEY = key(2);
 
   async function twoDevices() {
     const old = await device(pilot.base);
@@ -486,49 +489,77 @@ describe('E5 pairing gives a new device the encrypted recovery secret', () => {
     return { old, fresh };
   }
 
-  it('passes the sealed secret from the old device to the new one, once', async () => {
+  it('passes each step once, in order, and forgets the pairing when asked', async () => {
     const { old, fresh } = await twoDevices();
-    const started = await fresh.call('POST', '/pairing', { publicKey: pubKey(1) });
+    const commitment = await pairingCommitment(NEW_KEY);
+    const started = await fresh.call('POST', '/pairing', { commitment });
     expect(started.status).toBe(200);
     expect(started.body.code).toMatch(/^[0-9A-HJKMNP-TV-Z]{8}$/);
     expect(started.body.expiresAt).toBe(clock.now + 600);
+    const id = started.body.pairingId;
+    expect((await fresh.call('GET', `/pairing/${id}`)).body).toEqual({ claimed: false });
 
-    const waiting = await fresh.call('GET', `/pairing/${started.body.pairingId}`);
-    expect(waiting.body).toEqual({ status: 'waiting' });
-
+    // The new device's key cannot be revealed before the old device has shown its own.
+    expect((await fresh.call('PUT', `/pairing/${id}/new-key`, { publicKey: NEW_KEY })).status).toBe(
+      400,
+    );
     const claimed = await old.call('POST', '/pairing/claim', {
       code: started.body.code.toLowerCase(),
     });
-    expect(claimed.body).toEqual({ pairingId: started.body.pairingId, publicKey: pubKey(1) });
-
+    expect(claimed.body).toEqual({ pairingId: id, commitment });
+    expect((await old.call('PUT', `/pairing/${id}/old-key`, { publicKey: OLD_KEY })).status).toBe(
+      204,
+    );
+    expect((await fresh.call('GET', `/pairing/${id}`)).body).toEqual({
+      claimed: true,
+      oldPublicKey: OLD_KEY,
+    });
+    // A key that does not match the commitment is refused.
+    expect((await fresh.call('PUT', `/pairing/${id}/new-key`, { publicKey: key(9) })).status).toBe(
+      400,
+    );
+    expect((await fresh.call('PUT', `/pairing/${id}/new-key`, { publicKey: NEW_KEY })).status).toBe(
+      204,
+    );
     const sealedSecret = toBase64url(new Uint8Array(44).fill(5));
-    const sent = await old.call('PUT', `/pairing/${started.body.pairingId}/secret`, {
-      publicKey: pubKey(2),
+    expect((await old.call('PUT', `/pairing/${id}/secret`, { sealedSecret })).status).toBe(204);
+    expect((await old.call('PUT', `/pairing/${id}/secret`, { sealedSecret })).status).toBe(400);
+    expect((await fresh.call('GET', `/pairing/${id}`)).body).toEqual({
+      claimed: true,
+      oldPublicKey: OLD_KEY,
+      newPublicKey: NEW_KEY,
       sealedSecret,
     });
-    expect(sent.status).toBe(204);
-
-    const ready = await fresh.call('GET', `/pairing/${started.body.pairingId}`);
-    expect(ready.body).toEqual({ status: 'ready', publicKey: pubKey(2), sealedSecret });
-    expect((await fresh.call('GET', `/pairing/${started.body.pairingId}`)).status).toBe(404);
+    expect((await fresh.call('DELETE', `/pairing/${id}`)).status).toBe(204);
+    expect((await fresh.call('GET', `/pairing/${id}`)).status).toBe(404);
   });
 
   it('keeps pairing inside one account', async () => {
     const { fresh } = await twoDevices();
-    const started = await fresh.call('POST', '/pairing', { publicKey: pubKey(1) });
+    const started = await fresh.call('POST', '/pairing', {
+      commitment: await pairingCommitment(NEW_KEY),
+    });
     const stranger = await device(pilot.base, idToken({ sub: 'someone-else' }));
     await turnOn(stranger);
     const claim = await stranger.call('POST', '/pairing/claim', { code: started.body.code });
     expect(claim.status).toBe(404);
     expect((await stranger.call('GET', `/pairing/${started.body.pairingId}`)).status).toBe(404);
+    expect(
+      (
+        await stranger.call('PUT', `/pairing/${started.body.pairingId}/old-key`, {
+          publicKey: OLD_KEY,
+        })
+      ).status,
+    ).toBe(404);
   });
 
-  it('needs encryption to be on, a valid key, and a code that has not expired', async () => {
+  it('needs encryption to be on, a valid commitment, and a code that has not expired', async () => {
     const plain = await device(pilot.base, idToken({ sub: 'plain-owner' }));
-    expect((await plain.call('POST', '/pairing', { publicKey: pubKey(1) })).status).toBe(400);
+    const commitment = await pairingCommitment(NEW_KEY);
+    expect((await plain.call('POST', '/pairing', { commitment })).status).toBe(400);
     const { old, fresh } = await twoDevices();
-    expect((await fresh.call('POST', '/pairing', { publicKey: 'short' })).status).toBe(400);
-    const started = await fresh.call('POST', '/pairing', { publicKey: pubKey(1) });
+    expect((await fresh.call('POST', '/pairing', { commitment: 'short' })).status).toBe(400);
+    const started = await fresh.call('POST', '/pairing', { commitment });
     const at = clock.now;
     try {
       clock.now = at + 601;
@@ -542,7 +573,9 @@ describe('E5 pairing gives a new device the encrypted recovery secret', () => {
 
   it('limits wrong codes for an account', async () => {
     const { old, fresh } = await twoDevices();
-    const started = await fresh.call('POST', '/pairing', { publicKey: pubKey(1) });
+    const started = await fresh.call('POST', '/pairing', {
+      commitment: await pairingCommitment(NEW_KEY),
+    });
     let limited = false;
     for (let i = 0; i < 12 && !limited; i++) {
       const res = await old.call('POST', '/pairing/claim', { code: 'ZZZZZZZZ' });

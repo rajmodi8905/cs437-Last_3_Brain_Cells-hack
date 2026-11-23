@@ -14,7 +14,7 @@ import {
 import { applyEntry, type BotChannel, type SignInResult } from './entry';
 import { IndexedDbSyncStateStore } from './idb';
 import { repositoryLibrary } from './library';
-import { SyncEngine, type SyncResult } from './sync';
+import { SyncEngine, type PairingProgress, type SyncResult } from './sync';
 import type { SyncSnapshot } from './types';
 
 export interface AutoSyncView {
@@ -43,6 +43,11 @@ export interface AutoSyncView {
   offlineIds: string[];
   /** Sign-out could not reach the server, so its session may still be valid. */
   signOutPending: boolean;
+  /**
+   * End-to-end encryption of the cloud library, as of the last sync pass: whether it is on,
+   * and whether this device has the key (docs/pilot/e2ee-design.md).
+   */
+  encryption: { on: boolean; unlocked: boolean };
   error?: string;
   /** How a Google sign-in that came back without a session ended. */
   signInResult?: string;
@@ -61,6 +66,7 @@ const SIGNED_OUT_VIEW = {
   paused: false,
   needsResync: false,
   offlineIds: [],
+  encryption: { on: false, unlocked: false },
 } satisfies Partial<AutoSyncView>;
 
 /** The engine hook search uses to include cloud items (see LocalEngine.extraSegments). */
@@ -112,6 +118,7 @@ export class AutoSyncController {
     needsResync: false,
     offlineIds: [],
     signOutPending: false,
+    encryption: { on: false, unlocked: false },
   };
   private listeners = new Set<() => void>();
   private engine?: SyncEngine;
@@ -499,6 +506,64 @@ export class AutoSyncController {
     if (this.state) await this.refresh(await this.state.load());
   }
 
+  // End-to-end encryption (docs/pilot/e2ee-design.md). Each acts on this account's engine; a
+  // step that gives this device the key runs a sync pass so the library appears at once.
+
+  private requireEngine() {
+    if (!this.engine) throw new Error('Sign in first.');
+    return this.engine;
+  }
+
+  /** The recovery code to write down, before encryption is turned on. */
+  prepareEncryption() {
+    const engine = this.requireEngine();
+    return this.onAccount(() => engine.prepareEncryption());
+  }
+
+  async turnOnEncryption() {
+    const engine = this.requireEngine();
+    await this.onAccount(() => engine.turnOnEncryption());
+    await this.syncNow();
+  }
+
+  async unlock(code: string) {
+    await this.requireEngine().unlock(code);
+    await this.syncNow();
+  }
+
+  recoveryCode() {
+    return this.requireEngine().recoveryCode();
+  }
+
+  startPairing() {
+    const engine = this.requireEngine();
+    return this.onAccount(() => engine.startPairing());
+  }
+
+  claimPairing(code: string) {
+    const engine = this.requireEngine();
+    return this.onAccount(() => engine.claimPairing(code));
+  }
+
+  async pairingStep() {
+    const engine = this.requireEngine();
+    return this.afterPairing(await this.onAccount(() => engine.pairingStep()));
+  }
+
+  async confirmPairing() {
+    const engine = this.requireEngine();
+    return this.afterPairing(await this.onAccount(() => engine.confirmPairing()));
+  }
+
+  async cancelPairing() {
+    await this.engine?.cancelPairing();
+  }
+
+  private async afterPairing(progress: PairingProgress) {
+    if (progress.stage === 'done') await this.syncNow();
+    return progress;
+  }
+
   async removeCloudLibrary() {
     const engine = this.engine;
     if (!engine || !this.session) return;
@@ -604,6 +669,7 @@ export class AutoSyncController {
 
   private async refresh(snapshot: SyncSnapshot) {
     const offlineIds = (await this.engine?.offlineIds()) ?? [];
+    const encryption = (await this.engine?.encryption()) ?? { on: false, unlocked: false };
     const live = snapshot.mappings.filter((m) => m.state !== 'deleted');
     const mapped = new Set(live.map((m) => m.globalId));
     this.set({
@@ -611,6 +677,7 @@ export class AutoSyncController {
       paused: !!snapshot.paused,
       needsResync: !!snapshot.needsResync,
       offlineIds,
+      encryption,
       syncedCount: live.filter((m) => m.state === 'synced').length,
       cloudOnly: Object.values(snapshot.catalogue)
         .filter((item) => !mapped.has(item.globalId))

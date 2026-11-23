@@ -15,7 +15,9 @@ import {
   MAX_SEALED_META_BYTES,
   newPairingCode,
   normalizePairingCode,
+  pairingCommitment,
   validMetaRevision,
+  validPairingCommitment,
   validPairingPublicKey,
   validPairingSealedSecret,
   validSealedBlob,
@@ -641,6 +643,13 @@ export function createPilotHandler(options: PilotServerOptions): RequestListener
     return (
       (await store.getItem(ownerKey, globalId)) ?? (await store.getAnyItem(ownerKey, globalId))
     );
+  }
+  /** The account's unexpired pairing; another account's, or an expired one, is not found. */
+  async function ownPairing(session: Session, pairingId: string) {
+    const pairing = await store.getPairing(pairingId);
+    if (!pairing || pairing.ownerKey !== session.ownerKey || pairing.expiresAt <= now())
+      throw new ApiError('NOT_FOUND', 'Pairing not found. Start again on the new device.');
+    return pairing;
   }
   async function requireE2ee(ownerKey: string) {
     if (!(await store.vaultE2ee(ownerKey)))
@@ -1331,20 +1340,21 @@ export function createPilotHandler(options: PilotServerOptions): RequestListener
       return send(res, result.status, result.body);
     }
 
-    // Pairing (docs/pilot/e2ee-design.md, "Adding a device"). The server relays public keys and
-    // the sealed recovery secret within one account; it never sees the secret itself.
+    // Pairing (docs/pilot/e2ee-design.md, "Adding a device"). The server relays one account's
+    // commitment, public keys and sealed recovery secret in a fixed order, each once; it never
+    // sees the secret itself, and the devices' check number catches a key it swapped.
     if (path === '/pairing' && method === 'POST') {
       const session = await requireSession(req, true);
       const body = await readJson(req);
       await requireE2ee(session.ownerKey);
-      if (!validPairingPublicKey(body.publicKey))
-        throw new ApiError('INVALID_INPUT', 'publicKey must be an uncompressed P-256 key.');
+      if (!validPairingCommitment(body.commitment))
+        throw new ApiError('INVALID_INPUT', 'commitment must be 32 bytes of base64url.');
       const code = newPairingCode();
       const pairing = {
         pairingId: randomUUID(),
         ownerKey: session.ownerKey,
         codeHash: pairingCodeHash(code),
-        newPublicKey: body.publicKey,
+        commitment: body.commitment,
         expiresAt: now() + PAIRING_SECONDS,
       };
       await store.createPairing(pairing);
@@ -1363,46 +1373,58 @@ export function createPilotHandler(options: PilotServerOptions): RequestListener
       if (!pairing || pairing.claimed || pairing.expiresAt <= now())
         throw new ApiError('NOT_FOUND', 'That code is not valid. Check it, or start again.');
       await store.updatePairing({ ...pairing, claimed: true });
-      return send(res, 200, { pairingId: pairing.pairingId, publicKey: pairing.newPublicKey });
+      return send(res, 200, { pairingId: pairing.pairingId, commitment: pairing.commitment });
     }
 
-    if ((match = /^\/pairing\/([^/]+)\/secret$/.exec(path)) && method === 'PUT') {
+    if ((match = /^\/pairing\/([^/]+)\/(old-key|new-key|secret)$/.exec(path)) && method === 'PUT') {
       const session = await requireSession(req, true);
       const body = await readJson(req);
       await requireE2ee(session.ownerKey);
-      const pairing = await store.getPairing(match[1]);
-      if (
-        !pairing ||
-        pairing.ownerKey !== session.ownerKey ||
-        pairing.expiresAt <= now() ||
-        !pairing.claimed ||
-        pairing.sealedSecret
-      )
-        throw new ApiError('NOT_FOUND', 'This pairing is not waiting for a key.');
-      if (!validPairingPublicKey(body.publicKey) || !validPairingSealedSecret(body.sealedSecret))
-        throw new ApiError('INVALID_INPUT', 'Send a P-256 public key and the sealed secret.');
-      await store.updatePairing({
-        ...pairing,
-        oldPublicKey: body.publicKey,
-        sealedSecret: body.sealedSecret,
-      });
+      const pairing = await ownPairing(session, match[1]);
+      const step = match[2];
+      // Each step needs the one before it and happens once.
+      const ready =
+        step === 'old-key'
+          ? pairing.claimed && !pairing.oldPublicKey
+          : step === 'new-key'
+            ? pairing.oldPublicKey && !pairing.newPublicKey
+            : pairing.newPublicKey && !pairing.sealedSecret;
+      if (!ready) throw new ApiError('INVALID_INPUT', 'This pairing is not at that step.');
+      if (step === 'secret') {
+        if (!validPairingSealedSecret(body.sealedSecret))
+          throw new ApiError('INVALID_INPUT', 'sealedSecret must be 44 bytes of base64url.');
+        await store.updatePairing({ ...pairing, sealedSecret: body.sealedSecret });
+        return send(res, 204);
+      }
+      if (!validPairingPublicKey(body.publicKey))
+        throw new ApiError('INVALID_INPUT', 'publicKey must be an uncompressed P-256 key.');
+      if (step === 'old-key') {
+        await store.updatePairing({ ...pairing, oldPublicKey: body.publicKey });
+        return send(res, 204);
+      }
+      // The old device checks this too; checking here catches a confused client early.
+      if ((await pairingCommitment(body.publicKey)) !== pairing.commitment)
+        throw new ApiError('INVALID_INPUT', 'This key does not match the pairing commitment.');
+      await store.updatePairing({ ...pairing, newPublicKey: body.publicKey });
       return send(res, 204);
     }
 
     if ((match = /^\/pairing\/([^/]+)$/.exec(path)) && method === 'GET') {
       const session = await requireSession(req, false);
-      const pairing = await store.getPairing(match[1]);
-      if (!pairing || pairing.ownerKey !== session.ownerKey || pairing.expiresAt <= now())
-        throw new ApiError('NOT_FOUND', 'Pairing not found.');
-      if (!pairing.sealedSecret)
-        return send(res, 200, { status: pairing.claimed ? 'claimed' : 'waiting' });
-      // Handed over once: the new device has what it needs, and the record goes.
-      await store.deletePairing(pairing.pairingId);
+      const pairing = await ownPairing(session, match[1]);
       return send(res, 200, {
-        status: 'ready',
-        publicKey: pairing.oldPublicKey,
-        sealedSecret: pairing.sealedSecret,
+        claimed: !!pairing.claimed,
+        ...(pairing.oldPublicKey ? { oldPublicKey: pairing.oldPublicKey } : {}),
+        ...(pairing.newPublicKey ? { newPublicKey: pairing.newPublicKey } : {}),
+        ...(pairing.sealedSecret ? { sealedSecret: pairing.sealedSecret } : {}),
       });
+    }
+
+    if ((match = /^\/pairing\/([^/]+)$/.exec(path)) && method === 'DELETE') {
+      const session = await requireSession(req, true);
+      const pairing = await ownPairing(session, match[1]);
+      await store.deletePairing(pairing.pairingId);
+      return send(res, 204);
     }
 
     throw new ApiError('NOT_FOUND', 'No such endpoint.');

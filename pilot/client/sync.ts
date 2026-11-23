@@ -20,19 +20,25 @@ import {
   fromBase64url,
   keyCheck,
   newItemKey,
+  newPairingKeys,
   newRecoverySecret,
   newVaultSalt,
   openIndexBundle,
   openMeta,
   openOriginalChunk,
+  openPairingSecret,
+  pairingCheckNumber,
+  pairingCommitment,
   plainOriginalLength,
   sealIndexBundle,
   sealMeta,
   sealOriginal,
+  sealPairingSecret,
   toBase64url,
   unwrapItemKey,
   verifyKeyCheck,
   wrapItemKey,
+  type PairingKeys,
   type SealedItemFields,
   type VaultKeys,
 } from '../contract/e2ee';
@@ -51,6 +57,28 @@ import type {
   SyncStateStore,
   VaultSecretStore,
 } from './types';
+
+/**
+ * Where a pairing stands on this device: waiting for the other device, showing the check
+ * number to compare, or done. A new device is done once it holds the library's key.
+ */
+export type PairingProgress =
+  { stage: 'waiting' } | { stage: 'compare'; checkNumber: string } | { stage: 'done' };
+
+/** A pairing in progress; it lives only in memory, as its private key does. */
+interface Pairing {
+  role: 'new' | 'old';
+  pairingId: string;
+  keys: PairingKeys;
+  /** Old device: the hash the new device committed to. */
+  commitment?: string;
+  /** New device: the old device's key, as first received. */
+  oldPublicKey?: string;
+  /** Old device: the new device's key, once it matched the commitment. */
+  newPublicKey?: string;
+  /** New device: the student said both devices show the same number. */
+  confirmed?: boolean;
+}
 
 /** Opens an encrypted library's items outside a sync pass, as an export does. */
 export interface SealedReader {
@@ -108,6 +136,7 @@ export class SyncEngine {
   private vaultSecret?: VaultSecretStore;
   /** Vault keys derived for the settings and epoch they were checked against. */
   private keyCache?: { vaultSalt: string; epoch: number; keys: VaultKeys };
+  private pairing?: Pairing;
 
   constructor(options: {
     api: ApiClient;
@@ -1161,8 +1190,12 @@ export class SyncEngine {
 
   /** Keeps the recovery secret typed on this device once it proves to be this library's. */
   async unlock(code: string) {
+    await this.keepSecret(await decodeRecoveryCode(code));
+  }
+
+  /** Keeps a recovery secret once it passes this library's key check. */
+  private async keepSecret(secret: Uint8Array) {
     if (!this.vaultSecret) throw new Error('This device cannot keep an encryption key.');
-    const secret = await decodeRecoveryCode(code);
     const snapshot = await this.state.load();
     const settings = snapshot.e2ee;
     if (!settings || snapshot.epoch === undefined)
@@ -1171,6 +1204,140 @@ export class SyncEngine {
     if (!(await verifyKeyCheck(keys, snapshot.epoch, settings.keyCheck)))
       throw new E2eeError('WRONG_KEY', 'This recovery code belongs to another library.');
     await this.vaultSecret.put({ epoch: snapshot.epoch, vaultSalt: settings.vaultSalt, secret });
+  }
+
+  /**
+   * The recovery code for a library about to be encrypted, so the student can write it down
+   * before anything is sent. The same code is then used by `turnOnEncryption`.
+   */
+  async prepareEncryption(): Promise<string> {
+    if (!this.vaultSecret) throw new Error('This device cannot keep an encryption key.');
+    const snapshot = await this.state.load();
+    const epoch = snapshot.epoch;
+    if (epoch === undefined) throw new Error('Sign in and include a library first.');
+    if (snapshot.e2ee) throw new Error('End-to-end encryption is already on for this library.');
+    let stored = await this.vaultSecret.get();
+    if (!stored || stored.epoch !== epoch) {
+      stored = { epoch, vaultSalt: toBase64url(newVaultSalt()), secret: newRecoverySecret() };
+      await this.vaultSecret.put(stored);
+    }
+    return encodeRecoveryCode(stored.secret);
+  }
+
+  /** New device: starts pairing and returns the code to type on a device that has the key. */
+  async startPairing(): Promise<{ code: string; expiresAt: number }> {
+    const snapshot = await this.state.load();
+    if (!snapshot.e2ee) throw new Error('This cloud library is not end-to-end encrypted.');
+    await this.cancelPairing();
+    const keys = await newPairingKeys();
+    const started = await this.api.startPairing({
+      commitment: await pairingCommitment(keys.publicKey),
+    });
+    this.pairing = { role: 'new', pairingId: started.pairingId, keys };
+    return { code: started.code, expiresAt: started.expiresAt };
+  }
+
+  /** Device with the key: claims the code shown on the new device and shows its own key. */
+  async claimPairing(code: string): Promise<PairingProgress> {
+    if (!(await this.vaultKeys(await this.state.load())))
+      throw new Error('This device does not have the library’s key.');
+    await this.cancelPairing();
+    const claimed = await this.api.claimPairing({ code });
+    const keys = await newPairingKeys();
+    await this.api.pairingStep(claimed.pairingId, 'old-key', { publicKey: keys.publicKey });
+    this.pairing = {
+      role: 'old',
+      pairingId: claimed.pairingId,
+      keys,
+      commitment: claimed.commitment,
+    };
+    return { stage: 'waiting' };
+  }
+
+  /** Moves the pairing on as far as the other device has got; call it again while waiting. */
+  async pairingStep(): Promise<PairingProgress> {
+    const pairing = this.pairing;
+    if (!pairing) throw new Error('No pairing is in progress. Start again.');
+    const state = await this.api.pairing(pairing.pairingId);
+    if (pairing.role === 'old') {
+      if (!state.newPublicKey) return { stage: 'waiting' };
+      // The key must be the one the new device committed to before it saw this device's key.
+      if ((await pairingCommitment(state.newPublicKey)) !== pairing.commitment) {
+        await this.cancelPairing();
+        throw new E2eeError(
+          'TAMPERED',
+          'The new device’s key was changed on the way. Start again.',
+        );
+      }
+      pairing.newPublicKey = state.newPublicKey;
+      return {
+        stage: 'compare',
+        checkNumber: await pairingCheckNumber(state.newPublicKey, pairing.keys.publicKey),
+      };
+    }
+    if (!state.oldPublicKey) return { stage: 'waiting' };
+    if (!pairing.oldPublicKey) {
+      pairing.oldPublicKey = state.oldPublicKey;
+      // Revealed only now, after the other key is fixed: see "pairing" in the contract.
+      await this.api.pairingStep(pairing.pairingId, 'new-key', {
+        publicKey: pairing.keys.publicKey,
+      });
+    } else if (state.oldPublicKey !== pairing.oldPublicKey) {
+      await this.cancelPairing();
+      throw new E2eeError('TAMPERED', 'The other device’s key changed. Start again.');
+    }
+    const checkNumber = await pairingCheckNumber(pairing.keys.publicKey, pairing.oldPublicKey);
+    if (!pairing.confirmed || !state.sealedSecret) return { stage: 'compare', checkNumber };
+    const secret = await openPairingSecret(
+      pairing.keys,
+      {
+        pairingId: pairing.pairingId,
+        newPublicKey: pairing.keys.publicKey,
+        oldPublicKey: pairing.oldPublicKey,
+      },
+      state.sealedSecret,
+    );
+    try {
+      await this.keepSecret(secret);
+    } finally {
+      await this.cancelPairing();
+    }
+    return { stage: 'done' };
+  }
+
+  /**
+   * The student saw the same number on both devices. The device with the key then sends it;
+   * the new device accepts it when it arrives.
+   */
+  async confirmPairing(): Promise<PairingProgress> {
+    const pairing = this.pairing;
+    if (!pairing) throw new Error('No pairing is in progress. Start again.');
+    if (pairing.role === 'new') {
+      pairing.confirmed = true;
+      return this.pairingStep();
+    }
+    if (!pairing.newPublicKey) throw new Error('The new device has not answered yet.');
+    await this.requireKeys(await this.state.load());
+    const stored = (await this.vaultSecret!.get())!;
+    const sealedSecret = await sealPairingSecret(
+      pairing.keys,
+      {
+        pairingId: pairing.pairingId,
+        newPublicKey: pairing.newPublicKey,
+        oldPublicKey: pairing.keys.publicKey,
+      },
+      stored.secret,
+    );
+    await this.api.pairingStep(pairing.pairingId, 'secret', { sealedSecret });
+    this.pairing = undefined;
+    return { stage: 'done' };
+  }
+
+  /** Stops the pairing on this device and asks the server to forget it. */
+  async cancelPairing() {
+    const pairing = this.pairing;
+    this.pairing = undefined;
+    if (pairing) await this.api.deletePairing(pairing.pairingId).catch(() => undefined);
   }
 
   /** The recovery code again, for Settings; undefined unless this device holds the key. */
